@@ -41,6 +41,7 @@ import com.minimate.touchpad.model.BackgroundTheme
 import com.minimate.touchpad.model.ButtonPressAction
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.ThemeVariant
+import com.minimate.ui.components.BluetoothPairingDialog
 import com.minimate.ui.components.FingerEffectsLayer
 import com.minimate.ui.components.FloatingInteractionBall
 import com.minimate.ui.components.HudToast
@@ -66,6 +67,7 @@ fun TouchpadScreen(
     val activeTouchPoints by touchpadEngine.activeTouchPoints.collectAsState()
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showPairingDialog by remember { mutableStateOf(false) }
     var hudMessage by remember { mutableStateOf<String?>(null) }
     var hudIcon by remember { mutableStateOf<ImageVector?>(null) }
     val scope = rememberCoroutineScope()
@@ -105,16 +107,16 @@ fun TouchpadScreen(
         }
     }
 
-    fun startPairing() {
+    fun makeDeviceDiscoverable() {
         try {
             val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
                 putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-            showToast("Pairing Mode • Connect on Host", Icons.Default.Bluetooth)
+            showToast("Discoverable for 180s • Connect on Host", Icons.Default.Bluetooth)
         } catch (_: Exception) {
-            showToast("Bluetooth Discovery Triggered")
+            showToast("Bluetooth Discovery Request Sent")
         }
     }
 
@@ -179,7 +181,8 @@ fun TouchpadScreen(
                         showSettingsSheet = true
                     }
                     ButtonPressAction.PAIRING_MODE -> {
-                        startPairing()
+                        hidManager.refreshPairedDevices()
+                        showPairingDialog = true
                     }
                     ButtonPressAction.MIDDLE_CLICK -> {
                         scope.launch {
@@ -194,7 +197,8 @@ fun TouchpadScreen(
                 touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
                 when (action) {
                     RadialAction.PAIRING -> {
-                        startPairing()
+                        hidManager.refreshPairedDevices()
+                        showPairingDialog = true
                     }
                     RadialAction.SETTINGS -> {
                         hidManager.refreshPairedDevices()
@@ -210,7 +214,7 @@ fun TouchpadScreen(
                                 customImageUri = null
                             )
                         )
-                        showToast("Theme: ${nextTheme.displayName}", Icons.Default.Palette)
+                        showToast("${nextTheme.iconEmoji} ${nextTheme.displayName}")
                     }
                     RadialAction.LOCK -> {
                         touchpadEngine.updateSettings(settings.copy(isLocked = true))
@@ -247,7 +251,8 @@ fun TouchpadScreen(
                     hidManager.disconnect()
                 },
                 onPairNewDevice = {
-                    startPairing()
+                    showSettingsSheet = false
+                    showPairingDialog = true
                 },
                 onRefreshDevices = {
                     hidManager.refreshPairedDevices()
@@ -256,7 +261,19 @@ fun TouchpadScreen(
             )
         }
 
-        // 7. Minimal HUD Toast Feedback
+        // 7. Dedicated In-App Bluetooth Pairing Hub Dialog
+        if (showPairingDialog) {
+            BluetoothPairingDialog(
+                bluetoothState = bluetoothState,
+                onMakeDiscoverable = { makeDeviceDiscoverable() },
+                onConnectHost = { address -> hidManager.connectByAddress(address) },
+                onDisconnect = { hidManager.disconnect() },
+                onRefresh = { hidManager.refreshPairedDevices() },
+                onDismiss = { showPairingDialog = false }
+            )
+        }
+
+        // 8. Minimal HUD Toast Feedback
         HudToast(
             message = hudMessage,
             icon = hudIcon,
@@ -265,7 +282,7 @@ fun TouchpadScreen(
                 .padding(top = 24.dp)
         )
 
-        // 8. Bluetooth Permission Prompt if needed
+        // 9. Bluetooth Permission Prompt if needed
         if (bluetoothState.status == ConnectionStatus.NO_PERMISSION) {
             PermissionPrompt(
                 onRequestPermission = onRequestPermissions

@@ -2,22 +2,33 @@ package com.minimate.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Black = Color(0xFF000000)
-val PureBlack = Color(0xFF000000)
-val Obsidian = Color(0xFF0B0B0E)
-val ObsidianSurface = Color(0xFF14151B)
-val GlassSurface = Color(0xCC1A1B24)
-val GlassBorder = Color(0x26FFFFFF)
+// Primary Palette — Warm, cute, welcoming
+val SakuraPink = Color(0xFFFF85A1)
+val SoftPeach = Color(0xFFFFB7B2)
+val BabyBlue = Color(0xFF89CFF0)
+val MintFresh = Color(0xFF06D6A0)
+val LavenderMist = Color(0xFFB8B8FF)
+val SunflowerGold = Color(0xFFFFD166)
+val CoralPop = Color(0xFFFF6B6B)
 
-val AccentCyan = Color(0xFF00E5FF)
-val AccentBlue = Color(0xFF388AF6)
-val AccentPurple = Color(0xFF8B5CF6)
+// Accent Colors — Primary actions
+val AccentCyan = Color(0xFF4CC9F0)
+val AccentBlue = Color(0xFF4361EE)
+val AccentPurple = Color(0xFF7B2CBF)
 val AccentEmerald = Color(0xFF10B981)
+val AccentPink = Color(0xFFFF69B4)
+val AccentGold = Color(0xFFFFCA3A)
 
-val TextPrimary = Color(0xFFFFFFFF)
-val TextSecondary = Color(0xFF9E9EA7)
-val TextTertiary = Color(0xFF5C5C66)
+// Surface & Background
+val ObsidianSurface = Color(0xFF141419)
+val GlassSurface = Color(0xFF1C1C24)
+val Black = Color(0xFF000000)
 
-val BallNormal = Color(0xFF121318)
-val BallDim = Color(0xFFF4F4F6)
-val BallGlow = Color(0x40FFFFFF)
+// Text
+val TextPrimary = Color(0xFFF8F9FA)
+val TextSecondary = Color(0xFF9CA3AF)
+val TextTertiary = Color(0xFF6B7280)
+
+// Floating Ball
+val BallNormal = Color(0xFF1A1B22)
+val BallDim = Color(0xFFF0F0F5)
