@@ -32,147 +32,135 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import com.minimate.touchpad.engine.TouchPoint
 import com.minimate.touchpad.model.BackgroundTheme
+import com.minimate.touchpad.model.ThemeVariant
 import com.minimate.ui.theme.Black
 import kotlin.math.cos
 import kotlin.math.sin
 
-private const val COSMIC_WARP_AGSL = """
+private const val AGSL_MASTER_SHADER = """
     uniform float2 iResolution;
     uniform float iTime;
     uniform float2 uTouchPos;
     uniform float uTouchActive;
+    uniform int uTheme;
+    uniform int uVariant;
 
     half4 main(in float2 fragCoord) {
         float2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
         float2 touch = (uTouchPos - 0.5 * iResolution.xy) / iResolution.y;
-        
         float distToTouch = length(uv - touch);
-        float warp = exp(-distToTouch * 4.0) * uTouchActive * 0.35;
-        float2 warpedUv = uv - normalize(uv - touch + 0.001) * warp;
+        float time = iTime * 0.4;
         
-        float r = length(warpedUv);
-        float a = atan(warpedUv.y, warpedUv.x) + iTime * 0.25;
+        half3 colA = half3(0.0, 0.85, 1.0);
+        half3 colB = half3(0.7, 0.15, 0.95);
+        half3 bg = half3(0.02, 0.025, 0.04);
         
-        float rings = sin(r * 24.0 - iTime * 1.5 + sin(a * 4.0) * 1.2);
-        rings = smoothstep(0.1, 0.9, rings) * exp(-r * 2.2);
-        
-        half3 deepSpace = half3(0.02, 0.025, 0.05);
-        half3 neonCyan = half3(0.0, 0.9, 1.0);
-        half3 neonPurple = half3(0.65, 0.15, 0.95);
-        
-        half3 color = deepSpace + mix(neonCyan, neonPurple, sin(a + iTime) * 0.5 + 0.5) * rings * 0.6;
-        
-        // Touch luminous glow
-        if (uTouchActive > 0.01) {
-            float touchGlow = exp(-distToTouch * 6.0) * uTouchActive;
-            color += mix(half3(0.0, 0.8, 1.0), half3(1.0, 0.2, 0.8), sin(iTime * 2.0) * 0.5 + 0.5) * touchGlow * 0.8;
+        // Variant Palettes
+        if (uVariant == 1) {
+            colA = half3(1.0, 0.55, 0.0);
+            colB = half3(1.0, 0.1, 0.2);
+            bg = half3(0.04, 0.02, 0.02);
+        } else if (uVariant == 2) {
+            colA = half3(0.0, 1.0, 0.65);
+            colB = half3(0.1, 0.35, 0.95);
+            bg = half3(0.01, 0.03, 0.03);
+        }
+
+        half3 finalCol = bg;
+
+        if (uTheme == 0) { // COSMIC_WARP
+            float warp = exp(-distToTouch * 4.0) * uTouchActive * 0.35;
+            float2 warpedUv = uv - normalize(uv - touch + 0.001) * warp;
+            float r = length(warpedUv);
+            float a = atan(warpedUv.y, warpedUv.x) + time * 0.5;
+            float rings = sin(r * 22.0 - time * 3.0 + sin(a * 4.0) * 1.2);
+            rings = smoothstep(0.1, 0.9, rings) * exp(-r * 2.0);
+            finalCol += mix(colA, colB, sin(a + time) * 0.5 + 0.5) * rings * 0.7;
+            if (uTouchActive > 0.01) {
+                finalCol += colA * exp(-distToTouch * 6.0) * uTouchActive * 0.8;
+            }
+        } else if (uTheme == 1) { // FLUID_AURORA
+            float wave1 = sin(uv.x * 4.0 + time) * 0.3;
+            float wave2 = cos(uv.y * 3.5 - time * 0.8) * 0.25;
+            float dist = length(uv - float2(wave1 * 0.3, wave2 * 0.3));
+            float blend = smoothstep(0.85, 0.1, dist);
+            finalCol += mix(colA, colB, sin(time + uv.x * 2.0) * 0.5 + 0.5) * blend * 0.6;
+            if (uTouchActive > 0.01) {
+                finalCol += colA * exp(-distToTouch * 7.0) * uTouchActive * 0.6;
+            }
+        } else if (uTheme == 2) { // LIQUID_GLASS
+            float touchWarp = sin(distToTouch * 25.0 - time * 8.0) * exp(-distToTouch * 5.0) * uTouchActive * 0.07;
+            float2 guv = uv + (uv - touch) * touchWarp;
+            float d1 = sin(guv.x * 6.0 + time) * cos(guv.y * 6.0 + time);
+            finalCol += mix(colA * 0.4, colB, d1 * 0.5 + 0.5) * 0.5;
+        } else if (uTheme == 3) { // CYBER_GRID
+            float2 gridUv = fract(uv * 16.0 + float2(0.0, time * 0.3)) - 0.5;
+            float line = smoothstep(0.06, 0.02, abs(gridUv.x)) + smoothstep(0.06, 0.02, abs(gridUv.y));
+            finalCol += colA * line * 0.4;
+            if (uTouchActive > 0.01) {
+                float pulse = sin(distToTouch * 18.0 - time * 8.0) * exp(-distToTouch * 4.0) * uTouchActive;
+                finalCol += colB * max(0.0, pulse) * 1.5 + colA * exp(-distToTouch * 8.0) * uTouchActive;
+            }
+        } else if (uTheme == 4) { // QUANTUM_WAVES
+            float w1 = sin(length(uv - float2(-0.2, 0.0)) * 20.0 - time * 4.0);
+            float w2 = sin(length(uv - float2(0.2, 0.0)) * 20.0 - time * 4.0);
+            float wTouch = sin(distToTouch * 24.0 - time * 6.0) * uTouchActive;
+            float wave = (w1 + w2 + wTouch * 1.5) * 0.33;
+            finalCol += mix(colA, colB, wave * 0.5 + 0.5) * smoothstep(-0.2, 0.8, wave) * 0.6;
+        } else if (uTheme == 5) { // VORTEX_NEBULA
+            float r = length(uv);
+            float angle = atan(uv.y, uv.x) + r * 5.0 - time;
+            float spiral = sin(angle * 3.0) * exp(-r * 1.8);
+            finalCol += mix(colA, colB, sin(angle + time) * 0.5 + 0.5) * smoothstep(0.0, 0.8, spiral) * 0.8;
+            if (uTouchActive > 0.01) {
+                finalCol += colA * exp(-distToTouch * 6.0) * uTouchActive;
+            }
+        } else if (uTheme == 6) { // BIOLUMINESCENCE
+            float bio = sin(uv.x * 8.0 + sin(uv.y * 8.0 + time)) * sin(uv.y * 6.0 - time * 0.5);
+            finalCol += mix(colA, colB, bio * 0.5 + 0.5) * smoothstep(0.2, 0.9, bio) * 0.5;
+            if (uTouchActive > 0.01) {
+                finalCol += colA * exp(-distToTouch * 5.0) * uTouchActive * 0.9;
+            }
+        } else if (uTheme == 7) { // GEOMETRIC_MORPH
+            float2 p = abs(fract(uv * 10.0 + time * 0.1) - 0.5);
+            float poly = max(p.x, p.y);
+            float shape = smoothstep(0.48, 0.44, poly) - smoothstep(0.44, 0.40, poly);
+            finalCol += mix(colA, colB, uv.x + 0.5) * shape * 0.6;
+            if (uTouchActive > 0.01) {
+                finalCol += colA * exp(-distToTouch * 6.0) * uTouchActive;
+            }
+        } else if (uTheme == 8) { // PARTICLE_STARDUST
+            float2 sUv = uv + (touch - uv) * exp(-distToTouch * 4.0) * uTouchActive * 0.2;
+            float star = sin(sUv.x * 40.0) * sin(sUv.y * 40.0);
+            star = smoothstep(0.92, 0.98, star);
+            finalCol += mix(colA, colB, sin(time + uv.y * 4.0) * 0.5 + 0.5) * star * 1.5;
+            if (uTouchActive > 0.01) {
+                finalCol += colA * exp(-distToTouch * 6.0) * uTouchActive;
+            }
+        } else if (uTheme == 9) { // MINIMAL_OLED
+            if (uVariant == 1) { // Dark Titanium
+                finalCol = half3(0.04, 0.045, 0.05) + colA * exp(-length(uv) * 2.0) * 0.08;
+            } else if (uVariant == 2) { // Midnight Velvet
+                finalCol = half3(0.02, 0.025, 0.04);
+            } else { // Pitch Black
+                finalCol = half3(0.0, 0.0, 0.0);
+            }
         }
         
-        return half4(color, 1.0);
-    }
-"""
-
-private const val FLUID_AURORA_AGSL = """
-    uniform float2 iResolution;
-    uniform float iTime;
-    uniform float2 uTouchPos;
-    uniform float uTouchActive;
-
-    half4 main(in float2 fragCoord) {
-        float2 uv = fragCoord / iResolution.xy;
-        float2 touchUv = uTouchPos / iResolution.xy;
-        float time = iTime * 0.45;
-        
-        float distTouch = length(uv - touchUv);
-        float touchRipple = sin(distTouch * 25.0 - iTime * 4.0) * exp(-distTouch * 4.0) * uTouchActive * 0.15;
-        
-        float wave1 = sin(uv.x * 4.0 + time + touchRipple) * 0.3;
-        float wave2 = cos(uv.y * 3.5 - time * 0.7) * 0.25;
-        float dist = length(uv - float2(0.5 + wave1 * 0.2, 0.5 + wave2 * 0.2));
-        
-        half3 col1 = half3(0.03, 0.04, 0.09);
-        half3 col2 = half3(0.0, 0.75, 0.85);
-        half3 col3 = half3(0.55, 0.10, 0.90);
-        
-        float blend = smoothstep(0.85, 0.1, dist);
-        half3 finalColor = mix(col1, mix(col2, col3, sin(time + uv.x * 2.0) * 0.5 + 0.5), blend * 0.5);
-        
-        if (uTouchActive > 0.01) {
-            finalColor += half3(0.0, 0.9, 0.8) * exp(-distTouch * 8.0) * uTouchActive * 0.7;
-        }
-        
-        return half4(finalColor, 1.0);
-    }
-"""
-
-private const val LIQUID_GLASS_AGSL = """
-    uniform float2 iResolution;
-    uniform float iTime;
-    uniform float2 uTouchPos;
-    uniform float uTouchActive;
-
-    half4 main(in float2 fragCoord) {
-        float2 uv = fragCoord / iResolution.xy;
-        float2 touchUv = uTouchPos / iResolution.xy;
-        float time = iTime * 0.35;
-        
-        float dist = length(uv - touchUv);
-        float touchWarp = sin(dist * 30.0 - iTime * 5.0) * exp(-dist * 5.0) * uTouchActive * 0.08;
-        uv += (uv - touchUv) * touchWarp;
-        
-        float d1 = sin(uv.x * 6.0 + time) * cos(uv.y * 6.0 + time);
-        float d2 = cos(uv.x * 4.0 - time * 0.5) * sin(uv.y * 4.0 + time * 0.5);
-        
-        half3 base = mix(half3(0.05, 0.06, 0.10), half3(0.12, 0.22, 0.40), d1 * 0.5 + 0.5);
-        half3 prism = mix(base, half3(0.4, 0.1, 0.6), d2 * 0.4 + 0.4);
-        
-        if (uTouchActive > 0.01) {
-            prism += half3(0.3, 0.7, 1.0) * exp(-dist * 7.0) * uTouchActive * 0.5;
-        }
-        
-        return half4(prism, 1.0);
-    }
-"""
-
-private const val CYBER_GRID_AGSL = """
-    uniform float2 iResolution;
-    uniform float iTime;
-    uniform float2 uTouchPos;
-    uniform float uTouchActive;
-
-    half4 main(in float2 fragCoord) {
-        float2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
-        float2 touch = (uTouchPos - 0.5 * iResolution.xy) / iResolution.y;
-        
-        float dist = length(uv - touch);
-        float gridScale = 18.0;
-        
-        float2 gridUv = fract(uv * gridScale + float2(0.0, iTime * 0.2)) - 0.5;
-        float line = smoothstep(0.05, 0.02, abs(gridUv.x)) + smoothstep(0.05, 0.02, abs(gridUv.y));
-        
-        half3 bg = half3(0.02, 0.02, 0.04);
-        half3 gridCol = half3(0.0, 0.4, 0.7) * line * 0.4;
-        
-        // Touch reactive pulse
-        if (uTouchActive > 0.01) {
-            float pulse = sin(dist * 20.0 - iTime * 6.0) * exp(-dist * 4.0) * uTouchActive;
-            gridCol += half3(0.0, 0.9, 1.0) * max(0.0, pulse) * 1.5;
-            gridCol += half3(0.0, 1.0, 0.7) * exp(-dist * 8.0) * uTouchActive;
-        }
-        
-        return half4(bg + gridCol, 1.0);
+        return half4(finalCol, 1.0);
     }
 """
 
 @Composable
 fun BackgroundShaderCanvas(
     theme: BackgroundTheme,
+    variant: ThemeVariant = ThemeVariant.VARIANT_A,
     touchPoints: List<TouchPoint> = emptyList(),
     customImageUri: String? = null,
     dimRatio: Float = 0f,
     modifier: Modifier = Modifier
 ) {
-    if (theme == BackgroundTheme.OLED_BLACK || dimRatio >= 0.99f) {
+    if (theme == BackgroundTheme.MINIMAL_OLED && variant == ThemeVariant.VARIANT_A || dimRatio >= 0.99f) {
         Box(modifier = modifier.fillMaxSize().background(Black))
         return
     }
@@ -182,7 +170,7 @@ fun BackgroundShaderCanvas(
         return
     }
 
-    val transition = rememberInfiniteTransition(label = "ShaderTime")
+    val transition = rememberInfiniteTransition(label = "MasterShaderTime")
     val time by transition.animateFloat(
         initialValue = 0f,
         targetValue = 6.28318f,
@@ -199,8 +187,9 @@ fun BackgroundShaderCanvas(
     val touchActive = if (primaryTouch != null) 1.0f else 0.0f
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        AgslInteractiveBackground(
+        AgslMasterBackground(
             theme = theme,
+            variant = variant,
             time = time,
             touchX = touchX,
             touchY = touchY,
@@ -209,8 +198,9 @@ fun BackgroundShaderCanvas(
             modifier = modifier
         )
     } else {
-        FallbackInteractiveBackground(
+        FallbackMasterBackground(
             theme = theme,
+            variant = variant,
             time = time,
             touchX = touchX,
             touchY = touchY,
@@ -223,8 +213,9 @@ fun BackgroundShaderCanvas(
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun AgslInteractiveBackground(
+private fun AgslMasterBackground(
     theme: BackgroundTheme,
+    variant: ThemeVariant,
     time: Float,
     touchX: Float,
     touchY: Float,
@@ -232,21 +223,15 @@ private fun AgslInteractiveBackground(
     dimRatio: Float,
     modifier: Modifier
 ) {
-    val shaderCode = when (theme) {
-        BackgroundTheme.COSMIC_WARP -> COSMIC_WARP_AGSL
-        BackgroundTheme.FLUID_AURORA -> FLUID_AURORA_AGSL
-        BackgroundTheme.LIQUID_GLASS -> LIQUID_GLASS_AGSL
-        BackgroundTheme.CYBER_GRID -> CYBER_GRID_AGSL
-        else -> COSMIC_WARP_AGSL
-    }
-
-    val shader = remember(theme) { RuntimeShader(shaderCode) }
+    val shader = remember { RuntimeShader(AGSL_MASTER_SHADER) }
 
     Canvas(modifier = modifier.fillMaxSize()) {
         shader.setFloatUniform("iResolution", size.width, size.height)
         shader.setFloatUniform("iTime", time)
         shader.setFloatUniform("uTouchPos", touchX, touchY)
         shader.setFloatUniform("uTouchActive", touchActive)
+        shader.setIntUniform("uTheme", theme.ordinal.coerceIn(0, 9))
+        shader.setIntUniform("uVariant", variant.index)
 
         drawRect(
             brush = ShaderBrush(shader),
@@ -256,8 +241,9 @@ private fun AgslInteractiveBackground(
 }
 
 @Composable
-private fun FallbackInteractiveBackground(
+private fun FallbackMasterBackground(
     theme: BackgroundTheme,
+    variant: ThemeVariant,
     time: Float,
     touchX: Float,
     touchY: Float,
@@ -270,19 +256,16 @@ private fun FallbackInteractiveBackground(
         val h = size.height
         val alpha = (1.0f - (dimRatio * 0.95f)).coerceIn(0f, 1f)
 
-        // Base gradient
         val centerOffset = if (touchActive > 0.5f) {
             Offset(touchX, touchY)
         } else {
-            Offset(w * 0.5f + cos(time) * 50f, h * 0.5f + sin(time) * 50f)
+            Offset(w * 0.5f + cos(time) * 40f, h * 0.5f + sin(time) * 40f)
         }
 
-        val colors = when (theme) {
-            BackgroundTheme.COSMIC_WARP -> listOf(Color(0xFF00E5FF), Color(0xFF8B5CF6), Color(0xFF080911))
-            BackgroundTheme.FLUID_AURORA -> listOf(Color(0xFF10B981), Color(0xFF3B82F6), Color(0xFF060810))
-            BackgroundTheme.LIQUID_GLASS -> listOf(Color(0xFF60A5FA), Color(0xFF6366F1), Color(0xFF0B0D14))
-            BackgroundTheme.CYBER_GRID -> listOf(Color(0xFF06B6D4), Color(0xFF1E1B4B), Color(0xFF030712))
-            else -> listOf(Color(0xFF1E293B), Color(0xFF0F172A), Color(0xFF020617))
+        val colors = when (variant) {
+            ThemeVariant.VARIANT_A -> listOf(Color(0xFF00E5FF), Color(0xFF8B5CF6), Color(0xFF080911))
+            ThemeVariant.VARIANT_B -> listOf(Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFF140808))
+            ThemeVariant.VARIANT_C -> listOf(Color(0xFF10B981), Color(0xFF3B82F6), Color(0xFF06100E))
         }
 
         drawRect(
@@ -291,7 +274,7 @@ private fun FallbackInteractiveBackground(
                 center = centerOffset,
                 radius = w * 0.9f
             ),
-            alpha = alpha * 0.4f
+            alpha = alpha * 0.45f
         )
     }
 }
@@ -326,7 +309,6 @@ private fun CustomImageBackground(
                 alpha = (1f - dimRatio * 0.9f).coerceIn(0.1f, 1f)
             )
         }
-        // Dark glass vignette overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()

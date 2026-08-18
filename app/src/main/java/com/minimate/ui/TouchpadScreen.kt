@@ -40,6 +40,7 @@ import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.BackgroundTheme
 import com.minimate.touchpad.model.ButtonPressAction
 import com.minimate.touchpad.model.HapticIntensity
+import com.minimate.touchpad.model.ThemeVariant
 import com.minimate.ui.components.FingerEffectsLayer
 import com.minimate.ui.components.FloatingInteractionBall
 import com.minimate.ui.components.HudToast
@@ -125,18 +126,20 @@ fun TouchpadScreen(
                 touchpadEngine.setScreenDimensions(size.width.toFloat(), size.height.toFloat())
             }
     ) {
-        // 1. Interactive GPU Background Shader / Custom Wallpaper
+        // 1. Interactive GPU Background Shader with 10 Themes and 3 Subthemes
         BackgroundShaderCanvas(
             theme = settings.backgroundTheme,
+            variant = settings.themeVariant,
             touchPoints = activeTouchPoints,
             customImageUri = settings.customImageUri,
             dimRatio = dimRatio,
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Multi-Touch Finger Effects Layer
+        // 2. Multi-Touch Finger Effects Layer (10 Effects)
         FingerEffectsLayer(
             touchPoints = activeTouchPoints,
+            effect = settings.fingerEffect,
             enabled = settings.fingerEffectsEnabled && dimRatio < 0.8f,
             modifier = Modifier.fillMaxSize()
         )
@@ -198,13 +201,7 @@ fun TouchpadScreen(
                         showSettingsSheet = true
                     }
                     RadialAction.THEMES -> {
-                        val themes = listOf(
-                            BackgroundTheme.COSMIC_WARP,
-                            BackgroundTheme.FLUID_AURORA,
-                            BackgroundTheme.LIQUID_GLASS,
-                            BackgroundTheme.CYBER_GRID,
-                            BackgroundTheme.OLED_BLACK
-                        )
+                        val themes = BackgroundTheme.values().filter { it != BackgroundTheme.CUSTOM_IMAGE }
                         val nextIndex = (themes.indexOf(settings.backgroundTheme) + 1) % themes.size
                         val nextTheme = themes[nextIndex]
                         touchpadEngine.updateSettings(
@@ -213,15 +210,7 @@ fun TouchpadScreen(
                                 customImageUri = null
                             )
                         )
-                        val themeName = when (nextTheme) {
-                            BackgroundTheme.COSMIC_WARP -> "Cosmic Warp"
-                            BackgroundTheme.FLUID_AURORA -> "Fluid Aurora"
-                            BackgroundTheme.LIQUID_GLASS -> "Liquid Glass"
-                            BackgroundTheme.CYBER_GRID -> "Cyber Grid"
-                            BackgroundTheme.OLED_BLACK -> "Pure OLED Black"
-                            else -> "Shader Theme"
-                        }
-                        showToast("Theme: $themeName", Icons.Default.Palette)
+                        showToast("Theme: ${nextTheme.displayName}", Icons.Default.Palette)
                     }
                     RadialAction.LOCK -> {
                         touchpadEngine.updateSettings(settings.copy(isLocked = true))

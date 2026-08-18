@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothSearching
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Palette
@@ -51,10 +49,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothUiState
-import com.minimate.bluetooth.ConnectionStatus
 import com.minimate.touchpad.model.BackgroundTheme
 import com.minimate.touchpad.model.ButtonPressAction
+import com.minimate.touchpad.model.FingerEffect
 import com.minimate.touchpad.model.HapticIntensity
+import com.minimate.touchpad.model.ThemeVariant
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.ui.theme.AccentBlue
 import com.minimate.ui.theme.AccentCyan
@@ -92,7 +91,7 @@ fun SettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 18.dp)
                 .padding(bottom = 32.dp)
                 .verticalScroll(rememberScrollState())
         ) {
@@ -113,42 +112,73 @@ fun SettingsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // ==========================================
-            // 1. THEMES & BACKGROUND (WALLPAPERS / GIFS / SHADERS)
+            // 1. 10 THEMES & 3 SUBTHEME COLOR VARIANTS
             // ==========================================
-            SectionHeader(title = "BACKGROUND & THEMES", icon = Icons.Default.Palette)
+            SectionHeader(title = "10 THEMES & COLOR PALETTES", icon = Icons.Default.Palette)
 
-            Column(
+            // 3 Subtheme / Color Variant Selector Pills (Applies to active theme)
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                val themeOptions = listOf(
-                    Triple(BackgroundTheme.COSMIC_WARP, "Cosmic Warp", "Interactive spacetime gravity distortion"),
-                    Triple(BackgroundTheme.FLUID_AURORA, "Fluid Aurora", "Harmonic glowing plasma waves"),
-                    Triple(BackgroundTheme.LIQUID_GLASS, "Liquid Glass", "Refractive prism caustic waves"),
-                    Triple(BackgroundTheme.CYBER_GRID, "Cyber Grid", "Reactive neon digital matrix grid"),
-                    Triple(BackgroundTheme.OLED_BLACK, "Pure OLED Black", "Maximum battery saving zero-power dark")
-                )
+                ThemeVariant.values().forEach { v ->
+                    val isVarSelected = settings.themeVariant == v
+                    val varTitle = when (v) {
+                        ThemeVariant.VARIANT_A -> "Palette 1 (Cyan/Violet)"
+                        ThemeVariant.VARIANT_B -> "Palette 2 (Gold/Red)"
+                        ThemeVariant.VARIANT_C -> "Palette 3 (Emerald/Blue)"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isVarSelected) AccentCyan else Color(0x14FFFFFF))
+                            .clickable { onSettingsChange(settings.copy(themeVariant = v)) }
+                            .padding(vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (v) {
+                                ThemeVariant.VARIANT_A -> "Palette 1"
+                                ThemeVariant.VARIANT_B -> "Palette 2"
+                                ThemeVariant.VARIANT_C -> "Palette 3"
+                            },
+                            color = if (isVarSelected) Color.Black else TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = if (isVarSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
 
-                themeOptions.forEach { (theme, label, desc) ->
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // The 10 Themes List
+            val themes = BackgroundTheme.values().filter { it != BackgroundTheme.CUSTOM_IMAGE }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                themes.forEach { theme ->
                     val isSelected = settings.backgroundTheme == theme && settings.customImageUri == null
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSelected) AccentPurple.copy(alpha = 0.2f) else Color(0x0CFFFFFF))
+                            .background(if (isSelected) AccentPurple.copy(alpha = 0.25f) else Color(0x0AFFFFFF))
                             .clickable {
                                 onSettingsChange(settings.copy(backgroundTheme = theme, customImageUri = null))
                             }
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = label, color = if (isSelected) AccentCyan else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text(text = desc, color = TextSecondary, fontSize = 10.sp)
+                            Text(text = theme.displayName, color = if (isSelected) AccentCyan else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(text = theme.description, color = TextSecondary, fontSize = 10.sp)
                         }
                         Icon(
                             imageVector = if (isSelected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
@@ -159,15 +189,15 @@ fun SettingsSheet(
                     }
                 }
 
-                // Custom Wallpaper / GIF Button
+                // Custom Wallpaper / GIF Option
                 val hasCustomImage = settings.backgroundTheme == BackgroundTheme.CUSTOM_IMAGE && settings.customImageUri != null
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (hasCustomImage) AccentBlue.copy(alpha = 0.25f) else Color(0x0CFFFFFF))
+                        .background(if (hasCustomImage) AccentBlue.copy(alpha = 0.25f) else Color(0x0AFFFFFF))
                         .clickable { onPickCustomImage() }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -176,30 +206,68 @@ fun SettingsSheet(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = if (hasCustomImage) "Custom Wallpaper / GIF (Active)" else "Choose Image or GIF Wallpaper…",
+                                text = if (hasCustomImage) "Custom Wallpaper / GIF (Active)" else "Choose Custom Wallpaper / GIF…",
                                 color = if (hasCustomImage) AccentCyan else TextPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Text(text = "Pick any image or animated GIF from gallery", color = TextSecondary, fontSize = 10.sp)
+                            Text(text = "Pick image or animated GIF from device gallery", color = TextSecondary, fontSize = 10.sp)
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ==========================================
+            // 2. 10 FINGER EFFECTS
+            // ==========================================
+            SectionHeader(title = "10 FINGER EFFECTS", icon = Icons.Default.TouchApp)
 
             SwitchSettingItem(
-                title = "Finger Touch Effects",
-                subtitle = "Multi-touch glowing halo rings and particle wakes",
+                title = "Finger Effects Enabled",
+                subtitle = "Render live multi-touch visual FX under active fingers",
                 checked = settings.fingerEffectsEnabled,
                 onCheckedChange = { onSettingsChange(settings.copy(fingerEffectsEnabled = it)) }
             )
 
+            if (settings.fingerEffectsEnabled) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    FingerEffect.values().forEach { effect ->
+                        val isEffSelected = settings.fingerEffect == effect
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isEffSelected) AccentBlue.copy(alpha = 0.22f) else Color(0x08FFFFFF))
+                            .clickable { onSettingsChange(settings.copy(fingerEffect = effect)) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = effect.displayName, color = if (isEffSelected) AccentCyan else TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(text = effect.description, color = TextSecondary, fontSize = 9.sp)
+                        }
+                        Icon(
+                            imageVector = if (isEffSelected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                            contentDescription = null,
+                            tint = if (isEffSelected) AccentCyan else TextTertiary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // ==========================================
-            // 2. BUTTON SHORTCUT (WHEN NOT DRAGGING)
+            // 3. BALL TAP SHORTCUT
             // ==========================================
             SectionHeader(title = "BALL TAP SHORTCUT", icon = Icons.Default.TouchApp)
 
@@ -238,7 +306,7 @@ fun SettingsSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ==========================================
-            // 3. BLUETOOTH PAIRING & HOSTS
+            // 4. BLUETOOTH PAIRING & HOSTS
             // ==========================================
             SectionHeader(title = "BLUETOOTH HOSTS", icon = Icons.Default.Bluetooth)
 
@@ -302,7 +370,7 @@ fun SettingsSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ==========================================
-            // 4. POINTER & ACCELERATION
+            // 5. POINTER & ACCELERATION
             // ==========================================
             SectionHeader(title = "POINTER & TRACKING", icon = Icons.Default.Speed)
 
@@ -332,7 +400,7 @@ fun SettingsSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ==========================================
-            // 5. SCROLLING & GESTURES
+            // 6. SCROLLING & GESTURES
             // ==========================================
             SectionHeader(title = "SCROLLING & GESTURES", icon = Icons.Default.TouchApp)
 
@@ -382,7 +450,7 @@ fun SettingsSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ==========================================
-            // 6. HAPTICS
+            // 7. HAPTICS
             // ==========================================
             SectionHeader(title = "TACTILE FEEDBACK", icon = Icons.Default.Vibration)
 
