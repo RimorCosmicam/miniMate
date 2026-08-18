@@ -7,7 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.ui.theme.AccentBlue
 import com.minimate.ui.theme.AccentCyan
+import com.minimate.ui.theme.AccentPink
 import com.minimate.ui.theme.AccentPurple
 import com.minimate.ui.theme.BallDim
 import com.minimate.ui.theme.BallNormal
@@ -64,6 +66,7 @@ data class PetalConfig(
     val label: String,
     val icon: ImageVector,
     val angleDeg: Float, // Negative angles: fan upwards & right from bottom-left corner
+    val radiusDp: Float,  // Tailored radius to ensure 100% zero overlap
     val color: Color
 )
 
@@ -79,23 +82,30 @@ fun FloatingInteractionBall(
 ) {
     if (isLocked) return // Hides ball completely in Lock mode
 
+    var isPressed by remember { mutableStateOf(false) }
     var isDragging by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var activeAction by remember { mutableStateOf(RadialAction.NONE) }
     val density = LocalDensity.current
 
-    // The 4 essential petals fanning perfectly into the screen viewable area
+    // Perfectly spaced non-overlapping petals with distinct radii and wide angular separation
     val petals = remember {
         listOf(
-            PetalConfig(RadialAction.PAIRING, "Pair", Icons.Default.Bluetooth, -15f, AccentBlue),
-            PetalConfig(RadialAction.SETTINGS, "Settings", Icons.Default.Settings, -40f, AccentCyan),
-            PetalConfig(RadialAction.THEMES, "Themes", Icons.Default.Palette, -65f, AccentPurple),
-            PetalConfig(RadialAction.LOCK, "Lock", Icons.Default.Lock, -90f, Color(0xFFEF4444))
+            PetalConfig(RadialAction.PAIRING, "Pair", Icons.Default.Bluetooth, -8f, 80f, AccentBlue),
+            PetalConfig(RadialAction.SETTINGS, "Settings", Icons.Default.Settings, -34f, 86f, AccentCyan),
+            PetalConfig(RadialAction.THEMES, "Themes", Icons.Default.Palette, -60f, 86f, AccentPink),
+            PetalConfig(RadialAction.LOCK, "Lock", Icons.Default.Lock, -86f, 80f, Color(0xFFEF4444))
         )
     }
 
+    val ballScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
+        label = "BallPressScale"
+    )
+
     val ballSize by animateDpAsState(
-        targetValue = if (isDimMode || isDragging) 38.dp else 48.dp,
+        targetValue = if (isDimMode) 38.dp else 48.dp,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
         label = "BallSize"
     )
@@ -108,14 +118,14 @@ fun FloatingInteractionBall(
 
     Box(
         modifier = modifier
-            .padding(start = 18.dp, bottom = 18.dp)
+            .padding(start = 16.dp, bottom = 16.dp)
             .size(56.dp),
         contentAlignment = Alignment.Center
     ) {
         // Radial Action Petals Fan Arc (Active while holding & dragging)
-        if (isDragging) {
-            val radiusPx = with(density) { 68.dp.toPx() } // Compact radius so it NEVER clips
+        if (isDragging || isPressed) {
             petals.forEach { petal ->
+                val radiusPx = with(density) { petal.radiusDp.dp.toPx() }
                 val angleRad = Math.toRadians(petal.angleDeg.toDouble())
                 val targetX = (cos(angleRad) * radiusPx).toFloat()
                 val targetY = (sin(angleRad) * radiusPx).toFloat()
@@ -123,17 +133,22 @@ fun FloatingInteractionBall(
                 val isSelected = activeAction == petal.action
 
                 val petalScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.22f else 1.0f,
-                    animationSpec = spring(dampingRatio = 0.7f),
+                    targetValue = if (isSelected) 1.25f else if (isDragging) 1.0f else 0.85f,
+                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
                     label = "PetalScale"
                 )
 
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(targetX.roundToInt(), targetY.roundToInt()) }
-                        .size(44.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
-                        .background(if (isSelected) petal.color else Color(0xEE161722))
+                        .background(if (isSelected) petal.color else Color(0xD0181924))
+                        .border(
+                            1.5.dp,
+                            if (isSelected) Color.White else petal.color.copy(alpha = 0.5f),
+                            CircleShape
+                        )
                         .padding(2.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -142,12 +157,12 @@ fun FloatingInteractionBall(
                             imageVector = petal.icon,
                             contentDescription = petal.label,
                             tint = if (isSelected) Color.White else petal.color,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = petal.label,
-                            color = if (isSelected) Color.White else Color(0xFF9E9EA7),
-                            fontSize = 8.sp,
+                            color = if (isSelected) Color.White else Color(0xFFC0C0D0),
+                            fontSize = 7.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1
                         )
@@ -156,101 +171,125 @@ fun FloatingInteractionBall(
             }
         }
 
-        // The Floating Sphere
-        Canvas(
+        // Instant-response Interactive Touch Surface on the Ball
+        Box(
             modifier = Modifier
-                .size(ballSize)
+                .size(ballSize * ballScale)
                 .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = {
-                            isDragging = true
-                            dragOffset = Offset.Zero
-                            activeAction = RadialAction.NONE
-                            onTouchDown() // Immediate physical haptic feedback on touch!
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            dragOffset += dragAmount
-
-                            val dist = hypot(dragOffset.x, dragOffset.y)
-                            val triggerDist = with(density) { 32.dp.toPx() }
-
-                            if (dist > triggerDist) {
-                                val angleRad = atan2(dragOffset.y.toDouble(), dragOffset.x.toDouble())
-                                val angleDeg = Math.toDegrees(angleRad).toFloat()
-
-                                // Select closest petal
-                                val closest = petals.minByOrNull { petal ->
-                                    var diff = Math.abs(petal.angleDeg - angleDeg)
-                                    if (diff > 180) diff = 360 - diff
-                                    diff
-                                }
-
-                                val newAction = closest?.action ?: RadialAction.NONE
-                                if (newAction != activeAction && newAction != RadialAction.NONE) {
-                                    activeAction = newAction
-                                    onHapticTick()
-                                }
-                            } else {
-                                if (activeAction != RadialAction.NONE) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            when (event.type) {
+                                PointerEventType.Press -> {
+                                    isPressed = true
+                                    isDragging = false
+                                    dragOffset = Offset.Zero
                                     activeAction = RadialAction.NONE
-                                    onHapticTick()
+                                    onTouchDown() // Immediate physical haptic feedback on touch down!
                                 }
+
+                                PointerEventType.Move -> {
+                                    val currentPos = event.changes.firstOrNull()?.position ?: Offset.Zero
+                                    val center = Offset(size.width / 2f, size.height / 2f)
+                                    val currentDrag = currentPos - center
+                                    dragOffset = currentDrag
+
+                                    val dist = hypot(dragOffset.x, dragOffset.y)
+                                    val triggerDist = with(density) { 24.dp.toPx() }
+
+                                    if (dist > triggerDist) {
+                                        isDragging = true
+                                        val angleRad = atan2(dragOffset.y.toDouble(), dragOffset.x.toDouble())
+                                        val angleDeg = Math.toDegrees(angleRad).toFloat()
+
+                                        // Select closest petal
+                                        val closest = petals.minByOrNull { petal ->
+                                            var diff = Math.abs(petal.angleDeg - angleDeg)
+                                            if (diff > 180) diff = 360 - diff
+                                            diff
+                                        }
+
+                                        val newAction = closest?.action ?: RadialAction.NONE
+                                        if (newAction != activeAction && newAction != RadialAction.NONE) {
+                                            activeAction = newAction
+                                            onHapticTick()
+                                        }
+                                    } else {
+                                        if (activeAction != RadialAction.NONE) {
+                                            activeAction = RadialAction.NONE
+                                            onHapticTick()
+                                        }
+                                    }
+                                }
+
+                                PointerEventType.Release -> {
+                                    if (isDragging && activeAction != RadialAction.NONE) {
+                                        onActionSelected(activeAction)
+                                    } else {
+                                        // Tap / press without dragging -> triggers user's configured shortcut instantly!
+                                        onTapShortcut()
+                                    }
+                                    isPressed = false
+                                    isDragging = false
+                                    dragOffset = Offset.Zero
+                                    activeAction = RadialAction.NONE
+                                }
+
+                                PointerEventType.Unknown -> Unit
                             }
-                        },
-                        onDragEnd = {
-                            if (activeAction != RadialAction.NONE) {
-                                onActionSelected(activeAction)
-                            } else {
-                                // Tap / press without dragging -> triggers user's configured shortcut
-                                onTapShortcut()
-                            }
-                            isDragging = false
-                            dragOffset = Offset.Zero
-                            activeAction = RadialAction.NONE
-                        },
-                        onDragCancel = {
-                            isDragging = false
-                            dragOffset = Offset.Zero
-                            activeAction = RadialAction.NONE
                         }
-                    )
+                    }
                 }
         ) {
-            val radius = size.minDimension / 2f
-            val centerOffset = Offset(size.width / 2f, size.height / 2f)
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val radius = size.minDimension / 2f
+                val centerOffset = Offset(size.width / 2f, size.height / 2f)
 
-            // Tactile shadow
-            drawCircle(
-                color = Color(0x77000000),
-                radius = radius + 3f,
-                center = centerOffset + Offset(0f, 4f)
-            )
+                // Interactive Glow Ring when pressed
+                if (isPressed) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(AccentCyan.copy(alpha = 0.5f), Color.Transparent),
+                            center = centerOffset,
+                            radius = radius * 1.6f
+                        ),
+                        radius = radius * 1.6f,
+                        center = centerOffset
+                    )
+                }
 
-            // Sphere base gradient
-            val fillBrush = if (isDimMode) {
-                Brush.radialGradient(
-                    colors = listOf(Color.White, Color(0xFFE2E4E9), Color(0xFF9E9EA7)),
-                    center = centerOffset - Offset(radius * 0.3f, radius * 0.3f),
-                    radius = radius * 1.4f
+                // Tactile shadow
+                drawCircle(
+                    color = Color(0x88000000),
+                    radius = radius + 3f,
+                    center = centerOffset + Offset(0f, 4f)
                 )
-            } else {
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFF2C2D35), Color(0xFF16171E), Color(0xFF090A0D)),
-                    center = centerOffset - Offset(radius * 0.35f, radius * 0.35f),
-                    radius = radius * 1.5f
+
+                // Sphere base gradient
+                val fillBrush = if (isDimMode) {
+                    Brush.radialGradient(
+                        colors = listOf(Color.White, Color(0xFFE2E4E9), Color(0xFF9E9EA7)),
+                        center = centerOffset - Offset(radius * 0.3f, radius * 0.3f),
+                        radius = radius * 1.4f
+                    )
+                } else {
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFF383A48), Color(0xFF1E1F2A), Color(0xFF0D0E14)),
+                        center = centerOffset - Offset(radius * 0.35f, radius * 0.35f),
+                        radius = radius * 1.5f
+                    )
+                }
+
+                drawCircle(brush = fillBrush, radius = radius, center = centerOffset)
+
+                // Metallic / Glass rim highlight
+                drawCircle(
+                    color = if (isPressed) AccentCyan else if (isDimMode) Color(0x40000000) else Color(0x38FFFFFF),
+                    radius = radius - 0.5f,
+                    center = centerOffset,
+                    style = Stroke(width = if (isPressed) 2f else 1.2f)
                 )
             }
-
-            drawCircle(brush = fillBrush, radius = radius, center = centerOffset)
-
-            // Metallic rim highlight
-            drawCircle(
-                color = if (isDimMode) Color(0x40000000) else Color(0x2EFFFFFF),
-                radius = radius - 0.5f,
-                center = centerOffset,
-                style = Stroke(width = 1.2f)
-            )
         }
     }
 }
