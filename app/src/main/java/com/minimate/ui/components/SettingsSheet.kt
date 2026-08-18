@@ -32,12 +32,12 @@ import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Water
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothUiState
+import com.minimate.touchpad.model.AnalogStickMode
 import com.minimate.touchpad.model.BackgroundTheme
 import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.ClockStyle
@@ -106,7 +107,7 @@ fun SettingsSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = Color.Transparent,
-        scrimColor = Color(0x20000000), // Transparent glass scrim
+        scrimColor = Color(0x25000000),
         dragHandle = null,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -130,12 +131,19 @@ fun SettingsSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Control Center",
-                            color = TextPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Column {
+                            Text(
+                                text = "Control Center",
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Tip: Tap Clock to cycle themes • Hold Clock for settings",
+                                color = AccentCyan,
+                                fontSize = 9.5.sp
+                            )
+                        }
                         IconButton(
                             onClick = onDismiss,
                             modifier = Modifier
@@ -223,34 +231,60 @@ fun SettingsSheet(
                         ) {
                             Icon(Icons.Default.OpenWith, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Open Freeform Screen Editor", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Open Screen Editor (Move Stick & Clock)", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    // Multi-Action Ball Configuration (1 Click, 2 Clicks, Hold)
+                    // Single-Hand Liquid Glass Analog Stick
                     item {
-                        FloatingSectionTitle("Liquid Glass Ball Multi-Actions")
+                        FloatingSectionTitle("Liquid Glass Analog Stick (Single-Hand)")
                     }
                     item {
                         FloatingCard {
-                            ActionSelector("Single Click (1 Tap)", settings.ballSingleTapAction) {
-                                onSettingsChange(settings.copy(ballSingleTapAction = it))
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            ActionSelector("Double Click (2 Taps)", settings.ballDoubleTapAction) {
-                                onSettingsChange(settings.copy(ballDoubleTapAction = it))
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            ActionSelector("Hold & Drag Gesture", settings.ballHoldAction) {
-                                onSettingsChange(settings.copy(ballHoldAction = it))
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SwitchItem(
-                                "Show Amoled Mode in Menu",
-                                "Shows OLED dark switch inside liquid menu dock",
-                                settings.showAmoledInMenu
+                            Text("Stick Tilt Mode", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                onSettingsChange(settings.copy(showAmoledInMenu = it))
+                                AnalogStickMode.values().forEach { mode ->
+                                    val isSel = settings.analogStickMode == mode
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isSel) AccentCyan else Color(0x22FFFFFF))
+                                            .clickable { onSettingsChange(settings.copy(analogStickMode = mode)) }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            mode.label.take(12),
+                                            color = if (isSel) Color.Black else TextSecondary,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SliderItem("Stick Scroll Speed", settings.stickScrollSensitivity, 0.4f..2.5f) {
+                                onSettingsChange(settings.copy(stickScrollSensitivity = it))
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ActionSelector("Stick Tap (1 Click)", settings.stickSingleTapAction) {
+                                onSettingsChange(settings.copy(stickSingleTapAction = it))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ActionSelector("Stick Double Tap (2 Clicks)", settings.stickDoubleTapAction) {
+                                onSettingsChange(settings.copy(stickDoubleTapAction = it))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ActionSelector("Stick Hold (Long Press)", settings.stickHoldAction) {
+                                onSettingsChange(settings.copy(stickHoldAction = it))
                             }
                         }
                     }
@@ -285,7 +319,7 @@ fun SettingsSheet(
                     }
                     item {
                         FloatingCard {
-                            SliderItem("Scroll Speed", settings.scrollSpeed, 0.4f..2.5f) {
+                            SliderItem("2-Finger Scroll Speed", settings.scrollSpeed, 0.4f..2.5f) {
                                 onSettingsChange(settings.copy(scrollSpeed = it))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
@@ -454,7 +488,7 @@ fun SettingsSheet(
                 else if (selectedTab == 1) {
                     // Quick Preset Cycler Slots (5 Presets)
                     item {
-                        FloatingSectionTitle("Saved Quick-Switch Presets (Up to 5)")
+                        FloatingSectionTitle("Saved Theme Presets (Tap Clock to Cycle)")
                     }
                     item {
                         Row(

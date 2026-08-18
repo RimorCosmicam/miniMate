@@ -217,7 +217,7 @@ fun ScreenEditorOverlay(
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Liquid Ball Size", color = if (selectedElement == "ball") Color.White else TextSecondary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                        Text("Analog Stick Size", color = if (selectedElement == "ball") Color.White else TextSecondary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                     }
                     Box(
                         modifier = Modifier
@@ -240,7 +240,7 @@ fun ScreenEditorOverlay(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Size (${settings.ballSizeDp.roundToInt()} dp)", color = TextPrimary, fontSize = 11.sp)
+                        Text("Stick Size (${settings.ballSizeDp.roundToInt()} dp)", color = TextPrimary, fontSize = 11.sp)
                     }
                     Slider(
                         value = settings.ballSizeDp,

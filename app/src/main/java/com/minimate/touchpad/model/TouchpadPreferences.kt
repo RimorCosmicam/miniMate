@@ -7,7 +7,7 @@ import org.json.JSONObject
 
 /**
  * Robust persistent storage for TouchpadSettings using Android SharedPreferences.
- * Preserves all user configurations, themes, presets, ball actions, and layout coordinates across launches.
+ * Preserves all user configurations, themes, presets, analog stick settings, and layout coordinates across launches.
  */
 class TouchpadPreferences(context: Context) {
 
@@ -56,11 +56,13 @@ class TouchpadPreferences(context: Context) {
                 put("fingerEffect", settings.fingerEffect.name)
                 put("fingerEffectsEnabled", settings.fingerEffectsEnabled)
 
-                // Ball actions
-                put("ballSingleTapAction", settings.ballSingleTapAction.name)
-                put("ballDoubleTapAction", settings.ballDoubleTapAction.name)
-                put("ballHoldAction", settings.ballHoldAction.name)
-                put("showAmoledInMenu", settings.showAmoledInMenu)
+                // Analog Stick (Single Hand Mode)
+                put("analogStickMode", settings.analogStickMode.name)
+                put("stickSingleTapAction", settings.stickSingleTapAction.name)
+                put("stickDoubleTapAction", settings.stickDoubleTapAction.name)
+                put("stickHoldAction", settings.stickHoldAction.name)
+                put("stickScrollSensitivity", settings.stickScrollSensitivity.toDouble())
+                put("stickDeadzone", settings.stickDeadzone.toDouble())
 
                 // Screen Editor layout
                 put("ballPositionX", settings.ballPositionX.toDouble())
@@ -138,27 +140,33 @@ class TouchpadPreferences(context: Context) {
                     FingerEffect.CHERRY_PETALS
                 },
                 fingerEffectsEnabled = json.optBoolean("fingerEffectsEnabled", false),
-                ballSingleTapAction = try {
-                    BallAction.valueOf(json.optString("ballSingleTapAction", "LIQUID_WOBBLE"))
+                analogStickMode = try {
+                    AnalogStickMode.valueOf(json.optString("analogStickMode", "ANALOG_SCROLL"))
                 } catch (_: Exception) {
-                    BallAction.LIQUID_WOBBLE
+                    AnalogStickMode.ANALOG_SCROLL
                 },
-                ballDoubleTapAction = try {
-                    BallAction.valueOf(json.optString("ballDoubleTapAction", "MIDDLE_CLICK"))
+                stickSingleTapAction = try {
+                    BallAction.valueOf(json.optString("stickSingleTapAction", "MIDDLE_CLICK"))
                 } catch (_: Exception) {
                     BallAction.MIDDLE_CLICK
                 },
-                ballHoldAction = try {
-                    BallAction.valueOf(json.optString("ballHoldAction", "HOLD_AND_DRAG_MENU"))
+                stickDoubleTapAction = try {
+                    BallAction.valueOf(json.optString("stickDoubleTapAction", "RIGHT_CLICK"))
                 } catch (_: Exception) {
-                    BallAction.HOLD_AND_DRAG_MENU
+                    BallAction.RIGHT_CLICK
                 },
-                showAmoledInMenu = json.optBoolean("showAmoledInMenu", true),
-                ballPositionX = json.optDouble("ballPositionX", 0.12).toFloat(),
-                ballPositionY = json.optDouble("ballPositionY", 0.86).toFloat(),
-                ballSizeDp = json.optDouble("ballSizeDp", 48.0).toFloat(),
+                stickHoldAction = try {
+                    BallAction.valueOf(json.optString("stickHoldAction", "AMOLED_DIM"))
+                } catch (_: Exception) {
+                    BallAction.AMOLED_DIM
+                },
+                stickScrollSensitivity = json.optDouble("stickScrollSensitivity", 1.0).toFloat(),
+                stickDeadzone = json.optDouble("stickDeadzone", 0.10).toFloat(),
+                ballPositionX = json.optDouble("ballPositionX", 0.15).toFloat(),
+                ballPositionY = json.optDouble("ballPositionY", 0.82).toFloat(),
+                ballSizeDp = json.optDouble("ballSizeDp", 64.0).toFloat(),
                 clockPositionX = json.optDouble("clockPositionX", 0.50).toFloat(),
-                clockPositionY = json.optDouble("clockPositionY", 0.08).toFloat(),
+                clockPositionY = json.optDouble("clockPositionY", 0.09).toFloat(),
                 clockScale = json.optDouble("clockScale", 1.0).toFloat(),
                 clockStyle = try {
                     ClockStyle.valueOf(json.optString("clockStyle", "MINIMAL_PILL"))

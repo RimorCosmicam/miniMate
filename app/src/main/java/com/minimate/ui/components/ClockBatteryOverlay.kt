@@ -1,7 +1,10 @@
 package com.minimate.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -47,6 +52,11 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * Interactive Clock & Battery HUD Widget.
+ * - Tap: Cycle Theme Preset
+ * - Hold: Open Settings Control Center
+ */
 @Composable
 fun ClockBatteryOverlay(
     clockStyle: ClockStyle,
@@ -61,12 +71,21 @@ fun ClockBatteryOverlay(
     batteryPercentage: Int,
     bluetoothState: BluetoothUiState,
     dimRatio: Float,
+    onTap: () -> Unit = {},
+    onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (clockStyle == ClockStyle.OFF || dimRatio > 0.85f) return
 
     var currentTimeText by remember { mutableStateOf("") }
     var currentAmPm by remember { mutableStateOf("") }
+    var isPressed by remember { mutableStateOf(false) }
+
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
+        label = "ClockPressScale"
+    )
 
     LaunchedEffect(show24Hour, showSeconds) {
         while (true) {
@@ -90,31 +109,53 @@ fun ClockBatteryOverlay(
         }
     }
 
-    // Dynamic pixel position based on normalized coordinates
-    val widgetWidth = (140f * clockScale) * 2.7f
-    val widgetHeight = (36f * clockScale) * 2.7f
+    val widgetWidth = (145f * clockScale) * 2.7f
+    val widgetHeight = (38f * clockScale) * 2.7f
     val posX = (positionXFraction * screenWidthPx - widgetWidth / 2f).coerceIn(8f, screenWidthPx - widgetWidth - 8f)
     val posY = (positionYFraction * screenHeightPx - widgetHeight / 2f).coerceIn(8f, screenHeightPx - widgetHeight - 8f)
 
     Box(
         modifier = modifier
             .offset { IntOffset(posX.roundToInt(), posY.roundToInt()) }
-            .scale(clockScale)
+            .scale(clockScale * pressScale)
+            .shadow(12.dp, RoundedCornerShape(18.dp), spotColor = AccentCyan.copy(alpha = 0.35f))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        tryAwaitRelease()
+                        isPressed = false
+                    },
+                    onTap = { onTap() },
+                    onLongPress = { onLongPress() }
+                )
+            }
     ) {
         when (clockStyle) {
             ClockStyle.MINIMAL_PILL -> {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xD912131F))
-                        .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xEA161828),
+                                    Color(0xF010111D)
+                                )
+                            )
+                        )
+                        .border(
+                            1.2.dp,
+                            if (isPressed) AccentPink else Color(0x35FFFFFF),
+                            RoundedCornerShape(18.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = currentTimeText,
                         color = TextPrimary,
-                        fontSize = 12.5.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     )
@@ -138,7 +179,7 @@ fun ClockBatteryOverlay(
                                 tint = if (batteryPercentage < 20) Color(0xFFEF4444) else AccentEmerald,
                                 modifier = Modifier.size(12.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = "$batteryPercentage%",
                                 color = TextSecondary,
@@ -152,7 +193,7 @@ fun ClockBatteryOverlay(
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
-                                .size(5.dp)
+                                .size(6.dp)
                                 .clip(CircleShape)
                                 .background(AccentCyan)
                         )
@@ -163,10 +204,14 @@ fun ClockBatteryOverlay(
             ClockStyle.DIGITAL_BOLD -> {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xCC000000))
-                        .border(1.dp, AccentCyan.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xD90A0C16))
+                        .border(
+                            1.2.dp,
+                            if (isPressed) AccentPink else AccentCyan.copy(alpha = 0.5f),
+                            RoundedCornerShape(14.dp)
+                        )
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -192,21 +237,22 @@ fun ClockBatteryOverlay(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0x88000000))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .background(Color(0xCC10121C))
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = currentTimeText,
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium
                     )
                     if (showBattery) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "$batteryPercentage%",
-                            color = Color.White.copy(alpha = 0.6f),
+                            color = Color.White.copy(alpha = 0.65f),
                             fontSize = 9.5.sp
                         )
                     }
@@ -216,10 +262,10 @@ fun ClockBatteryOverlay(
             ClockStyle.MONOSPACE -> {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xEE0A0C14))
-                        .border(1.dp, Color(0xFF00FF66).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xF0080B12))
+                        .border(1.dp, Color(0xFF00FF66).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 11.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(

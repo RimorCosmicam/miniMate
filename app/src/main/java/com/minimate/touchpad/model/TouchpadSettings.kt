@@ -82,18 +82,24 @@ enum class FingerEffect(val displayName: String, val description: String) {
     MINIMAL_DOT("Clean Dot", "Minimalist precision micro-dot with zero clutter")
 }
 
+enum class AnalogStickMode(val label: String, val description: String) {
+    ANALOG_SCROLL("2D Analog Scroller", "Tilt stick in any direction to scroll continuously with velocity scaling"),
+    ANALOG_CURSOR("Continuous Cursor", "Tilt stick to glide the mouse pointer continuously"),
+    VIRTUAL_DPAD("Directional D-Pad", "Push up/down/left/right to trigger page scroll & navigation")
+}
+
 enum class BallAction(val label: String, val description: String) {
-    HOLD_AND_DRAG_MENU("Hold & Drag Menu", "Expands liquid menu with slide-to-select"),
-    LIQUID_WOBBLE("Liquid Ripple", "Plays elastic liquid glass fluid wave animation"),
-    AMOLED_DIM("Amoled Mode", "Toggles display to pure black battery saver"),
     MIDDLE_CLICK("Middle Click (M3)", "Emits standard mouse middle button (Scroll Click)"),
     RIGHT_CLICK("Right Click", "Emits secondary mouse click"),
+    LEFT_CLICK("Left Click", "Emits primary mouse click"),
     BACK_BUTTON("Back Button (M4)", "Emits browser/app Back mouse button 4"),
     FORWARD_BUTTON("Forward Button (M5)", "Emits browser/app Forward mouse button 5"),
     CYCLE_THEME("Cycle Theme Preset", "Instantly switches to next saved theme preset"),
+    AMOLED_DIM("Amoled Mode", "Toggles display to pure black battery saver"),
     OPEN_SETTINGS("Open Settings", "Opens the 3-tab Control Center"),
     PAIRING_MODE("Pairing Hub", "Opens Bluetooth device manager"),
     SCREEN_EDITOR("Screen Editor", "Enables freeform dragging & resizing of UI elements"),
+    LIQUID_WOBBLE("Liquid Ripple", "Plays elastic liquid glass fluid wave animation"),
     DISABLED("Disabled", "No action performed")
 }
 
@@ -112,8 +118,8 @@ enum class ClockStyle(val label: String) {
 }
 
 data class TouchpadSettings(
-    val trackingSpeed: Float = 1.15f,
-    val acceleration: Float = 1.20f,
+    val trackingSpeed: Float = 1.0f,
+    val acceleration: Float = 1.15f,
     val scrollSpeed: Float = 1.0f,
     val naturalScrolling: Boolean = true,
     val invertCursorY: Boolean = false,
@@ -139,27 +145,29 @@ data class TouchpadSettings(
     ),
     val currentPresetIndex: Int = 0,
     val fingerEffect: FingerEffect = FingerEffect.CHERRY_PETALS,
-    val fingerEffectsEnabled: Boolean = false, // Disabled by default per user feedback
+    val fingerEffectsEnabled: Boolean = false,
     
-    // Ball actions (1 Click, 2 Clicks, Hold)
-    val ballSingleTapAction: BallAction = BallAction.LIQUID_WOBBLE,
-    val ballDoubleTapAction: BallAction = BallAction.MIDDLE_CLICK,
-    val ballHoldAction: BallAction = BallAction.HOLD_AND_DRAG_MENU,
-    val showAmoledInMenu: Boolean = true,
+    // Analog Stick Configurations (Single Hand Mastery)
+    val analogStickMode: AnalogStickMode = AnalogStickMode.ANALOG_SCROLL,
+    val stickSingleTapAction: BallAction = BallAction.MIDDLE_CLICK,
+    val stickDoubleTapAction: BallAction = BallAction.RIGHT_CLICK,
+    val stickHoldAction: BallAction = BallAction.AMOLED_DIM,
+    val stickScrollSensitivity: Float = 1.0f,
+    val stickDeadzone: Float = 0.10f,
     
     // Screen Editor: Freeform Positions & Sizes (Normalized 0.0..1.0 coordinates and dp sizes)
-    val ballPositionX: Float = 0.12f, // Left side
-    val ballPositionY: Float = 0.86f, // Near bottom
-    val ballSizeDp: Float = 48f,
+    val ballPositionX: Float = 0.15f, // Left side comfortable for thumb
+    val ballPositionY: Float = 0.82f, // Bottom corner
+    val ballSizeDp: Float = 64f, // 64dp analog stick base
     
     val clockPositionX: Float = 0.50f, // Centered horizontally
-    val clockPositionY: Float = 0.08f, // Near top
+    val clockPositionY: Float = 0.09f, // Near top
     val clockScale: Float = 1.0f,
     
     val isLocked: Boolean = false,
     val isEditorMode: Boolean = false,
     
-    // Clock & HUD customization
+    // Clock & HUD customization (Tap = Cycle Theme, Hold = Open Settings)
     val clockStyle: ClockStyle = ClockStyle.MINIMAL_PILL,
     val show24HourFormat: Boolean = false,
     val showSeconds: Boolean = false,
