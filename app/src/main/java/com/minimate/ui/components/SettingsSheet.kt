@@ -21,28 +21,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InvertColors
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Water
 import androidx.compose.material.icons.filled.Waves
-import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +70,7 @@ import com.minimate.touchpad.model.ClockPosition
 import com.minimate.touchpad.model.ClockStyle
 import com.minimate.touchpad.model.FingerEffect
 import com.minimate.touchpad.model.HapticIntensity
+import com.minimate.touchpad.model.ThemePreset
 import com.minimate.touchpad.model.ThemeVariant
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.ui.theme.AccentBlue
@@ -103,14 +98,14 @@ fun SettingsSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Settings, 1: Theme, 2: Finger Shader
     var previewEffect by remember { mutableStateOf<FingerEffect?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = Color.Transparent,
-        scrimColor = Color(0x20000000), // Sheer transparent scrim to see shader behind
+        scrimColor = Color(0x20000000), // Transparent glass scrim
         dragHandle = null,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -157,7 +152,7 @@ fun SettingsSheet(
                     }
                 }
 
-                // 4 Modern Navigation Tabs
+                // 3 Modern Tabs: Settings, Theme, Finger Shader
                 item {
                     Row(
                         modifier = Modifier
@@ -166,13 +161,12 @@ fun SettingsSheet(
                             .background(Color(0xEE161726))
                             .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(16.dp))
                             .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         val tabs = listOf(
-                            Triple(0, "Themes", Icons.Default.Palette),
-                            Triple(1, "Touch FX", Icons.Default.TouchApp),
-                            Triple(2, "Clock & HUD", Icons.Default.Schedule),
-                            Triple(3, "Settings", Icons.Default.Tune)
+                            Triple(0, "Settings", Icons.Default.Tune),
+                            Triple(1, "Theme", Icons.Default.Palette),
+                            Triple(2, "Finger Shader", Icons.Default.TouchApp)
                         )
                         tabs.forEach { (index, title, icon) ->
                             val isSel = selectedTab == index
@@ -185,20 +179,19 @@ fun SettingsSheet(
                                     .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = icon,
                                         contentDescription = title,
                                         tint = if (isSel) Color.White else TextSecondary,
-                                        modifier = Modifier.size(17.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = title,
                                         color = if (isSel) Color.White else TextSecondary,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                                        maxLines = 1
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
                                     )
                                 }
                             }
@@ -206,8 +199,335 @@ fun SettingsSheet(
                     }
                 }
 
-                // ==================== TAB 0: THEMES ====================
+                // ==================== TAB 0: SETTINGS ====================
                 if (selectedTab == 0) {
+                    // Ball Tap Shortcut Configuration
+                    item {
+                        FloatingSectionTitle("Liquid Glass Ball Tap Action")
+                    }
+                    item {
+                        FloatingCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                ButtonPressAction.values().forEach { action ->
+                                    val sel = settings.buttonPressAction == action
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (sel) AccentBlue.copy(alpha = 0.25f) else Color.Transparent)
+                                            .border(
+                                                1.dp,
+                                                if (sel) AccentBlue else Color.Transparent,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable { onSettingsChange(settings.copy(buttonPressAction = action)) }
+                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = action.label,
+                                                color = if (sel) AccentCyan else TextPrimary,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = action.description,
+                                                color = TextSecondary,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                        if (sel) {
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Pointer Tracking & Acceleration
+                    item {
+                        FloatingSectionTitle("Pointer Speed & Acceleration")
+                    }
+                    item {
+                        FloatingCard {
+                            SliderItem("Tracking Speed", settings.trackingSpeed, 0.4f..2.5f) {
+                                onSettingsChange(settings.copy(trackingSpeed = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SliderItem("Acceleration", settings.acceleration, 0.5f..2.5f) {
+                                onSettingsChange(settings.copy(acceleration = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SwitchItem(
+                                "Invert Cursor Y",
+                                "Reverses up/down pointer direction",
+                                settings.invertCursorY
+                            ) {
+                                onSettingsChange(settings.copy(invertCursorY = it))
+                            }
+                        }
+                    }
+
+                    // Scrolling & Gestures
+                    item {
+                        FloatingSectionTitle("Scrolling & Gestures")
+                    }
+                    item {
+                        FloatingCard {
+                            SliderItem("Scroll Speed", settings.scrollSpeed, 0.4f..2.5f) {
+                                onSettingsChange(settings.copy(scrollSpeed = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SwitchItem(
+                                "Natural Scrolling",
+                                "Content moves with finger direction",
+                                settings.naturalScrolling
+                            ) {
+                                onSettingsChange(settings.copy(naturalScrolling = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SwitchItem(
+                                "Kinetic Momentum",
+                                "Fluid inertial deceleration",
+                                settings.momentumScrolling
+                            ) {
+                                onSettingsChange(settings.copy(momentumScrolling = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SwitchItem(
+                                "Tap to Click",
+                                "Single tap = primary click",
+                                settings.tapToClick
+                            ) {
+                                onSettingsChange(settings.copy(tapToClick = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SwitchItem(
+                                "Two-Finger Right Click",
+                                "Two-finger tap = secondary click",
+                                settings.twoFingerRightClick
+                            ) {
+                                onSettingsChange(settings.copy(twoFingerRightClick = it))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            SwitchItem(
+                                "Double-Tap Drag",
+                                "Double tap and slide to drag",
+                                settings.doubleTapDrag
+                            ) {
+                                onSettingsChange(settings.copy(doubleTapDrag = it))
+                            }
+                        }
+                    }
+
+                    // Clock & Battery HUD
+                    item {
+                        FloatingSectionTitle("Clock & Battery HUD Overlay")
+                    }
+                    item {
+                        FloatingCard {
+                            Text("Clock Style", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                ClockStyle.values().forEach { style ->
+                                    val sel = settings.clockStyle == style
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (sel) AccentCyan else Color(0x22FFFFFF))
+                                            .clickable { onSettingsChange(settings.copy(clockStyle = style)) }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(style.label, color = if (sel) Color.Black else TextSecondary, fontSize = 9.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            SwitchItem(
+                                "24-Hour Format",
+                                "Display 24h military time",
+                                settings.show24HourFormat
+                            ) {
+                                onSettingsChange(settings.copy(show24HourFormat = it))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            SwitchItem(
+                                "Show Battery %",
+                                "Battery charge pill in HUD",
+                                settings.showBatteryPercentage
+                            ) {
+                                onSettingsChange(settings.copy(showBatteryPercentage = it))
+                            }
+                        }
+                    }
+
+                    // Haptics & Reset
+                    item {
+                        FloatingSectionTitle("Haptic Feedback")
+                    }
+                    item {
+                        FloatingCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                HapticIntensity.values().forEach { h ->
+                                    val sel = settings.hapticIntensity == h
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (sel) AccentCyan else Color(0x22FFFFFF))
+                                            .clickable { onSettingsChange(settings.copy(hapticIntensity = h)) }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            h.name.lowercase().replaceFirstChar { it.uppercase() },
+                                            color = if (sel) Color.Black else TextSecondary,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Bluetooth Pairing Hub Shortcut
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(AccentCyan, AccentPink)
+                                    )
+                                )
+                                .clickable { onPairNewDevice() }
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.BluetoothSearching, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Open Pairing & Host Hub", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Reset Defaults
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x881E1F2C))
+                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(12.dp))
+                                .clickable { onSettingsChange(TouchpadSettings()) }
+                                .padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Reset All Defaults", color = TextSecondary, fontSize = 11.5.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+
+                // ==================== TAB 1: THEME ====================
+                else if (selectedTab == 1) {
+                    // Quick Preset Cycler Slots (5 Presets)
+                    item {
+                        FloatingSectionTitle("Saved Quick-Switch Presets (Up to 5)")
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            settings.themePresets.take(5).forEachIndexed { index, preset ->
+                                val isActive = settings.currentPresetIndex == index
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isActive) AccentEmerald else Color(0xCC181926))
+                                        .border(
+                                            1.dp,
+                                            if (isActive) Color.White else Color(0x22FFFFFF),
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            onSettingsChange(
+                                                settings.copy(
+                                                    backgroundTheme = preset.theme,
+                                                    themeVariant = preset.variant,
+                                                    customImageUri = preset.customUri,
+                                                    currentPresetIndex = index
+                                                )
+                                            )
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            "Slot ${index + 1}",
+                                            color = if (isActive) Color.Black else TextPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            preset.theme.displayName.take(8),
+                                            color = if (isActive) Color.Black.copy(alpha = 0.7f) else TextSecondary,
+                                            fontSize = 8.5.sp,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Save Current Theme to Active Preset Slot Button
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x3310B981))
+                                .border(1.dp, AccentEmerald.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                .clickable {
+                                    val updatedPresets = settings.themePresets.toMutableList()
+                                    if (settings.currentPresetIndex in updatedPresets.indices) {
+                                        updatedPresets[settings.currentPresetIndex] = ThemePreset(
+                                            theme = settings.backgroundTheme,
+                                            variant = settings.themeVariant,
+                                            customUri = settings.customImageUri
+                                        )
+                                    }
+                                    onSettingsChange(settings.copy(themePresets = updatedPresets))
+                                }
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Bookmark, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save Current Theme to Slot ${settings.currentPresetIndex + 1}", color = AccentEmerald, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Color Palette Variant
                     item {
                         FloatingSectionTitle("Color Palette Variant")
                     }
@@ -248,8 +568,9 @@ fun SettingsSheet(
                         }
                     }
 
+                    // 10 Procedural Themes
                     item {
-                        FloatingSectionTitle("Procedural Themes")
+                        FloatingSectionTitle("Procedural Themes (Live Background)")
                     }
 
                     val themes = BackgroundTheme.values().filter { it != BackgroundTheme.CUSTOM_IMAGE }
@@ -346,7 +667,7 @@ fun SettingsSheet(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Pick animated GIF or photo from local storage",
+                                    "Pick animated GIF or photo from gallery",
                                     color = TextSecondary,
                                     fontSize = 10.sp
                                 )
@@ -355,13 +676,13 @@ fun SettingsSheet(
                     }
                 }
 
-                // ==================== TAB 1: TOUCH FX ====================
-                else if (selectedTab == 1) {
+                // ==================== TAB 2: FINGER SHADER ====================
+                else {
                     item {
                         FloatingCard {
                             SwitchItem(
                                 title = "Finger Effects",
-                                subtitle = "Multi-touch particle trails following active fingers",
+                                subtitle = "Multi-touch particle trails following active touches",
                                 checked = settings.fingerEffectsEnabled,
                                 onChange = { onSettingsChange(settings.copy(fingerEffectsEnabled = it)) }
                             )
@@ -429,270 +750,11 @@ fun SettingsSheet(
                         }
                     }
                 }
-
-                // ==================== TAB 2: CLOCK & HUD ====================
-                else if (selectedTab == 2) {
-                    item {
-                        FloatingSectionTitle("Clock Style")
-                    }
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            ClockStyle.values().forEach { style ->
-                                val sel = settings.clockStyle == style
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (sel) AccentCyan else Color(0xCC181926))
-                                        .border(1.dp, if (sel) Color.White else Color(0x22FFFFFF), RoundedCornerShape(10.dp))
-                                        .clickable { onSettingsChange(settings.copy(clockStyle = style)) }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        style.label,
-                                        color = if (sel) Color.Black else TextSecondary,
-                                        fontSize = 9.5.sp,
-                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        FloatingSectionTitle("Screen Position")
-                    }
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            ClockPosition.values().forEach { pos ->
-                                val sel = settings.clockPosition == pos
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (sel) AccentPink else Color(0xCC181926))
-                                        .border(1.dp, if (sel) Color.White else Color(0x22FFFFFF), RoundedCornerShape(10.dp))
-                                        .clickable { onSettingsChange(settings.copy(clockPosition = pos)) }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        pos.label,
-                                        color = if (sel) Color.White else TextSecondary,
-                                        fontSize = 9.5.sp,
-                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        FloatingCard {
-                            SwitchItem(
-                                title = "24-Hour Format",
-                                subtitle = "Display military 24h format instead of 12h AM/PM",
-                                checked = settings.show24HourFormat,
-                                onChange = { onSettingsChange(settings.copy(show24HourFormat = it)) }
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                title = "Show Seconds",
-                                subtitle = "Render live running second indicators",
-                                checked = settings.showSeconds,
-                                onChange = { onSettingsChange(settings.copy(showSeconds = it)) }
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                title = "Battery Percentage",
-                                subtitle = "Show live battery percentage in the HUD pill",
-                                checked = settings.showBatteryPercentage,
-                                onChange = { onSettingsChange(settings.copy(showBatteryPercentage = it)) }
-                            )
-                        }
-                    }
-                }
-
-                // ==================== TAB 3: SETTINGS ====================
-                else {
-                    item {
-                        FloatingSectionTitle("Pointer Tracking Speed")
-                    }
-                    item {
-                        FloatingCard {
-                            SliderItem("Tracking Speed", settings.trackingSpeed, 0.4f..2.5f) {
-                                onSettingsChange(settings.copy(trackingSpeed = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SliderItem("Acceleration", settings.acceleration, 0.5f..2.5f) {
-                                onSettingsChange(settings.copy(acceleration = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                "Invert Cursor Y",
-                                "Reverses up/down pointer direction",
-                                settings.invertCursorY
-                            ) {
-                                onSettingsChange(settings.copy(invertCursorY = it))
-                            }
-                        }
-                    }
-
-                    item {
-                        FloatingSectionTitle("Scrolling & Gestures")
-                    }
-                    item {
-                        FloatingCard {
-                            SliderItem("Scroll Speed", settings.scrollSpeed, 0.4f..2.5f) {
-                                onSettingsChange(settings.copy(scrollSpeed = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                "Natural Scrolling",
-                                "Content moves with finger direction",
-                                settings.naturalScrolling
-                            ) {
-                                onSettingsChange(settings.copy(naturalScrolling = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                "Kinetic Momentum",
-                                "Fluid inertial deceleration",
-                                settings.momentumScrolling
-                            ) {
-                                onSettingsChange(settings.copy(momentumScrolling = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                "Tap to Click",
-                                "Single tap = primary click",
-                                settings.tapToClick
-                            ) {
-                                onSettingsChange(settings.copy(tapToClick = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                "Two-Finger Right Click",
-                                "Two-finger tap = secondary click",
-                                settings.twoFingerRightClick
-                            ) {
-                                onSettingsChange(settings.copy(twoFingerRightClick = it))
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            SwitchItem(
-                                "Double-Tap Drag",
-                                "Double tap and slide to drag",
-                                settings.doubleTapDrag
-                            ) {
-                                onSettingsChange(settings.copy(doubleTapDrag = it))
-                            }
-                        }
-                    }
-
-                    item {
-                        FloatingSectionTitle("Ball Tap Shortcut")
-                    }
-                    item {
-                        FloatingCard {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                val actions = listOf(
-                                    ButtonPressAction.STEALTH_DIM to "Dim",
-                                    ButtonPressAction.OPEN_SETTINGS to "Menu",
-                                    ButtonPressAction.PAIRING_MODE to "Pair",
-                                    ButtonPressAction.MIDDLE_CLICK to "Click"
-                                )
-                                actions.forEach { (action, label) ->
-                                    val sel = settings.buttonPressAction == action
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (sel) AccentBlue else Color(0x33FFFFFF))
-                                            .clickable { onSettingsChange(settings.copy(buttonPressAction = action)) }
-                                            .padding(vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            label,
-                                            color = if (sel) Color.White else TextSecondary,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        FloatingSectionTitle("Haptic Feedback")
-                    }
-                    item {
-                        FloatingCard {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                HapticIntensity.values().forEach { h ->
-                                    val sel = settings.hapticIntensity == h
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (sel) AccentCyan else Color(0x22FFFFFF))
-                                            .clickable { onSettingsChange(settings.copy(hapticIntensity = h)) }
-                                            .padding(vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            h.name.lowercase().replaceFirstChar { it.uppercase() },
-                                            color = if (sel) Color.Black else TextSecondary,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Reset Button
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0x881E1F2C))
-                                .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(14.dp))
-                                .clickable { onSettingsChange(TouchpadSettings()) }
-                                .padding(vertical = 11.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Reset All Defaults", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
             }
 
             // Top-Right Live Mini Preview Popup for Finger Effects
             (previewEffect ?: if (settings.fingerEffectsEnabled) settings.fingerEffect else null)?.let { effect ->
-                if (selectedTab == 1) {
+                if (selectedTab == 2) {
                     FingerEffectPreviewPopup(
                         effect = effect,
                         visible = true,

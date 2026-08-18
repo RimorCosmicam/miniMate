@@ -40,12 +40,23 @@ enum class FingerEffect(val displayName: String, val description: String) {
     MINIMAL_DOT("Clean Dot", "Minimalist precision micro-dot with zero clutter")
 }
 
-enum class ButtonPressAction {
-    STEALTH_DIM,
-    OPEN_SETTINGS,
-    PAIRING_MODE,
-    MIDDLE_CLICK
+enum class ButtonPressAction(val label: String, val description: String) {
+    LIQUID_WOBBLE("Liquid Ripple", "Plays elastic liquid glass fluid wave animation"),
+    MIDDLE_CLICK("Middle Click", "Emits standard mouse middle button (Scroll Click)"),
+    RIGHT_CLICK("Right Click", "Emits secondary mouse click"),
+    BACK_BUTTON("Back Button (M4)", "Emits browser/app Back mouse button 4"),
+    FORWARD_BUTTON("Forward Button (M5)", "Emits browser/app Forward mouse button 5"),
+    CYCLE_THEME("Cycle Theme Preset", "Instantly switches to next saved theme preset"),
+    AMOLED_DIM("Amoled Mode", "Dims display to pure black battery saver"),
+    OPEN_SETTINGS("Open Settings", "Opens the 3-tab Control Center"),
+    PAIRING_MODE("Pairing Hub", "Opens Bluetooth device manager")
 }
+
+data class ThemePreset(
+    val theme: BackgroundTheme = BackgroundTheme.SAKURA_PETALS,
+    val variant: ThemeVariant = ThemeVariant.VARIANT_A,
+    val customUri: String? = null
+)
 
 enum class ClockStyle(val label: String) {
     MINIMAL_PILL("Glass Pill"),
@@ -77,12 +88,21 @@ data class TouchpadSettings(
     val dragReleaseDelayMs: Long = 250L,
     val edgeMarginDp: Float = 12f,
     val hapticIntensity: HapticIntensity = HapticIntensity.CRISP,
+    // Active theme & 5 quick presets
     val backgroundTheme: BackgroundTheme = BackgroundTheme.SAKURA_PETALS,
     val themeVariant: ThemeVariant = ThemeVariant.VARIANT_A,
+    val customImageUri: String? = null,
+    val themePresets: List<ThemePreset> = listOf(
+        ThemePreset(BackgroundTheme.SAKURA_PETALS, ThemeVariant.VARIANT_A),
+        ThemePreset(BackgroundTheme.BUBBLE_POP, ThemeVariant.VARIANT_A),
+        ThemePreset(BackgroundTheme.KAWAII_PAWS, ThemeVariant.VARIANT_A),
+        ThemePreset(BackgroundTheme.PRISM_WAVES, ThemeVariant.VARIANT_A),
+        ThemePreset(BackgroundTheme.CLEAN_MINIMAL, ThemeVariant.VARIANT_A)
+    ),
+    val currentPresetIndex: Int = 0,
     val fingerEffect: FingerEffect = FingerEffect.CHERRY_PETALS,
     val fingerEffectsEnabled: Boolean = true,
-    val customImageUri: String? = null,
-    val buttonPressAction: ButtonPressAction = ButtonPressAction.STEALTH_DIM,
+    val buttonPressAction: ButtonPressAction = ButtonPressAction.LIQUID_WOBBLE,
     val stealthDimHold: Boolean = true,
     val isLocked: Boolean = false,
     // Clock & Battery HUD customization
