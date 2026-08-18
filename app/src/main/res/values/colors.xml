@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="obsidian">#FF0D0D11</color>
+    <color name="surface_dark">#FF16171E</color>
+    <color name="accent_cyan">#FF4ECCA3</color>
+    <color name="accent_blue">#FF3B82F6</color>
+    <color name="accent_purple">#FF8B5CF6</color>
+</resources>

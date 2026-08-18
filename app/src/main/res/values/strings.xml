@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">Minimate</string>
+    <string name="touchpad_surface_desc">Cover Screen Touch Surface</string>
+    <string name="interaction_ball_desc">Floating Interaction Ball</string>
+    
+    <!-- Bluetooth Status -->
+    <string name="status_disconnected">Ready to Connect</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_suspended">Suspended</string>
+    <string name="status_error">Bluetooth Error</string>
+    <string name="status_bt_disabled">Bluetooth is Turned Off</string>
+    <string name="status_permission_needed">Permissions Required</string>
+
+    <!-- Actions & Settings -->
+    <string name="settings_title">Touchpad Preferences</string>
+    <string name="device_hub_title">Device Hub</string>
+    <string name="tracking_speed">Tracking Speed</string>
+    <string name="acceleration">Acceleration</string>
+    <string name="scroll_speed">Scroll Speed</string>
+    <string name="natural_scrolling">Natural Scrolling</string>
+    <string name="tap_to_click">Tap to Click</string>
+    <string name="two_finger_right_click">Two-Finger Right Click</string>
+    <string name="momentum_scrolling">Momentum Scrolling</string>
+    <string name="haptic_feedback">Haptic Feedback</string>
+    <string name="background_style">Background Theme</string>
+    <string name="hold_dim_mode">Stealth Dim Mode</string>
+    <string name="reconnect">Reconnect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="make_discoverable">Pair New Device</string>
+    <string name="reset_defaults">Reset to Defaults</string>
+</resources>
