@@ -150,7 +150,7 @@ fun TouchpadScreen(
         touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
         when (action) {
             BallAction.HOLD_AND_DRAG_MENU -> {
-                // Handled natively in LiquidGlassBall drag gesture
+                // Handled natively inside LiquidGlassBall onLongPress / drag
             }
             BallAction.LIQUID_WOBBLE -> {
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
@@ -164,28 +164,28 @@ fun TouchpadScreen(
             BallAction.MIDDLE_CLICK -> {
                 scope.launch {
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_MIDDLE, dx = 0, dy = 0)
-                    delay(16)
+                    delay(20)
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
                 }
             }
             BallAction.RIGHT_CLICK -> {
                 scope.launch {
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_RIGHT, dx = 0, dy = 0)
-                    delay(16)
+                    delay(20)
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
                 }
             }
             BallAction.BACK_BUTTON -> {
                 scope.launch {
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_BACK, dx = 0, dy = 0)
-                    delay(16)
+                    delay(20)
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
                 }
             }
             BallAction.FORWARD_BUTTON -> {
                 scope.launch {
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_FORWARD, dx = 0, dy = 0)
-                    delay(16)
+                    delay(20)
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
                 }
             }
@@ -216,16 +216,8 @@ fun TouchpadScreen(
                 screenHeightPx = size.height.toFloat()
                 touchpadEngine.setScreenDimensions(screenWidthPx, screenHeightPx)
             }
-            // Fullscreen Touch Surface (Receives ALL touch events even during locked or amoled mode)
-            .pointerInteropFilter { motionEvent ->
-                if (!showScreenEditor) {
-                    touchpadEngine.onTouchEvent(motionEvent)
-                } else {
-                    false
-                }
-            }
     ) {
-        // 1. Interactive GPU Background Shader with 10 Inspired Themes
+        // Layer 1: Interactive GPU Background Shader with 10 Inspired Themes
         BackgroundShaderCanvas(
             theme = settings.backgroundTheme,
             variantIndex = settings.themeVariantIndex,
@@ -235,7 +227,21 @@ fun TouchpadScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Multi-Touch Finger Effects Layer (Only if enabled)
+        // Layer 2: Fullscreen Trackpad Touch Surface
+        // Receives all pointer movement events without intercepting child composables
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInteropFilter { motionEvent ->
+                    if (!showScreenEditor) {
+                        touchpadEngine.onTouchEvent(motionEvent)
+                    } else {
+                        false
+                    }
+                }
+        )
+
+        // Layer 3: Multi-Touch Finger Effects Layer (Only if enabled)
         if (settings.fingerEffectsEnabled && dimRatio < 0.8f) {
             FingerEffectsLayer(
                 touchPoints = activeTouchPoints,
@@ -245,7 +251,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 3. Freeform Clock & Battery HUD Widget
+        // Layer 4: Freeform Clock & Battery HUD Widget
         ClockBatteryOverlay(
             clockStyle = settings.clockStyle,
             positionXFraction = settings.clockPositionX,
@@ -261,7 +267,7 @@ fun TouchpadScreen(
             dimRatio = dimRatio
         )
 
-        // 4. Stealth Dim Overlay (Amoled Mode)
+        // Layer 5: Stealth Dim Overlay (Amoled Mode)
         if (dimRatio > 0.01f) {
             Box(
                 modifier = Modifier
@@ -270,7 +276,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 5. Pure Crystal Liquid Glass Ball (Hold-and-Drag Menu, Zero Icons in Collapsed Mode)
+        // Layer 6: Pure Crystal Liquid Glass Ball (Placed on top so it receives all tap/hold/drag events directly)
         if (!showScreenEditor && !settings.isLocked) {
             LiquidGlassBall(
                 isDimMode = isDimMode,
@@ -290,7 +296,9 @@ fun TouchpadScreen(
                     executeBallAction(settings.ballDoubleTapAction)
                 },
                 onHoldAction = {
-                    executeBallAction(settings.ballHoldAction)
+                    if (settings.ballHoldAction != BallAction.HOLD_AND_DRAG_MENU) {
+                        executeBallAction(settings.ballHoldAction)
+                    }
                 },
                 onMenuAction = { action ->
                     touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
@@ -323,7 +331,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 6. Freeform Screen Editor Overlay
+        // Layer 7: Freeform Screen Editor Overlay
         if (showScreenEditor) {
             ScreenEditorOverlay(
                 settings = settings,
@@ -338,7 +346,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 7. Settings & Theme Manager Modal Sheet (3 Tabs)
+        // Layer 8: Settings & Theme Manager Modal Sheet (3 Tabs)
         if (showSettingsSheet) {
             SettingsSheet(
                 settings = settings,
@@ -370,7 +378,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 8. Dedicated In-App Bluetooth Pairing Hub Dialog
+        // Layer 9: Dedicated In-App Bluetooth Pairing Hub Dialog
         if (showPairingDialog) {
             BluetoothPairingDialog(
                 bluetoothState = bluetoothState,
@@ -382,7 +390,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 9. Minimal HUD Toast Feedback
+        // Layer 10: Minimal HUD Toast Feedback
         HudToast(
             message = hudMessage,
             icon = hudIcon,
@@ -391,7 +399,7 @@ fun TouchpadScreen(
                 .padding(top = 24.dp)
         )
 
-        // 10. Bluetooth Permission Prompt if needed
+        // Layer 11: Bluetooth Permission Prompt if needed
         if (bluetoothState.status == ConnectionStatus.NO_PERMISSION) {
             PermissionPrompt(
                 onRequestPermission = onRequestPermissions

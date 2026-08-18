@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,15 +28,11 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -64,7 +60,6 @@ import com.minimate.ui.theme.AccentEmerald
 import com.minimate.ui.theme.AccentPink
 import com.minimate.ui.theme.TextPrimary
 import com.minimate.ui.theme.TextSecondary
-import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 enum class LiquidMenuAction {
@@ -75,9 +70,9 @@ enum class LiquidMenuAction {
 }
 
 /**
- * Pure Liquid Glass Ball inspired by Kyant0/AndroidLiquidGlass.
- * Refractive glassmorphism with ZERO icons in collapsed state,
- * true hold-and-slide gesture selection, and 1-click / 2-click / hold multi-actions.
+ * Pure Crystal Liquid Glass Ball inspired by Kyant0/AndroidLiquidGlass.
+ * 100% pristine translucent glass with smooth specular rim lighting,
+ * zero internal clutter/dots/icons in collapsed state, and hold-and-drag menu selection.
  */
 @Composable
 fun LiquidGlassBall(
@@ -104,10 +99,6 @@ fun LiquidGlassBall(
     var isExpanded by remember { mutableStateOf(false) }
     var isPressed by remember { mutableStateOf(false) }
     var highlightedIndex by remember { mutableIntStateOf(-1) }
-    
-    var lastTapTime by remember { mutableLongStateOf(0L) }
-    var tapCount by remember { mutableIntStateOf(0) }
-    var isHolding by remember { mutableStateOf(false) }
 
     // Dynamic menu item bounds for hold-and-drag collision detection
     val itemBounds = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
@@ -115,7 +106,7 @@ fun LiquidGlassBall(
     // Items present in menu
     val menuItems = remember(showAmoledInMenu, isDimMode, presetIndex, totalPresets) {
         mutableListOf<Pair<LiquidMenuAction, Triple<String, String, ImageVector>>>().apply {
-            add(LiquidMenuAction.LOCK to Triple("Lock", "Touchpad active", Icons.Default.Lock))
+            add(LiquidMenuAction.LOCK to Triple("Lock Trackpad", "Hardware Vol unlock", Icons.Default.Lock))
             if (showAmoledInMenu) {
                 add(LiquidMenuAction.AMOLED_MODE to Triple("Amoled Mode", if (isDimMode) "Active" else "OLED black", if (isDimMode) Icons.Default.Brightness2 else Icons.Default.DarkMode))
             }
@@ -127,47 +118,31 @@ fun LiquidGlassBall(
     // Elastic fluid spring physics for liquid morphing
     val morphProgress by animateFloatAsState(
         targetValue = if (isExpanded) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 400f),
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
         label = "LiquidMorphProgress"
     )
 
-    val targetWidth = if (isExpanded) 210.dp else ballSizeDp.dp
-    val targetHeight = if (isExpanded) (menuItems.size * 48 + 44).dp else ballSizeDp.dp
-    val cornerRadius = if (isExpanded) 24.dp else (ballSizeDp / 2f).dp
+    val targetWidth = if (isExpanded) 205.dp else ballSizeDp.dp
+    val targetHeight = if (isExpanded) (menuItems.size * 46 + 42).dp else ballSizeDp.dp
+    val cornerRadius = if (isExpanded) 22.dp else (ballSizeDp / 2f).dp
 
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 400f),
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
         label = "LiquidWidth"
     )
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 400f),
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
         label = "LiquidHeight"
     )
 
     // Calculate pixel coordinates based on fractions
     val ballPx = ballSizeDp * 2.7f
-    val posX = (positionXFraction * screenWidthPx - (if (isExpanded) 105f * 2.7f else ballPx / 2f))
-        .coerceIn(12f, screenWidthPx - (if (isExpanded) 210f * 2.7f else ballPx) - 12f)
-    val posY = (positionYFraction * screenHeightPx - (if (isExpanded) (menuItems.size * 48f + 44f) * 2.7f else ballPx / 2f))
-        .coerceIn(12f, screenHeightPx - (if (isExpanded) (menuItems.size * 48f + 44f) * 2.7f else ballPx) - 12f)
-
-    // Single / Double tap resolver
-    LaunchedEffect(tapCount) {
-        if (tapCount == 1) {
-            delay(280L)
-            if (tapCount == 1 && !isHolding && !isExpanded) {
-                onSingleClick()
-            }
-            tapCount = 0
-        } else if (tapCount >= 2) {
-            if (!isHolding && !isExpanded) {
-                onDoubleClick()
-            }
-            tapCount = 0
-        }
-    }
+    val posX = (positionXFraction * screenWidthPx - (if (isExpanded) 102f * 2.7f else ballPx / 2f))
+        .coerceIn(10f, screenWidthPx - (if (isExpanded) 205f * 2.7f else ballPx) - 10f)
+    val posY = (positionYFraction * screenHeightPx - (if (isExpanded) (menuItems.size * 46f + 42f) * 2.7f else ballPx / 2f))
+        .coerceIn(10f, screenHeightPx - (if (isExpanded) (menuItems.size * 46f + 42f) * 2.7f else ballPx) - 10f)
 
     Box(
         modifier = modifier
@@ -178,141 +153,109 @@ fun LiquidGlassBall(
             modifier = Modifier
                 .size(width = animatedWidth, height = animatedHeight)
                 .shadow(
-                    elevation = if (isExpanded) 18.dp else 10.dp,
+                    elevation = if (isExpanded) 20.dp else 12.dp,
                     shape = RoundedCornerShape(cornerRadius),
-                    spotColor = AccentCyan.copy(alpha = 0.5f),
+                    spotColor = AccentCyan.copy(alpha = 0.45f),
                     ambientColor = Color.Black
                 )
                 .clip(RoundedCornerShape(cornerRadius))
+                // Tap Gestures (Single Tap vs Double Tap vs Long Press)
                 .pointerInput(isExpanded) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val pointer = event.changes.firstOrNull() ?: continue
-                            val posInWindow = pointer.position
-
-                            when (event.type) {
-                                PointerEventType.Press -> {
-                                    isPressed = true
-                                    isHolding = false
-                                    onTouchDown()
-                                    val pressTime = System.currentTimeMillis()
-
-                                    // Check hold after 320ms
-                                    // If holding, morph into menu and start drag-selection
-                                }
-
-                                PointerEventType.Move -> {
-                                    if (isExpanded) {
-                                        // Collision detection for hold-and-drag over menu items
-                                        var foundHover = -1
-                                        itemBounds.forEach { (idx, bounds) ->
-                                            if (pointer.position.y >= bounds.top && pointer.position.y <= bounds.bottom) {
-                                                foundHover = idx
-                                            }
-                                        }
-                                        if (foundHover != highlightedIndex) {
-                                            highlightedIndex = foundHover
-                                            if (foundHover != -1) {
-                                                onHoverItemChanged()
-                                            }
-                                        }
-                                    }
-                                }
-
-                                PointerEventType.Release -> {
-                                    if (isExpanded) {
-                                        if (highlightedIndex in menuItems.indices) {
-                                            val action = menuItems[highlightedIndex].first
-                                            onMenuAction(action)
-                                        }
-                                        isExpanded = false
-                                        highlightedIndex = -1
-                                    } else {
-                                        val duration = System.currentTimeMillis() - lastTapTime
-                                        if (duration > 320L && isHolding) {
-                                            onHoldAction()
-                                        } else {
-                                            tapCount++
-                                        }
-                                    }
-                                    isPressed = false
-                                    isHolding = false
-                                }
-                            }
-                        }
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = {
-                            isHolding = true
-                            isExpanded = true
+                    detectTapGestures(
+                        onPress = {
+                            isPressed = true
                             onTouchDown()
-                        },
-                        onDrag = { change, _ ->
-                            val currentPos = change.position
-                            var foundHover = -1
-                            itemBounds.forEach { (idx, bounds) ->
-                                if (currentPos.y >= bounds.top && currentPos.y <= bounds.bottom) {
-                                    foundHover = idx
-                                }
-                            }
-                            if (foundHover != highlightedIndex) {
-                                highlightedIndex = foundHover
-                                if (foundHover != -1) {
-                                    onHoverItemChanged()
-                                }
-                            }
-                        },
-                        onDragEnd = {
-                            if (highlightedIndex in menuItems.indices) {
-                                val action = menuItems[highlightedIndex].first
-                                onMenuAction(action)
-                            }
-                            isExpanded = false
-                            highlightedIndex = -1
-                            isHolding = false
+                            tryAwaitRelease()
                             isPressed = false
                         },
-                        onDragCancel = {
-                            isExpanded = false
-                            highlightedIndex = -1
-                            isHolding = false
-                            isPressed = false
+                        onTap = {
+                            if (!isExpanded) {
+                                onSingleClick()
+                            }
+                        },
+                        onDoubleTap = {
+                            if (!isExpanded) {
+                                onDoubleClick()
+                            }
+                        },
+                        onLongPress = {
+                            if (!isExpanded) {
+                                isExpanded = true
+                                onTouchDown()
+                                onHoldAction()
+                            }
                         }
                     )
                 }
+                // Drag Gestures for Hold-and-Slide Selection
+                .pointerInput(isExpanded) {
+                    if (isExpanded) {
+                        detectDragGestures(
+                            onDragStart = {
+                                isPressed = true
+                            },
+                            onDrag = { change, _ ->
+                                val currentPos = change.position
+                                var foundHover = -1
+                                itemBounds.forEach { (idx, bounds) ->
+                                    if (currentPos.y >= bounds.top && currentPos.y <= bounds.bottom) {
+                                        foundHover = idx
+                                    }
+                                }
+                                if (foundHover != highlightedIndex) {
+                                    highlightedIndex = foundHover
+                                    if (foundHover != -1) {
+                                        onHoverItemChanged()
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                if (highlightedIndex in menuItems.indices) {
+                                    val action = menuItems[highlightedIndex].first
+                                    onMenuAction(action)
+                                }
+                                isExpanded = false
+                                highlightedIndex = -1
+                                isPressed = false
+                            },
+                            onDragCancel = {
+                                isExpanded = false
+                                highlightedIndex = -1
+                                isPressed = false
+                            }
+                        )
+                    }
+                }
         ) {
-            // Liquid Glass Refractive Backdrop Canvas (Pure glass lens when collapsed)
+            // Liquid Glass Refractive Backdrop Canvas (Pure, clean glass lens)
             Canvas(modifier = Modifier.matchParentSize()) {
                 val w = size.width
                 val h = size.height
-                val cr = if (isExpanded) 24.dp.toPx() else (size.minDimension / 2f)
+                val cr = if (isExpanded) 22.dp.toPx() else (size.minDimension / 2f)
 
-                // 1. Crystal Refraction & Chromatic Dispersion Lens Body
+                // 1. Crystal Refraction & Frosted Glass Base
                 val liquidFillBrush = if (isExpanded) {
                     Brush.linearGradient(
                         colors = listOf(
-                            Color(0xEA161824),
-                            Color(0xF210111A),
-                            Color(0xF808090E)
+                            Color(0xEE161824),
+                            Color(0xF510111A),
+                            Color(0xFA08090E)
                         ),
                         start = Offset(0f, 0f),
                         end = Offset(w, h)
                     )
                 } else {
-                    // Pristine Liquid Glass Sphere (Zero Icon Pollution)
+                    // Pristine Liquid Glass Sphere (Pure translucent glass)
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0x66FFFFFF),
-                            Color(0x3500F5D4),
-                            Color(0x28FF69B4),
-                            Color(0x3010121C),
-                            Color(0x60080910)
+                            Color(0x70FFFFFF),
+                            Color(0x4000F5D4),
+                            Color(0x30FF69B4),
+                            Color(0x4010121C),
+                            Color(0x75080910)
                         ),
                         center = Offset(w * 0.35f, h * 0.35f),
-                        radius = w * 0.85f
+                        radius = w * 0.90f
                     )
                 }
 
@@ -322,32 +265,32 @@ fun LiquidGlassBall(
                     cornerRadius = CornerRadius(cr, cr)
                 )
 
-                // 2. Specular Top-Left Fresnel Highlight Sheen
+                // 2. Specular Top-Left Fresnel Highlight
                 val specularBrush = Brush.linearGradient(
                     colors = listOf(
-                        Color(0xE6FFFFFF),
+                        Color(0xF0FFFFFF),
                         Color(0x66FFFFFF),
                         Color.Transparent,
                         Color(0x22FFFFFF)
                     ),
                     start = Offset(0f, 0f),
-                    end = Offset(w * 0.7f, h * 0.7f)
+                    end = Offset(w * 0.75f, h * 0.75f)
                 )
 
                 drawRoundRect(
                     brush = specularBrush,
                     size = Size(w, h),
                     cornerRadius = CornerRadius(cr, cr),
-                    style = Stroke(width = if (isPressed) 2.4f else 1.6f)
+                    style = Stroke(width = if (isPressed) 2.2f else 1.5f)
                 )
 
-                // 3. Bottom-Right Iridescent Chromatic Glint
+                // 3. Bottom-Right Iridescent Chromatic Glint Rim
                 val rimBrush = Brush.linearGradient(
                     colors = listOf(
                         Color.Transparent,
-                        AccentPink.copy(alpha = 0.45f),
-                        AccentCyan.copy(alpha = 0.55f),
-                        Color(0x66FFFFFF)
+                        AccentPink.copy(alpha = 0.40f),
+                        AccentCyan.copy(alpha = 0.50f),
+                        Color(0x55FFFFFF)
                     ),
                     start = Offset(0f, 0f),
                     end = Offset(w, h)
@@ -357,22 +300,8 @@ fun LiquidGlassBall(
                     brush = rimBrush,
                     size = Size(w, h),
                     cornerRadius = CornerRadius(cr, cr),
-                    style = Stroke(width = 1.2f)
+                    style = Stroke(width = 1.0f)
                 )
-
-                // 4. Center Specular Caustic Lens Bead (Zero icons!)
-                if (!isExpanded) {
-                    drawCircle(
-                        color = Color(0xCCFFFFFF),
-                        radius = w * 0.14f,
-                        center = Offset(w * 0.33f, h * 0.30f)
-                    )
-                    drawCircle(
-                        color = Color(0x7700F5D4),
-                        radius = w * 0.24f,
-                        center = Offset(w * 0.65f, h * 0.68f)
-                    )
-                }
             }
 
             // Expanded Liquid Glass Menu with Hold-and-Drag Highlighting
@@ -380,7 +309,7 @@ fun LiquidGlassBall(
                 Column(
                     modifier = Modifier
                         .matchParentSize()
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     // Header Bar

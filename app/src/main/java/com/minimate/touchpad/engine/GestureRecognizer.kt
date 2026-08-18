@@ -19,7 +19,8 @@ data class TouchPoint(
 )
 
 /**
- * Advanced gesture recognizer modeled after macOS Magic Trackpad gestures.
+ * High-precision gesture recognizer with subpixel accumulation for butter-smooth
+ * pointer tracking and 2-finger scrolling.
  */
 class GestureRecognizer(
     private val context: Context,
@@ -57,6 +58,10 @@ class GestureRecognizer(
     private var totalMovedDistance2 = 0f
     private var initialPinchSpan = 0f
     private var isTwoFingerGestureActive = false
+
+    // Subpixel scroll accumulation for effortless, silky smooth scrolling
+    private var subpixelScrollX = 0f
+    private var subpixelScrollY = 0f
 
     var settings: TouchpadSettings = TouchpadSettings()
     var screenWidth = 0f
@@ -138,7 +143,7 @@ class GestureRecognizer(
     }
 
     private fun handlePointerDown(event: MotionEvent) {
-        if (event.pointerCount == 2) {
+        if (event.pointerCount >= 2) {
             isTwoFingerGestureActive = true
             downTime2 = event.eventTime
             val x0 = event.getX(0)
@@ -153,6 +158,8 @@ class GestureRecognizer(
             lastTime2 = downTime2
             totalMovedDistance2 = 0f
             initialPinchSpan = hypot(x0 - x1, y0 - y1)
+            subpixelScrollX = 0f
+            subpixelScrollY = 0f
         }
     }
 
@@ -161,7 +168,7 @@ class GestureRecognizer(
 
         if (pointerCount == 1 && !isTwoFingerGestureActive) {
             processHistorical1FingerMovement(event)
-        } else if (pointerCount == 2) {
+        } else if (pointerCount >= 2) {
             processHistorical2FingerMovement(event)
         }
     }
@@ -202,15 +209,7 @@ class GestureRecognizer(
     }
 
     private fun processHistorical2FingerMovement(event: MotionEvent) {
-        val historySize = event.historySize
-        for (h in 0 until historySize) {
-            val x0 = event.getHistoricalX(0, h)
-            val y0 = event.getHistoricalY(0, h)
-            val x1 = event.getHistoricalX(1, h)
-            val y1 = event.getHistoricalY(1, h)
-            val ht = event.getHistoricalEventTime(h)
-            step2Finger(x0, y0, x1, y1, ht)
-        }
+        if (event.pointerCount < 2) return
         step2Finger(event.getX(0), event.getY(0), event.getX(1), event.getY(1), event.eventTime)
     }
 
@@ -226,13 +225,23 @@ class GestureRecognizer(
         lastAvgY = avgY
         lastTime2 = timeMs
 
+        if (rawDx == 0f && rawDy == 0f) return
+
         // Natural scrolling ONLY affects two-finger scroll, never pointer cursor
         val scrollSign = if (settings.naturalScrolling) -1 else 1
-        val vScroll = (rawDy * 0.12f * settings.scrollSpeed * scrollSign).toInt()
-        val hScroll = (rawDx * 0.12f * settings.scrollSpeed * scrollSign).toInt()
 
-        if (vScroll != 0 || hScroll != 0) {
-            onGesture(GestureEvent.Scroll(vScroll, hScroll))
+        // Calibrated scroll scaling with subpixel accumulation (effortless scrolling at any swipe speed)
+        val targetV = rawDy * 0.40f * settings.scrollSpeed * scrollSign + subpixelScrollY
+        val targetH = rawDx * 0.40f * settings.scrollSpeed * scrollSign + subpixelScrollX
+
+        val intV = targetV.toInt()
+        val intH = targetH.toInt()
+
+        subpixelScrollY = targetV - intV
+        subpixelScrollX = targetH - intH
+
+        if (intV != 0 || intH != 0) {
+            onGesture(GestureEvent.Scroll(intV, intH))
         }
 
         // Pinch detection foundation
@@ -244,17 +253,17 @@ class GestureRecognizer(
     }
 
     private fun handlePointerUp(event: MotionEvent) {
-        if (event.pointerCount == 2 && isTwoFingerGestureActive) {
+        if (event.pointerCount <= 2 && isTwoFingerGestureActive) {
             val duration = event.eventTime - downTime2
             if (totalMovedDistance2 < touchSlop && duration < tapTimeout && settings.twoFingerRightClick) {
                 onGesture(GestureEvent.RightClick)
             } else if (settings.momentumScrolling) {
                 velocityTracker?.computeCurrentVelocity(1000)
-                val vy = velocityTracker?.yVelocity ?: 0f
-                val vx = velocityTracker?.xVelocity ?: 0f
                 onGesture(GestureEvent.Scroll(0, 0))
             }
             isTwoFingerGestureActive = false
+            subpixelScrollX = 0f
+            subpixelScrollY = 0f
         }
     }
 
@@ -278,18 +287,25 @@ class GestureRecognizer(
         if (isDragging) {
             onGesture(GestureEvent.Click(HidDescriptor.BUTTON_LEFT, down = false))
             onGesture(GestureEvent.DragEnd)
+            isDragging = false
         }
         resetState()
     }
 
     private fun resetState() {
-        isDragging = false
+        downX1 = 0f
+        downY1 = 0f
+        lastX1 = 0f
+        lastY1 = 0f
+        totalMovedDistance1 = 0f
         isTwoFingerGestureActive = false
-        velocityTracker?.recycle()
-        velocityTracker = null
+        subpixelScrollX = 0f
+        subpixelScrollY = 0f
         filterDx.reset()
         filterDy.reset()
         accelerationCurve.reset()
+        velocityTracker?.recycle()
+        velocityTracker = null
     }
 
     fun getVelocityTracker(): VelocityTracker? = velocityTracker
