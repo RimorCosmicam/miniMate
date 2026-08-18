@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,8 +37,25 @@ class BatteryReporter(private val context: Context) {
     fun start() {
         if (!isRegistered) {
             val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            context.registerReceiver(batteryReceiver, filter)
-            isRegistered = true
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ContextCompat.registerReceiver(
+                        context,
+                        batteryReceiver,
+                        filter,
+                        ContextCompat.RECEIVER_NOT_EXPORTED
+                    )
+                } else {
+                    context.registerReceiver(batteryReceiver, filter)
+                }
+                isRegistered = true
+            } catch (e: Exception) {
+                // Fallback for system broadcast
+                try {
+                    context.registerReceiver(batteryReceiver, filter)
+                    isRegistered = true
+                } catch (_: Exception) {}
+            }
         }
     }
 

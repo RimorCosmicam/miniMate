@@ -42,8 +42,8 @@ private const val AGSL_MINIMATE_SHADER = """
     uniform float iTime;
     uniform float2 uTouchPos;
     uniform float uTouchActive;
-    uniform int uTheme;
-    uniform int uVariant;
+    uniform float uTheme;
+    uniform float uVariant;
 
     // Fast procedural pseudo-random hash
     float hash(float2 p) {
@@ -87,28 +87,29 @@ private const val AGSL_MINIMATE_SHADER = """
         half3 colB = half3(0.4, 0.8, 1.0);
         half3 bg   = half3(0.04, 0.04, 0.07);
 
+        int themeId = int(uTheme + 0.5);
+        int variantId = int(uVariant + 0.5);
+
         // 1. SAKURA PETALS (Procedural 5-lobed cherry blossoms drifting in wind)
-        if (uTheme == 0) {
-            if (uVariant == 0) { colA = half3(1.0, 0.6, 0.75); colB = half3(1.0, 0.85, 0.9); bg = half3(0.08, 0.03, 0.06); }
-            else if (uVariant == 1) { colA = half3(1.0, 0.35, 0.6); colB = half3(0.95, 0.7, 0.4); bg = half3(0.09, 0.04, 0.03); }
+        if (themeId == 0) {
+            if (variantId == 0) { colA = half3(1.0, 0.6, 0.75); colB = half3(1.0, 0.85, 0.9); bg = half3(0.08, 0.03, 0.06); }
+            else if (variantId == 1) { colA = half3(1.0, 0.35, 0.6); colB = half3(0.95, 0.7, 0.4); bg = half3(0.09, 0.04, 0.03); }
             else { colA = half3(0.65, 0.45, 0.95); colB = half3(0.85, 0.75, 1.0); bg = half3(0.04, 0.02, 0.08); }
 
             half3 col = bg;
-            // Drifting petal field
             float2 pUv = uv * 3.5;
             pUv.y += time * 0.8;
             pUv.x += sin(pUv.y * 1.5 + time) * 0.4;
             
             float2 cell = fract(pUv) - 0.5;
             float2 cellId = floor(pUv);
-            float angle = atan2(cell.y, cell.x) + time * (hash(cellId) - 0.5) * 2.0;
+            // SkSL uses atan(y, x)
+            float angle = atan(cell.y, cell.x) + time * (hash(cellId) - 0.5) * 2.0;
             float r = length(cell);
-            // 5 petal flower polar shape: r = cos(5 * theta)
             float flower = 0.18 + 0.06 * cos(5.0 * angle);
             float petalMask = smoothstep(flower + 0.02, flower - 0.01, r);
             col += mix(colA, colB, hash(cellId)) * petalMask * 0.85;
 
-            // Touch interaction ripple
             if (uTouchActive > 0.01) {
                 float ripple = sin(distToTouch * 30.0 - time * 10.0) * exp(-distToTouch * 6.0);
                 col += colA * max(0.0, ripple) * 1.5 * uTouchActive;
@@ -117,20 +118,19 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 2. BUBBLE AQUARIUM (Spherical bubbles with Fresnel rim lighting & burst)
-        else if (uTheme == 1) {
-            if (uVariant == 0) { colA = half3(0.3, 0.8, 1.0); colB = half3(1.0, 0.5, 0.85); bg = half3(0.02, 0.05, 0.09); }
-            else if (uVariant == 1) { colA = half3(0.2, 0.95, 0.7); colB = half3(0.9, 0.95, 0.3); bg = half3(0.02, 0.07, 0.05); }
+        else if (themeId == 1) {
+            if (variantId == 0) { colA = half3(0.3, 0.8, 1.0); colB = half3(1.0, 0.5, 0.85); bg = half3(0.02, 0.05, 0.09); }
+            else if (variantId == 1) { colA = half3(0.2, 0.95, 0.7); colB = half3(0.9, 0.95, 0.3); bg = half3(0.02, 0.07, 0.05); }
             else { colA = half3(0.8, 0.4, 1.0); colB = half3(0.3, 0.7, 1.0); bg = half3(0.05, 0.02, 0.09); }
 
             half3 col = bg;
             float2 bUv = uv * 3.0;
-            bUv.y -= time * 0.7; // Float upwards
+            bUv.y -= time * 0.7;
             bUv.x += sin(bUv.y * 2.0 + time * 1.2) * 0.2;
             
             float2 cell = fract(bUv) - 0.5;
             float d = length(cell);
             float bubbleRadius = 0.22;
-            // Fresnel rim & specular shine
             float rim = smoothstep(bubbleRadius, bubbleRadius - 0.03, d) * smoothstep(bubbleRadius - 0.08, bubbleRadius - 0.01, d);
             float spec = smoothstep(0.06, 0.01, length(cell - float2(-0.07, 0.07)));
             
@@ -144,9 +144,9 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 3. CAT PAW CAFE (Soft paw prints & drifting heart particles)
-        else if (uTheme == 2) {
-            if (uVariant == 0) { colA = half3(1.0, 0.55, 0.65); colB = half3(1.0, 0.85, 0.7); bg = half3(0.07, 0.03, 0.04); }
-            else if (uVariant == 1) { colA = half3(0.95, 0.65, 0.35); colB = half3(1.0, 0.9, 0.75); bg = half3(0.07, 0.05, 0.02); }
+        else if (themeId == 2) {
+            if (variantId == 0) { colA = half3(1.0, 0.55, 0.65); colB = half3(1.0, 0.85, 0.7); bg = half3(0.07, 0.03, 0.04); }
+            else if (variantId == 1) { colA = half3(0.95, 0.65, 0.35); colB = half3(1.0, 0.9, 0.75); bg = half3(0.07, 0.05, 0.02); }
             else { colA = half3(0.55, 0.65, 0.95); colB = half3(0.85, 0.8, 1.0); bg = half3(0.03, 0.03, 0.07); }
 
             half3 col = bg;
@@ -154,7 +154,6 @@ private const val AGSL_MINIMATE_SHADER = """
             float2 cell = fract(gridUv) - 0.5;
             float2 id = floor(gridUv);
 
-            // Paw main pad & 3 toe beans
             float pad = smoothstep(0.14, 0.11, length(cell + float2(0.0, 0.04)));
             float toe1 = smoothstep(0.06, 0.04, length(cell - float2(-0.10, 0.12)));
             float toe2 = smoothstep(0.07, 0.05, length(cell - float2(0.0, 0.16)));
@@ -171,7 +170,7 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 4. PRISM WAVES (Chromatic light diffraction & fluid ribbon waves)
-        else if (uTheme == 3) {
+        else if (themeId == 3) {
             float wave1 = sin(uv.x * 4.0 + uv.y * 3.0 + time);
             float wave2 = cos(uv.x * 3.0 - uv.y * 5.0 + time * 1.2);
             float w = sin(wave1 + wave2);
@@ -189,9 +188,9 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 5. MATCHA LATTE ART (Fluid froth swirls with touch vortex)
-        else if (uTheme == 4) {
-            if (uVariant == 0) { colA = half3(0.4, 0.75, 0.4); colB = half3(0.96, 0.93, 0.82); bg = half3(0.03, 0.06, 0.03); }
-            else if (uVariant == 1) { colA = half3(0.85, 0.6, 0.35); colB = half3(0.98, 0.92, 0.8); bg = half3(0.06, 0.04, 0.02); }
+        else if (themeId == 4) {
+            if (variantId == 0) { colA = half3(0.4, 0.75, 0.4); colB = half3(0.96, 0.93, 0.82); bg = half3(0.03, 0.06, 0.03); }
+            else if (variantId == 1) { colA = half3(0.85, 0.6, 0.35); colB = half3(0.98, 0.92, 0.8); bg = half3(0.06, 0.04, 0.02); }
             else { colA = half3(0.65, 0.5, 0.85); colB = half3(0.95, 0.9, 0.98); bg = half3(0.05, 0.03, 0.07); }
 
             float2 fUv = uv * 3.0;
@@ -209,7 +208,7 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 6. RETRO 8-BIT ARCADE (Pixel starfield & scanlines)
-        else if (uTheme == 5) {
+        else if (themeId == 5) {
             float2 pUv = floor(uv * 32.0) / 32.0;
             float star = hash(pUv + floor(time * 4.0) * 0.001);
             float starGlow = smoothstep(0.96, 1.0, star);
@@ -227,7 +226,7 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 7. BIOLUMINESCENT SEA (Caustic sun rays & aquatic shockwaves)
-        else if (uTheme == 6) {
+        else if (themeId == 6) {
             float v1 = voronoi(uv * 6.0 + time * 0.8);
             float v2 = voronoi(uv * 10.0 - time * 0.5);
             float caustic = pow(1.0 - (v1 * 0.6 + v2 * 0.4), 2.5);
@@ -243,7 +242,7 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 8. JELLY MOCHI SQUISH (Elastic jiggling jelly with glossy specular highlights)
-        else if (uTheme == 7) {
+        else if (themeId == 7) {
             float2 jUv = uv * 5.0;
             float jelly = sin(length(jUv) * 4.0 - time * 3.0) * exp(-length(jUv) * 0.8);
             float spec = pow(max(0.0, sin(uv.x * 8.0 + uv.y * 8.0 + time)), 16.0);
@@ -259,9 +258,9 @@ private const val AGSL_MINIMATE_SHADER = """
         }
 
         // 9. COSMIC GALAXY (Spiral nebula vortex & twinkling star clusters)
-        else if (uTheme == 8) {
+        else if (themeId == 8) {
             float r = length(uv);
-            float a = atan2(uv.y, uv.x) + r * 3.5 - time * 0.5;
+            float a = atan(uv.y, uv.x) + r * 3.5 - time * 0.5;
             float spiral = sin(a * 2.0) * 0.5 + 0.5;
             float core = exp(-r * 3.0);
 
@@ -269,7 +268,6 @@ private const val AGSL_MINIMATE_SHADER = """
             col += half3(0.4, 0.2, 0.9) * spiral * exp(-r * 1.5) * 0.9;
             col += half3(0.2, 0.8, 1.0) * core * 1.5;
 
-            // Twinkling stars
             float stars = hash(floor(uv * 40.0));
             col += half3(1.0, 1.0, 1.0) * smoothstep(0.985, 1.0, stars) * (sin(time * 4.0 + stars * 100.0) * 0.5 + 0.5);
 
@@ -281,9 +279,9 @@ private const val AGSL_MINIMATE_SHADER = """
 
         // 10. STEALTH TITANIUM (Luxury brushed titanium & OLED black)
         else {
-            if (uVariant == 0) {
-                return half4(0.0, 0.0, 0.0, 1.0); // Pure OLED
-            } else if (uVariant == 1) {
+            if (variantId == 0) {
+                return half4(0.0, 0.0, 0.0, 1.0);
+            } else if (variantId == 1) {
                 float brush = hash(float2(fragCoord.x * 0.1, fragCoord.y * 0.01)) * 0.04;
                 return half4(half3(0.06 + brush), 1.0);
             } else {
@@ -366,19 +364,40 @@ private fun AgslProceduralBackground(
     dimRatio: Float,
     modifier: Modifier
 ) {
-    val shader = remember { RuntimeShader(AGSL_MINIMATE_SHADER) }
+    val shader = remember {
+        try {
+            RuntimeShader(AGSL_MINIMATE_SHADER)
+        } catch (_: Throwable) {
+            null
+        }
+    }
 
-    Canvas(modifier = modifier.fillMaxSize()) {
-        shader.setFloatUniform("iResolution", size.width, size.height)
-        shader.setFloatUniform("iTime", time)
-        shader.setFloatUniform("uTouchPos", touchX, touchY)
-        shader.setFloatUniform("uTouchActive", touchActive)
-        shader.setIntUniform("uTheme", theme.ordinal.coerceIn(0, 9))
-        shader.setIntUniform("uVariant", variant.index)
+    if (shader != null) {
+        Canvas(modifier = modifier.fillMaxSize()) {
+            try {
+                shader.setFloatUniform("iResolution", size.width, size.height)
+                shader.setFloatUniform("iTime", time)
+                shader.setFloatUniform("uTouchPos", touchX, touchY)
+                shader.setFloatUniform("uTouchActive", touchActive)
+                shader.setFloatUniform("uTheme", theme.ordinal.toFloat().coerceIn(0f, 9f))
+                shader.setFloatUniform("uVariant", variant.index.toFloat())
 
-        drawRect(
-            brush = ShaderBrush(shader),
-            alpha = (1.0f - (dimRatio * 0.95f)).coerceIn(0f, 1f)
+                drawRect(
+                    brush = ShaderBrush(shader),
+                    alpha = (1.0f - (dimRatio * 0.95f)).coerceIn(0f, 1f)
+                )
+            } catch (_: Throwable) {}
+        }
+    } else {
+        FallbackProceduralBackground(
+            theme = theme,
+            variant = variant,
+            time = time,
+            touchX = touchX,
+            touchY = touchY,
+            touchActive = touchActive,
+            dimRatio = dimRatio,
+            modifier = modifier
         )
     }
 }

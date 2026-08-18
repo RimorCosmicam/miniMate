@@ -175,7 +175,22 @@ class BluetoothHidManager(private val context: Context) {
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         }
-        context.registerReceiver(bluetoothReceiver, filter)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                androidx.core.content.ContextCompat.registerReceiver(
+                    context,
+                    bluetoothReceiver,
+                    filter,
+                    androidx.core.content.ContextCompat.RECEIVER_EXPORTED
+                )
+            } else {
+                context.registerReceiver(bluetoothReceiver, filter)
+            }
+        } catch (e: Exception) {
+            try {
+                context.registerReceiver(bluetoothReceiver, filter)
+            } catch (_: Exception) {}
+        }
         initialize()
     }
 
