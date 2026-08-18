@@ -7,24 +7,66 @@ enum class HapticIntensity {
     STRONG
 }
 
-enum class BackgroundTheme(val displayName: String, val description: String) {
-    SAKURA_PETALS("Sakura Petals", "Procedural drifting cherry blossoms with breeze physics"),
-    BUBBLE_POP("Bubble Aquarium", "Spherical soap bubbles with surface tension & touch burst"),
-    KAWAII_PAWS("Cat Paw Cafe", "Kitten paw print stamps with floating heart particles"),
-    PRISM_WAVES("Prism Waves", "Iridescent chromatic diffraction & fluid ribbon waves"),
-    MATCHA_CAFE("Matcha Latte Art", "Viscous fluid froth swirls and organic latte art flow"),
-    RETRO_ARCADE("Retro 8-Bit", "Procedural pixel starfield, arcade blocks & scanlines"),
-    TROPICAL_OCEAN("Bioluminescent Sea", "Caustic sun rays, deep aqua water & touch ripple physics"),
-    STRAWBERRY_MOCHI("Jelly Mochi", "Elastic jiggling jelly grid with glossy specular shine"),
-    STARRY_GALAXY("Cosmic Galaxy", "Spiral nebula vortex with twinkling stars & meteors"),
-    CLEAN_MINIMAL("Stealth Titanium", "Brushed titanium texture with pure OLED black mode"),
-    CUSTOM_IMAGE("Custom Wallpaper", "User-selected photo or animated GIF from gallery")
-}
-
-enum class ThemeVariant(val index: Int, val label: String) {
-    VARIANT_A(0, "Soft Palette"),
-    VARIANT_B(1, "Warm Palette"),
-    VARIANT_C(2, "Cool Palette")
+enum class BackgroundTheme(
+    val displayName: String,
+    val description: String,
+    val variantNames: List<String>
+) {
+    CHROME_FLUID(
+        "Liquid Cyber Chrome",
+        "Viscous metallic mercury with specular highlights and environmental reflection",
+        listOf("Mercury Silver", "Cyber Neon Pink", "Golden Amber")
+    ),
+    DEEP_ABYSS(
+        "Bioluminescent Abyss",
+        "Deep marine dark waters with pulsing glowing jellyfish light scattering",
+        listOf("Electric Cyan", "Violet Deep", "Coral Glow")
+    ),
+    HYPERDRIVE_WARP(
+        "Hyperdrive Warp Tunnel",
+        "Relativistic space warp tunnel with light speed celestial streaks",
+        listOf("Photon Blue", "Hyperspace Magenta", "Starlight Gold")
+    ),
+    AURORA_BOREALIS(
+        "Aurora Borealis",
+        "Silky curtains of polar northern lights dancing over starry skies",
+        listOf("Emerald Polar", "Cosmic Violet", "Arctic Cyan")
+    ),
+    MAGMA_CORE(
+        "Molten Magma Fissures",
+        "Cracked glowing tectonic plates with subsurface convective heat glow",
+        listOf("Volcanic Fire", "Plasma Purple", "Solar White-Hot")
+    ),
+    HOLO_PRISM(
+        "Holographic Prismatic Glass",
+        "Crystal refractive facets with spectral rainbow dispersion and thin-film sheen",
+        listOf("Prism Rainbow", "Opal Pearl", "Obsidian Iridescent")
+    ),
+    SYNTHWAVE_3D(
+        "Retro Synthwave 3D",
+        "3D perspective wireframe terrain moving to infinity with glowing sun",
+        listOf("Outrun 1984", "Cyber Tokyo", "Blood Dusk")
+    ),
+    SAKURA_BREEZE(
+        "Sakura Wind Breeze",
+        "Swirling cherry blossom petals caught in turbulent wind vortices",
+        listOf("Spring Cherry", "Midnight Blossom", "Sunset Sakura")
+    ),
+    MATRIX_CASCADE(
+        "Cyber Matrix Rain",
+        "Cascading digital glyph waterfalls glitching on touch",
+        listOf("Phosphor Green", "Amber CRT", "Cyan Ghost")
+    ),
+    STEALTH_OLED(
+        "Stealth Titanium OLED",
+        "True zero-power 100% OLED pitch black with luxury textures",
+        listOf("Pure Pitch Black", "Brushed Titanium", "Carbon Weave")
+    ),
+    CUSTOM_IMAGE(
+        "Custom Wallpaper / GIF",
+        "User-selected photo or 60fps animated GIF from gallery",
+        listOf("Original", "Dimmed 50%", "Vibrant")
+    )
 }
 
 enum class FingerEffect(val displayName: String, val description: String) {
@@ -40,21 +82,24 @@ enum class FingerEffect(val displayName: String, val description: String) {
     MINIMAL_DOT("Clean Dot", "Minimalist precision micro-dot with zero clutter")
 }
 
-enum class ButtonPressAction(val label: String, val description: String) {
+enum class BallAction(val label: String, val description: String) {
+    HOLD_AND_DRAG_MENU("Hold & Drag Menu", "Expands liquid menu with slide-to-select"),
     LIQUID_WOBBLE("Liquid Ripple", "Plays elastic liquid glass fluid wave animation"),
-    MIDDLE_CLICK("Middle Click", "Emits standard mouse middle button (Scroll Click)"),
+    AMOLED_DIM("Amoled Mode", "Toggles display to pure black battery saver"),
+    MIDDLE_CLICK("Middle Click (M3)", "Emits standard mouse middle button (Scroll Click)"),
     RIGHT_CLICK("Right Click", "Emits secondary mouse click"),
     BACK_BUTTON("Back Button (M4)", "Emits browser/app Back mouse button 4"),
     FORWARD_BUTTON("Forward Button (M5)", "Emits browser/app Forward mouse button 5"),
     CYCLE_THEME("Cycle Theme Preset", "Instantly switches to next saved theme preset"),
-    AMOLED_DIM("Amoled Mode", "Dims display to pure black battery saver"),
     OPEN_SETTINGS("Open Settings", "Opens the 3-tab Control Center"),
-    PAIRING_MODE("Pairing Hub", "Opens Bluetooth device manager")
+    PAIRING_MODE("Pairing Hub", "Opens Bluetooth device manager"),
+    SCREEN_EDITOR("Screen Editor", "Enables freeform dragging & resizing of UI elements"),
+    DISABLED("Disabled", "No action performed")
 }
 
 data class ThemePreset(
-    val theme: BackgroundTheme = BackgroundTheme.SAKURA_PETALS,
-    val variant: ThemeVariant = ThemeVariant.VARIANT_A,
+    val theme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,
+    val variantIndex: Int = 0,
     val customUri: String? = null
 )
 
@@ -64,14 +109,6 @@ enum class ClockStyle(val label: String) {
     CLEAN_SANS("Clean Sans"),
     MONOSPACE("Retro Mono"),
     OFF("Hidden")
-}
-
-enum class ClockPosition(val label: String) {
-    TOP_LEFT("Top Left"),
-    TOP_CENTER("Top Center"),
-    TOP_RIGHT("Top Right"),
-    BOTTOM_RIGHT("Bottom Right"),
-    BOTTOM_CENTER("Bottom Center")
 }
 
 data class TouchpadSettings(
@@ -88,26 +125,42 @@ data class TouchpadSettings(
     val dragReleaseDelayMs: Long = 250L,
     val edgeMarginDp: Float = 12f,
     val hapticIntensity: HapticIntensity = HapticIntensity.CRISP,
+    
     // Active theme & 5 quick presets
-    val backgroundTheme: BackgroundTheme = BackgroundTheme.SAKURA_PETALS,
-    val themeVariant: ThemeVariant = ThemeVariant.VARIANT_A,
+    val backgroundTheme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,
+    val themeVariantIndex: Int = 0,
     val customImageUri: String? = null,
     val themePresets: List<ThemePreset> = listOf(
-        ThemePreset(BackgroundTheme.SAKURA_PETALS, ThemeVariant.VARIANT_A),
-        ThemePreset(BackgroundTheme.BUBBLE_POP, ThemeVariant.VARIANT_A),
-        ThemePreset(BackgroundTheme.KAWAII_PAWS, ThemeVariant.VARIANT_A),
-        ThemePreset(BackgroundTheme.PRISM_WAVES, ThemeVariant.VARIANT_A),
-        ThemePreset(BackgroundTheme.CLEAN_MINIMAL, ThemeVariant.VARIANT_A)
+        ThemePreset(BackgroundTheme.CHROME_FLUID, 0),
+        ThemePreset(BackgroundTheme.DEEP_ABYSS, 0),
+        ThemePreset(BackgroundTheme.HYPERDRIVE_WARP, 0),
+        ThemePreset(BackgroundTheme.AURORA_BOREALIS, 0),
+        ThemePreset(BackgroundTheme.STEALTH_OLED, 0)
     ),
     val currentPresetIndex: Int = 0,
     val fingerEffect: FingerEffect = FingerEffect.CHERRY_PETALS,
-    val fingerEffectsEnabled: Boolean = true,
-    val buttonPressAction: ButtonPressAction = ButtonPressAction.LIQUID_WOBBLE,
-    val stealthDimHold: Boolean = true,
+    val fingerEffectsEnabled: Boolean = false, // Disabled by default per user feedback
+    
+    // Ball actions (1 Click, 2 Clicks, Hold)
+    val ballSingleTapAction: BallAction = BallAction.LIQUID_WOBBLE,
+    val ballDoubleTapAction: BallAction = BallAction.MIDDLE_CLICK,
+    val ballHoldAction: BallAction = BallAction.HOLD_AND_DRAG_MENU,
+    val showAmoledInMenu: Boolean = true,
+    
+    // Screen Editor: Freeform Positions & Sizes (Normalized 0.0..1.0 coordinates and dp sizes)
+    val ballPositionX: Float = 0.12f, // Left side
+    val ballPositionY: Float = 0.86f, // Near bottom
+    val ballSizeDp: Float = 48f,
+    
+    val clockPositionX: Float = 0.50f, // Centered horizontally
+    val clockPositionY: Float = 0.08f, // Near top
+    val clockScale: Float = 1.0f,
+    
     val isLocked: Boolean = false,
-    // Clock & Battery HUD customization
+    val isEditorMode: Boolean = false,
+    
+    // Clock & HUD customization
     val clockStyle: ClockStyle = ClockStyle.MINIMAL_PILL,
-    val clockPosition: ClockPosition = ClockPosition.TOP_CENTER,
     val show24HourFormat: Boolean = false,
     val showSeconds: Boolean = false,
     val showBatteryPercentage: Boolean = true

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,7 +40,7 @@ import com.minimate.bluetooth.ConnectionStatus
 import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.BackgroundTheme
-import com.minimate.touchpad.model.ButtonPressAction
+import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.ui.components.BluetoothPairingDialog
 import com.minimate.ui.components.ClockBatteryOverlay
@@ -48,6 +49,7 @@ import com.minimate.ui.components.HudToast
 import com.minimate.ui.components.LiquidGlassBall
 import com.minimate.ui.components.LiquidMenuAction
 import com.minimate.ui.components.PermissionPrompt
+import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.SettingsSheet
 import com.minimate.ui.shader.BackgroundShaderCanvas
 import kotlinx.coroutines.delay
@@ -69,8 +71,13 @@ fun TouchpadScreen(
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
+    var showScreenEditor by remember { mutableStateOf(false) }
     var hudMessage by remember { mutableStateOf<String?>(null) }
     var hudIcon by remember { mutableStateOf<ImageVector?>(null) }
+    
+    var screenWidthPx by remember { mutableFloatStateOf(1080f) }
+    var screenHeightPx by remember { mutableFloatStateOf(1080f) }
+
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -85,7 +92,7 @@ fun TouchpadScreen(
                 )
             )
             hudIcon = Icons.Default.Palette
-            hudMessage = "Custom Background Loaded"
+            hudMessage = "Custom Wallpaper Loaded"
             scope.launch {
                 delay(2500)
                 hudMessage = null
@@ -129,7 +136,7 @@ fun TouchpadScreen(
             touchpadEngine.updateSettings(
                 settings.copy(
                     backgroundTheme = nextPreset.theme,
-                    themeVariant = nextPreset.variant,
+                    themeVariantIndex = nextPreset.variantIndex,
                     customImageUri = nextPreset.customUri,
                     currentPresetIndex = nextIndex
                 )
@@ -139,36 +146,113 @@ fun TouchpadScreen(
         }
     }
 
+    fun executeBallAction(action: BallAction) {
+        touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+        when (action) {
+            BallAction.HOLD_AND_DRAG_MENU -> {
+                // Handled natively in LiquidGlassBall drag gesture
+            }
+            BallAction.LIQUID_WOBBLE -> {
+                touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+            }
+            BallAction.AMOLED_DIM -> {
+                isDimMode = !isDimMode
+                onDimModeChanged(isDimMode)
+                touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                showToast(if (isDimMode) "Amoled Mode Active" else "Amoled Mode Disabled", if (isDimMode) Icons.Default.Brightness2 else Icons.Default.DarkMode)
+            }
+            BallAction.MIDDLE_CLICK -> {
+                scope.launch {
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_MIDDLE, dx = 0, dy = 0)
+                    delay(16)
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
+                }
+            }
+            BallAction.RIGHT_CLICK -> {
+                scope.launch {
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_RIGHT, dx = 0, dy = 0)
+                    delay(16)
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
+                }
+            }
+            BallAction.BACK_BUTTON -> {
+                scope.launch {
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_BACK, dx = 0, dy = 0)
+                    delay(16)
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
+                }
+            }
+            BallAction.FORWARD_BUTTON -> {
+                scope.launch {
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_FORWARD, dx = 0, dy = 0)
+                    delay(16)
+                    hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
+                }
+            }
+            BallAction.CYCLE_THEME -> {
+                cycleNextThemePreset()
+            }
+            BallAction.OPEN_SETTINGS -> {
+                hidManager.refreshPairedDevices()
+                showSettingsSheet = true
+            }
+            BallAction.PAIRING_MODE -> {
+                hidManager.refreshPairedDevices()
+                showPairingDialog = true
+            }
+            BallAction.SCREEN_EDITOR -> {
+                showScreenEditor = true
+            }
+            BallAction.DISABLED -> {}
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
             .onSizeChanged { size ->
-                touchpadEngine.setScreenDimensions(size.width.toFloat(), size.height.toFloat())
+                screenWidthPx = size.width.toFloat()
+                screenHeightPx = size.height.toFloat()
+                touchpadEngine.setScreenDimensions(screenWidthPx, screenHeightPx)
+            }
+            // Fullscreen Touch Surface (Receives ALL touch events even during locked or amoled mode)
+            .pointerInteropFilter { motionEvent ->
+                if (!showScreenEditor) {
+                    touchpadEngine.onTouchEvent(motionEvent)
+                } else {
+                    false
+                }
             }
     ) {
-        // 1. Interactive GPU Background Shader with 10 Procedural Themes
+        // 1. Interactive GPU Background Shader with 10 Inspired Themes
         BackgroundShaderCanvas(
             theme = settings.backgroundTheme,
-            variant = settings.themeVariant,
+            variantIndex = settings.themeVariantIndex,
             touchPoints = activeTouchPoints,
             customImageUri = settings.customImageUri,
             dimRatio = dimRatio,
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Multi-Touch Finger Effects Layer (10 Effects)
-        FingerEffectsLayer(
-            touchPoints = activeTouchPoints,
-            effect = settings.fingerEffect,
-            enabled = settings.fingerEffectsEnabled && dimRatio < 0.8f,
-            modifier = Modifier.fillMaxSize()
-        )
+        // 2. Multi-Touch Finger Effects Layer (Only if enabled)
+        if (settings.fingerEffectsEnabled && dimRatio < 0.8f) {
+            FingerEffectsLayer(
+                touchPoints = activeTouchPoints,
+                effect = settings.fingerEffect,
+                enabled = true,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
-        // 3. Customizable Clock & Battery HUD Widget
+        // 3. Freeform Clock & Battery HUD Widget
         ClockBatteryOverlay(
             clockStyle = settings.clockStyle,
-            clockPosition = settings.clockPosition,
+            positionXFraction = settings.clockPositionX,
+            positionYFraction = settings.clockPositionY,
+            clockScale = settings.clockScale,
+            screenWidthPx = screenWidthPx,
+            screenHeightPx = screenHeightPx,
             show24Hour = settings.show24HourFormat,
             showSeconds = settings.showSeconds,
             showBattery = settings.showBatteryPercentage,
@@ -177,16 +261,7 @@ fun TouchpadScreen(
             dimRatio = dimRatio
         )
 
-        // 4. Fullscreen Touch Surface
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInteropFilter { motionEvent ->
-                    touchpadEngine.onTouchEvent(motionEvent)
-                }
-        )
-
-        // 5. Stealth Dim Overlay (Amoled Mode)
+        // 4. Stealth Dim Overlay (Amoled Mode)
         if (dimRatio > 0.01f) {
             Box(
                 modifier = Modifier
@@ -195,93 +270,75 @@ fun TouchpadScreen(
             )
         }
 
-        // 6. Liquid Glass UI Element (Fluid Morphing into Lock, Amoled, Settings, Theme Cycler)
-        LiquidGlassBall(
-            isDimMode = isDimMode,
-            isLocked = settings.isLocked,
-            presetIndex = settings.currentPresetIndex,
-            totalPresets = settings.themePresets.size,
-            onTap = {
-                touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
-                when (settings.buttonPressAction) {
-                    ButtonPressAction.LIQUID_WOBBLE -> {
-                        touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                    }
-                    ButtonPressAction.MIDDLE_CLICK -> {
-                        scope.launch {
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_MIDDLE, dx = 0, dy = 0)
-                            delay(16)
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
+        // 5. Pure Crystal Liquid Glass Ball (Hold-and-Drag Menu, Zero Icons in Collapsed Mode)
+        if (!showScreenEditor && !settings.isLocked) {
+            LiquidGlassBall(
+                isDimMode = isDimMode,
+                isLocked = settings.isLocked,
+                showAmoledInMenu = settings.showAmoledInMenu,
+                presetIndex = settings.currentPresetIndex,
+                totalPresets = settings.themePresets.size,
+                ballSizeDp = settings.ballSizeDp,
+                positionXFraction = settings.ballPositionX,
+                positionYFraction = settings.ballPositionY,
+                screenWidthPx = screenWidthPx,
+                screenHeightPx = screenHeightPx,
+                onSingleClick = {
+                    executeBallAction(settings.ballSingleTapAction)
+                },
+                onDoubleClick = {
+                    executeBallAction(settings.ballDoubleTapAction)
+                },
+                onHoldAction = {
+                    executeBallAction(settings.ballHoldAction)
+                },
+                onMenuAction = { action ->
+                    touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+                    when (action) {
+                        LiquidMenuAction.LOCK -> {
+                            touchpadEngine.updateSettings(settings.copy(isLocked = true))
+                            showToast("Locked • Touchpad active • Press Vol to unlock", Icons.Default.Lock)
+                        }
+                        LiquidMenuAction.AMOLED_MODE -> {
+                            isDimMode = !isDimMode
+                            onDimModeChanged(isDimMode)
+                            touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                            showToast(if (isDimMode) "Amoled Mode Active" else "Amoled Mode Disabled", if (isDimMode) Icons.Default.Brightness2 else Icons.Default.DarkMode)
+                        }
+                        LiquidMenuAction.SETTINGS -> {
+                            hidManager.refreshPairedDevices()
+                            showSettingsSheet = true
+                        }
+                        LiquidMenuAction.THEME_CYCLE -> {
+                            cycleNextThemePreset()
                         }
                     }
-                    ButtonPressAction.RIGHT_CLICK -> {
-                        scope.launch {
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_RIGHT, dx = 0, dy = 0)
-                            delay(16)
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
-                        }
-                    }
-                    ButtonPressAction.BACK_BUTTON -> {
-                        scope.launch {
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_BACK, dx = 0, dy = 0)
-                            delay(16)
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
-                        }
-                    }
-                    ButtonPressAction.FORWARD_BUTTON -> {
-                        scope.launch {
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_FORWARD, dx = 0, dy = 0)
-                            delay(16)
-                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
-                        }
-                    }
-                    ButtonPressAction.CYCLE_THEME -> {
-                        cycleNextThemePreset()
-                    }
-                    ButtonPressAction.AMOLED_DIM -> {
-                        isDimMode = !isDimMode
-                        onDimModeChanged(isDimMode)
-                        touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                    }
-                    ButtonPressAction.OPEN_SETTINGS -> {
-                        hidManager.refreshPairedDevices()
-                        showSettingsSheet = true
-                    }
-                    ButtonPressAction.PAIRING_MODE -> {
-                        hidManager.refreshPairedDevices()
-                        showPairingDialog = true
-                    }
+                },
+                onTouchDown = {
+                    touchpadEngine.hapticEngine.playTouchDown(settings.hapticIntensity)
+                },
+                onHoverItemChanged = {
+                    touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
                 }
-            },
-            onMenuAction = { action ->
-                touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
-                when (action) {
-                    LiquidMenuAction.LOCK -> {
-                        touchpadEngine.updateSettings(settings.copy(isLocked = true))
-                        showToast("Locked • Press Vol+ & Vol- to Unlock", Icons.Default.Lock)
-                    }
-                    LiquidMenuAction.AMOLED_MODE -> {
-                        isDimMode = !isDimMode
-                        onDimModeChanged(isDimMode)
-                        touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                        showToast(if (isDimMode) "Amoled Mode Active" else "Amoled Mode Disabled", if (isDimMode) Icons.Default.Brightness2 else Icons.Default.DarkMode)
-                    }
-                    LiquidMenuAction.SETTINGS -> {
-                        hidManager.refreshPairedDevices()
-                        showSettingsSheet = true
-                    }
-                    LiquidMenuAction.THEME_CYCLE -> {
-                        cycleNextThemePreset()
-                    }
-                }
-            },
-            onTouchDown = {
-                touchpadEngine.hapticEngine.playTouchDown(settings.hapticIntensity)
-            },
-            modifier = Modifier.align(Alignment.BottomStart)
-        )
+            )
+        }
 
-        // 7. Settings & Theme Manager Modal Sheet (3 Tabs: Settings, Theme, Finger Shader)
+        // 6. Freeform Screen Editor Overlay
+        if (showScreenEditor) {
+            ScreenEditorOverlay(
+                settings = settings,
+                screenWidthPx = screenWidthPx,
+                screenHeightPx = screenHeightPx,
+                onSettingsChange = { newSettings ->
+                    touchpadEngine.updateSettings(newSettings)
+                },
+                onClose = {
+                    showScreenEditor = false
+                }
+            )
+        }
+
+        // 7. Settings & Theme Manager Modal Sheet (3 Tabs)
         if (showSettingsSheet) {
             SettingsSheet(
                 settings = settings,
@@ -289,6 +346,9 @@ fun TouchpadScreen(
                 batteryPercentage = batteryPercentage,
                 onSettingsChange = { newSettings ->
                     touchpadEngine.updateSettings(newSettings)
+                },
+                onOpenScreenEditor = {
+                    showScreenEditor = true
                 },
                 onPickCustomImage = {
                     imagePickerLauncher.launch("image/*")

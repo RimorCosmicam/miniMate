@@ -19,22 +19,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Water
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,13 +68,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothUiState
 import com.minimate.touchpad.model.BackgroundTheme
-import com.minimate.touchpad.model.ButtonPressAction
-import com.minimate.touchpad.model.ClockPosition
+import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.ClockStyle
 import com.minimate.touchpad.model.FingerEffect
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.ThemePreset
-import com.minimate.touchpad.model.ThemeVariant
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.ui.theme.AccentBlue
 import com.minimate.ui.theme.AccentCyan
@@ -80,7 +81,6 @@ import com.minimate.ui.theme.AccentGold
 import com.minimate.ui.theme.AccentPink
 import com.minimate.ui.theme.TextPrimary
 import com.minimate.ui.theme.TextSecondary
-import com.minimate.ui.theme.TextTertiary
 
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,6 +90,7 @@ fun SettingsSheet(
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
     onSettingsChange: (TouchpadSettings) -> Unit,
+    onOpenScreenEditor: () -> Unit,
     onPickCustomImage: () -> Unit,
     onConnectAddress: (String) -> Unit,
     onDisconnect: () -> Unit,
@@ -152,7 +153,7 @@ fun SettingsSheet(
                     }
                 }
 
-                // 3 Modern Tabs: Settings, Theme, Finger Shader
+                // 3 Clean Tabs: Settings, Theme, Finger Shader
                 item {
                     Row(
                         modifier = Modifier
@@ -201,47 +202,55 @@ fun SettingsSheet(
 
                 // ==================== TAB 0: SETTINGS ====================
                 if (selectedTab == 0) {
-                    // Ball Tap Shortcut Configuration
+                    // Screen Layout Freeform Editor Trigger
                     item {
-                        FloatingSectionTitle("Liquid Glass Ball Tap Action")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(AccentPink, AccentBlue)
+                                    )
+                                )
+                                .clickable {
+                                    onDismiss()
+                                    onOpenScreenEditor()
+                                }
+                                .padding(vertical = 12.dp, horizontal = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.OpenWith, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Open Freeform Screen Editor", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Multi-Action Ball Configuration (1 Click, 2 Clicks, Hold)
+                    item {
+                        FloatingSectionTitle("Liquid Glass Ball Multi-Actions")
                     }
                     item {
                         FloatingCard {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                ButtonPressAction.values().forEach { action ->
-                                    val sel = settings.buttonPressAction == action
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (sel) AccentBlue.copy(alpha = 0.25f) else Color.Transparent)
-                                            .border(
-                                                1.dp,
-                                                if (sel) AccentBlue else Color.Transparent,
-                                                RoundedCornerShape(10.dp)
-                                            )
-                                            .clickable { onSettingsChange(settings.copy(buttonPressAction = action)) }
-                                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = action.label,
-                                                color = if (sel) AccentCyan else TextPrimary,
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = action.description,
-                                                color = TextSecondary,
-                                                fontSize = 9.sp
-                                            )
-                                        }
-                                        if (sel) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(14.dp))
-                                        }
-                                    }
-                                }
+                            ActionSelector("Single Click (1 Tap)", settings.ballSingleTapAction) {
+                                onSettingsChange(settings.copy(ballSingleTapAction = it))
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            ActionSelector("Double Click (2 Taps)", settings.ballDoubleTapAction) {
+                                onSettingsChange(settings.copy(ballDoubleTapAction = it))
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            ActionSelector("Hold & Drag Gesture", settings.ballHoldAction) {
+                                onSettingsChange(settings.copy(ballHoldAction = it))
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SwitchItem(
+                                "Show Amoled Mode in Menu",
+                                "Shows OLED dark switch inside liquid menu dock",
+                                settings.showAmoledInMenu
+                            ) {
+                                onSettingsChange(settings.copy(showAmoledInMenu = it))
                             }
                         }
                     }
@@ -324,12 +333,10 @@ fun SettingsSheet(
 
                     // Clock & Battery HUD
                     item {
-                        FloatingSectionTitle("Clock & Battery HUD Overlay")
+                        FloatingSectionTitle("Clock & Battery HUD Style")
                     }
                     item {
                         FloatingCard {
-                            Text("Clock Style", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -417,7 +424,7 @@ fun SettingsSheet(
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.BluetoothSearching, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.BluetoothSearching, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Open Pairing & Host Hub", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                         }
@@ -470,7 +477,7 @@ fun SettingsSheet(
                                             onSettingsChange(
                                                 settings.copy(
                                                     backgroundTheme = preset.theme,
-                                                    themeVariant = preset.variant,
+                                                    themeVariantIndex = preset.variantIndex,
                                                     customImageUri = preset.customUri,
                                                     currentPresetIndex = index
                                                 )
@@ -511,7 +518,7 @@ fun SettingsSheet(
                                     if (settings.currentPresetIndex in updatedPresets.indices) {
                                         updatedPresets[settings.currentPresetIndex] = ThemePreset(
                                             theme = settings.backgroundTheme,
-                                            variant = settings.themeVariant,
+                                            variantIndex = settings.themeVariantIndex,
                                             customUri = settings.customImageUri
                                         )
                                     }
@@ -527,112 +534,127 @@ fun SettingsSheet(
                         }
                     }
 
-                    // Color Palette Variant
+                    // 10 Inspired Themes with Embedded Unique Sub-Options
                     item {
-                        FloatingSectionTitle("Color Palette Variant")
-                    }
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            val palettes = listOf(
-                                ThemeVariant.VARIANT_A to "Soft Palette",
-                                ThemeVariant.VARIANT_B to "Warm Palette",
-                                ThemeVariant.VARIANT_C to "Cool Palette"
-                            )
-                            palettes.forEach { (variant, label) ->
-                                val sel = settings.themeVariant == variant
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (sel) AccentPink else Color(0xCC181926))
-                                        .border(
-                                            1.dp,
-                                            if (sel) Color.White.copy(alpha = 0.6f) else Color(0x22FFFFFF),
-                                            RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable { onSettingsChange(settings.copy(themeVariant = variant)) }
-                                        .padding(vertical = 9.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        label,
-                                        color = if (sel) Color.White else TextSecondary,
-                                        fontSize = 10.5.sp,
-                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // 10 Procedural Themes
-                    item {
-                        FloatingSectionTitle("Procedural Themes (Live Background)")
+                        FloatingSectionTitle("10 Inspired Themes with Unique Options")
                     }
 
                     val themes = BackgroundTheme.values().filter { it != BackgroundTheme.CUSTOM_IMAGE }
                     items(themes.toList()) { theme ->
-                        val sel = settings.backgroundTheme == theme && settings.customImageUri == null
+                        val isThemeSelected = settings.backgroundTheme == theme && settings.customImageUri == null
                         val icon = getThemeIcon(theme)
-                        Row(
+
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(if (sel) Color(0xD9251833) else Color(0xBF141520))
+                                .background(if (isThemeSelected) Color(0xD9251833) else Color(0xBF141520))
                                 .border(
                                     1.5.dp,
-                                    if (sel) AccentPink else Color(0x1FFFFFFF),
+                                    if (isThemeSelected) AccentPink else Color(0x1FFFFFFF),
                                     RoundedCornerShape(16.dp)
                                 )
-                                .clickable {
-                                    onSettingsChange(settings.copy(backgroundTheme = theme, customImageUri = null))
-                                }
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(12.dp)
                         ) {
-                            Box(
+                            // Main Theme Header (Click to Select)
+                            Row(
                                 modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(if (sel) AccentPink.copy(alpha = 0.25f) else Color(0x22FFFFFF)),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSettingsChange(
+                                            settings.copy(
+                                                backgroundTheme = theme,
+                                                customImageUri = null
+                                            )
+                                        )
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(icon, contentDescription = null, tint = if (sel) AccentPink else TextSecondary, modifier = Modifier.size(18.dp))
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    theme.displayName,
-                                    color = if (sel) AccentPink else TextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    theme.description,
-                                    color = TextSecondary,
-                                    fontSize = 10.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            if (sel) {
                                 Box(
                                     modifier = Modifier
-                                        .size(22.dp)
+                                        .size(34.dp)
                                         .clip(CircleShape)
-                                        .background(AccentPink),
+                                        .background(if (isThemeSelected) AccentPink.copy(alpha = 0.25f) else Color(0x22FFFFFF)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                    Icon(icon, contentDescription = null, tint = if (isThemeSelected) AccentPink else TextSecondary, modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        theme.displayName,
+                                        color = if (isThemeSelected) AccentPink else TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        theme.description,
+                                        color = TextSecondary,
+                                        fontSize = 9.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                if (isThemeSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(AccentPink),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                    }
+                                }
+                            }
+
+                            // Unique Sub-Options per Theme
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                theme.variantNames.forEachIndexed { vIdx, vName ->
+                                    val isSubSelected = isThemeSelected && settings.themeVariantIndex == vIdx
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(
+                                                if (isSubSelected) AccentCyan.copy(alpha = 0.35f)
+                                                else Color(0x33FFFFFF)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isSubSelected) AccentCyan else Color.Transparent,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable {
+                                                onSettingsChange(
+                                                    settings.copy(
+                                                        backgroundTheme = theme,
+                                                        themeVariantIndex = vIdx,
+                                                        customImageUri = null
+                                                    )
+                                                )
+                                            }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = vName,
+                                            color = if (isSubSelected) AccentCyan else TextSecondary,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = if (isSubSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // Custom Wallpaper
+                    // Custom Wallpaper & Animated GIF
                     item {
                         val hasCustom = settings.backgroundTheme == BackgroundTheme.CUSTOM_IMAGE && settings.customImageUri != null
                         Row(
@@ -661,13 +683,13 @@ fun SettingsSheet(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    if (hasCustom) "Custom Wallpaper (Active)" else "Choose Image or GIF",
+                                    if (hasCustom) "Custom Wallpaper / GIF (Active)" else "Choose Image or Animated GIF",
                                     color = if (hasCustom) AccentCyan else TextPrimary,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Pick animated GIF or photo from gallery",
+                                    "Plays 60fps animated GIFs & photos smoothly",
                                     color = TextSecondary,
                                     fontSize = 10.sp
                                 )
@@ -768,18 +790,82 @@ fun SettingsSheet(
     }
 }
 
+@Composable
+private fun ActionSelector(
+    title: String,
+    currentAction: BallAction,
+    onSelect: (BallAction) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, color = TextPrimary, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(AccentCyan.copy(alpha = 0.2f))
+                    .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(currentAction.label, color = AccentCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0x55000000))
+                    .padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                BallAction.values().forEach { action ->
+                    val isSel = currentAction == action
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSel) AccentCyan.copy(alpha = 0.3f) else Color.Transparent)
+                            .clickable {
+                                onSelect(action)
+                                expanded = false
+                            }
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = action.label,
+                            color = if (isSel) AccentCyan else TextSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun getThemeIcon(theme: BackgroundTheme): ImageVector {
     return when (theme) {
-        BackgroundTheme.SAKURA_PETALS -> Icons.Default.AutoAwesome
-        BackgroundTheme.BUBBLE_POP -> Icons.Default.Water
-        BackgroundTheme.KAWAII_PAWS -> Icons.Default.Pets
-        BackgroundTheme.PRISM_WAVES -> Icons.Default.Waves
-        BackgroundTheme.MATCHA_CAFE -> Icons.Default.LocalCafe
-        BackgroundTheme.RETRO_ARCADE -> Icons.Default.SportsEsports
-        BackgroundTheme.TROPICAL_OCEAN -> Icons.Default.Water
-        BackgroundTheme.STRAWBERRY_MOCHI -> Icons.Default.Grain
-        BackgroundTheme.STARRY_GALAXY -> Icons.Default.Star
-        BackgroundTheme.CLEAN_MINIMAL -> Icons.Default.DarkMode
+        BackgroundTheme.CHROME_FLUID -> Icons.Default.Speed
+        BackgroundTheme.DEEP_ABYSS -> Icons.Default.Water
+        BackgroundTheme.HYPERDRIVE_WARP -> Icons.Default.Star
+        BackgroundTheme.AURORA_BOREALIS -> Icons.Default.Waves
+        BackgroundTheme.MAGMA_CORE -> Icons.Default.LocalFireDepartment
+        BackgroundTheme.HOLO_PRISM -> Icons.Default.AutoAwesome
+        BackgroundTheme.SYNTHWAVE_3D -> Icons.Default.SportsEsports
+        BackgroundTheme.SAKURA_BREEZE -> Icons.Default.AutoAwesome
+        BackgroundTheme.MATRIX_CASCADE -> Icons.Default.Grain
+        BackgroundTheme.STEALTH_OLED -> Icons.Default.DarkMode
         BackgroundTheme.CUSTOM_IMAGE -> Icons.Default.Image
     }
 }

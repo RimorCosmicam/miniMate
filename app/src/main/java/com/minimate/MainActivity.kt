@@ -86,6 +86,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (checkAndHandleUnlock()) return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
         val isDown = event.action == KeyEvent.ACTION_DOWN
@@ -107,17 +114,14 @@ class MainActivity : ComponentActivity() {
     private fun checkAndHandleUnlock(): Boolean {
         val currentSettings = touchpadEngine.settings.value
         if (currentSettings.isLocked) {
-            val bothHeld = isVolUpPressed && isVolDownPressed
-            val bothPressedRecently = (abs(lastVolUpTime - lastVolDownTime) < 450L) && (lastVolUpTime > 0 && lastVolDownTime > 0)
-            if (bothHeld || bothPressedRecently) {
-                touchpadEngine.updateSettings(currentSettings.copy(isLocked = false))
-                touchpadEngine.hapticEngine.playModeTransition(HapticIntensity.STRONG)
-                isVolUpPressed = false
-                isVolDownPressed = false
-                lastVolUpTime = 0L
-                lastVolDownTime = 0L
-                return true
-            }
+            // Unlock on any volume button press while locked
+            touchpadEngine.updateSettings(currentSettings.copy(isLocked = false))
+            touchpadEngine.hapticEngine.playModeTransition(HapticIntensity.STRONG)
+            isVolUpPressed = false
+            isVolDownPressed = false
+            lastVolUpTime = 0L
+            lastVolDownTime = 0L
+            return true
         }
         return false
     }

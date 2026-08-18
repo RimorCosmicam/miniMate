@@ -44,10 +44,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,8 +60,12 @@ import com.minimate.touchpad.engine.TouchPoint
 import com.minimate.touchpad.model.FingerEffect
 import com.minimate.ui.theme.AccentCyan
 import com.minimate.ui.theme.AccentPink
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 @Composable
 fun FingerEffectsLayer(
@@ -68,12 +76,12 @@ fun FingerEffectsLayer(
 ) {
     if (!enabled || touchPoints.isEmpty()) return
 
-    val transition = rememberInfiniteTransition(label = "CuteEffectPulse")
+    val transition = rememberInfiniteTransition(label = "FxPulse")
     val pulse by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "PulseFloat"
@@ -81,17 +89,19 @@ fun FingerEffectsLayer(
 
     Canvas(modifier = modifier.fillMaxSize()) {
         touchPoints.forEach { pt ->
-            drawSingleFingerEffect(effect = effect, center = Offset(pt.x, pt.y), pulse = pulse)
+            drawSingleFingerEffect(
+                effect = effect,
+                center = Offset(pt.x, pt.y),
+                pulse = pulse
+            )
         }
 
-        // Multi-point connection for Plasma Lightning
-        if (effect == FingerEffect.PLASMA_LIGHTNING && touchPoints.size >= 2) {
-            for (i in 0 until touchPoints.size - 1) {
-                val p1 = Offset(touchPoints[i].x, touchPoints[i].y)
-                val p2 = Offset(touchPoints[i + 1].x, touchPoints[i + 1].y)
-                drawLine(color = Color(0xFF00F5D4), start = p1, end = p2, strokeWidth = 3.5f)
-                val mid = Offset((p1.x + p2.x) / 2f + sin(pulse * 6.28f) * 14f, (p1.y + p2.y) / 2f + cos(pulse * 6.28f) * 14f)
-                drawCircle(color = Color.White, radius = 5f, center = mid)
+        // Multi-point interactions
+        if (touchPoints.size >= 2) {
+            when (effect) {
+                FingerEffect.PLASMA_LIGHTNING -> drawPlasmaArcs(touchPoints, pulse)
+                FingerEffect.RAINBOW_RIBBON -> drawRainbowConnections(touchPoints, pulse)
+                else -> {}
             }
         }
     }
@@ -150,7 +160,7 @@ fun FingerEffectPreviewPopup(
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        effect.displayName,
+                        text = effect.displayName,
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -159,7 +169,6 @@ fun FingerEffectPreviewPopup(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Simulated Mini Interactive Touch Canvas
                 Box(
                     modifier = Modifier
                         .size(80.dp)
@@ -177,7 +186,7 @@ fun FingerEffectPreviewPopup(
 
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Live Effect Preview",
+                    text = "Live Effect Preview",
                     color = AccentCyan,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium
@@ -202,119 +211,589 @@ private fun getEffectPreviewIcon(effect: FingerEffect): ImageVector {
     }
 }
 
+// ===== ACTUAL REAL VISUAL EFFECTS =====
+
 fun DrawScope.drawSingleFingerEffect(
     effect: FingerEffect,
     center: Offset,
     pulse: Float
 ) {
     when (effect) {
-        FingerEffect.CHERRY_PETALS -> {
-            for (i in 0 until 5) {
-                val angle = (i * Math.PI * 2.0 / 5.0 + pulse * Math.PI * 0.5).toFloat()
-                val petalDist = 18f + sin(pulse * 6.28f + i) * 6f
-                val px = center.x + cos(angle) * petalDist
-                val py = center.y + sin(angle) * petalDist
-                drawCircle(color = Color(0xFFFFB7B2).copy(alpha = 0.85f), radius = 8f, center = Offset(px, py))
-                drawCircle(color = Color(0xFFFF69B4), radius = 5f, center = Offset(px, py))
+        FingerEffect.CHERRY_PETALS -> drawSakuraAura(center, pulse)
+        FingerEffect.BUBBLE_SPLASH -> drawLiquidBubbleField(center, pulse)
+        FingerEffect.CAT_PAW_PRINTS -> drawGlowingPawStamp(center, pulse)
+        FingerEffect.STAR_GLITTER -> drawPrismaticStarBurst(center, pulse)
+        FingerEffect.RAINBOW_RIBBON -> drawChromaticHalo(center, pulse)
+        FingerEffect.WATER_RIPPLES -> drawShockwaveRipples(center, pulse)
+        FingerEffect.PLASMA_LIGHTNING -> drawPlasmaCore(center, pulse)
+        FingerEffect.NEON_RETICLE -> drawHolographicReticle(center, pulse)
+        FingerEffect.FIRE_HEARTS -> drawEmberHearts(center, pulse)
+        FingerEffect.MINIMAL_DOT -> drawGlassDot(center, pulse)
+    }
+}
+
+/**
+ * Sakura Aura: Soft radiating glow with orbiting petal shapes that warp light around them.
+ */
+private fun DrawScope.drawSakuraAura(center: Offset, pulse: Float) {
+    // Outer aura glow that bleeds into the wallpaper
+    val auraRadius = 55f + sin(pulse * PI.toFloat() * 2f) * 8f
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color(0x55FFB7B2),
+                Color(0x33FF69B4),
+                Color(0x11FF1493),
+                Color.Transparent
+            ),
+            center = center,
+            radius = auraRadius
+        ),
+        radius = auraRadius,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    // Orbiting petals with proper geometry
+    for (i in 0 until 6) {
+        val angle = (i * PI.toFloat() * 2f / 6f) + pulse * PI.toFloat()
+        val dist = 22f + sin(pulse * PI.toFloat() * 2f + i * 1.2f) * 7f
+        val px = center.x + cos(angle) * dist
+        val py = center.y + sin(angle) * dist
+        val petalAlpha = (0.7f + sin(pulse * PI.toFloat() * 4f + i) * 0.3f).coerceIn(0f, 1f)
+
+        // Each petal is an elongated ellipse rotated along its orbit
+        rotate(degrees = Math.toDegrees(angle.toDouble()).toFloat() + 90f, pivot = Offset(px, py)) {
+            drawOval(
+                color = Color(0xFFFF69B4).copy(alpha = petalAlpha),
+                topLeft = Offset(px - 5f, py - 9f),
+                size = Size(10f, 18f)
+            )
+            drawOval(
+                color = Color(0xFFFFB7B2).copy(alpha = petalAlpha * 0.7f),
+                topLeft = Offset(px - 3f, py - 6f),
+                size = Size(6f, 12f)
+            )
+        }
+    }
+
+    // Hot center bead
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xDDFFF0F5), Color(0x88FF69B4), Color.Transparent),
+            center = center,
+            radius = 10f
+        ),
+        radius = 10f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+}
+
+/**
+ * Liquid Bubble Field: Translucent refractive soap bubbles with animated highlight beads.
+ */
+private fun DrawScope.drawLiquidBubbleField(center: Offset, pulse: Float) {
+    // Ambient refraction haze
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x2289CFF0), Color(0x1100BFFF), Color.Transparent),
+            center = center,
+            radius = 60f
+        ),
+        radius = 60f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    for (i in 0..3) {
+        val phase = (pulse + i * 0.25f) % 1f
+        val r = 12f + phase * 40f
+        val alpha = ((1f - phase) * 0.75f).coerceIn(0f, 1f)
+        val bubbleCol = if (i % 2 == 0) Color(0xFF89CFF0) else Color(0xFFFF85A1)
+
+        // Bubble rim with iridescent tint
+        drawCircle(
+            color = bubbleCol.copy(alpha = alpha),
+            radius = r,
+            center = center,
+            style = Stroke(2.5f + (1f - phase) * 1.5f)
+        )
+
+        // Specular highlight bead sliding along the rim
+        val highlightAngle = pulse * PI.toFloat() * 4f + i * 1.5f
+        val hx = center.x + cos(highlightAngle) * r * 0.55f - r * 0.3f
+        val hy = center.y + sin(highlightAngle) * r * 0.35f - r * 0.3f
+        drawCircle(
+            color = Color.White.copy(alpha = alpha * 0.9f),
+            radius = r * 0.15f + 1.5f,
+            center = Offset(hx, hy)
+        )
+    }
+
+    // Center lens
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xAAFFFFFF), Color(0x4489CFF0), Color.Transparent),
+            center = center,
+            radius = 8f
+        ),
+        radius = 8f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+}
+
+/**
+ * Glowing Paw Stamp: Full paw geometry with warm glow that blends with the wallpaper.
+ */
+private fun DrawScope.drawGlowingPawStamp(center: Offset, pulse: Float) {
+    val breathe = 1f + sin(pulse * PI.toFloat() * 2f) * 0.1f
+    val glowAlpha = (0.3f + sin(pulse * PI.toFloat() * 4f) * 0.15f).coerceIn(0f, 1f)
+
+    // Warm glow aura bleeding into wallpaper
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x44FF758F), Color(0x22FFB3C1), Color.Transparent),
+            center = center,
+            radius = 50f
+        ),
+        radius = 50f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    val pawColor = Color(0xFFFF758F)
+    val innerColor = Color(0xFFFFB3C1)
+    val s = breathe
+
+    // Main palm pad
+    drawOval(color = pawColor.copy(alpha = 0.9f), topLeft = Offset(center.x - 14f * s, center.y - 6f * s), size = Size(28f * s, 22f * s))
+    drawOval(color = innerColor.copy(alpha = 0.6f), topLeft = Offset(center.x - 10f * s, center.y - 4f * s), size = Size(20f * s, 16f * s))
+
+    // 4 toe beans with individual glow
+    val toes = listOf(
+        Offset(-12f, -17f) to 5f,
+        Offset(-4f, -22f) to 5.5f,
+        Offset(4f, -22f) to 5.5f,
+        Offset(12f, -17f) to 5f
+    )
+    toes.forEach { (off, r) ->
+        val toeCenter = Offset(center.x + off.x * s, center.y + off.y * s)
+        drawCircle(color = pawColor.copy(alpha = 0.85f), radius = r * s, center = toeCenter)
+        drawCircle(
+            color = Color(0x33FF69B4),
+            radius = r * s + 4f,
+            center = toeCenter,
+            blendMode = BlendMode.Screen
+        )
+    }
+}
+
+/**
+ * Prismatic Star Burst: Multi-pointed star geometry with chromatic shimmer trails.
+ */
+private fun DrawScope.drawPrismaticStarBurst(center: Offset, pulse: Float) {
+    // Chromatic dispersion aura
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x33FFD166), Color(0x2206D6A0), Color(0x11EF476F), Color.Transparent),
+            center = center,
+            radius = 55f
+        ),
+        radius = 55f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    // Orbiting multi-colored stars with trail
+    for (i in 0 until 8) {
+        val angle = (i * PI.toFloat() * 2f / 8f) + pulse * PI.toFloat() * 2.5f
+        val dist = 20f + (i % 3) * 7f
+        val px = center.x + cos(angle) * dist
+        val py = center.y + sin(angle) * dist
+        val starCol = when (i % 4) {
+            0 -> Color(0xFFFFD166)
+            1 -> Color(0xFF06D6A0)
+            2 -> Color(0xFFEF476F)
+            else -> Color(0xFF118AB2)
+        }
+
+        // Star with 4 points
+        val starPath = Path().apply {
+            for (j in 0 until 8) {
+                val sa = j * PI.toFloat() / 4f - PI.toFloat() / 2f
+                val sr = if (j % 2 == 0) 5.5f else 2.5f
+                val sx = px + cos(sa) * sr
+                val sy = py + sin(sa) * sr
+                if (j == 0) moveTo(sx, sy) else lineTo(sx, sy)
             }
-            drawCircle(color = Color(0xFFFFF0F5), radius = 6f, center = center)
+            close()
         }
+        drawPath(starPath, color = starCol.copy(alpha = 0.85f), style = Fill)
 
-        FingerEffect.BUBBLE_SPLASH -> {
-            for (i in 0..3) {
-                val phase = (pulse + i * 0.25f) % 1f
-                val r = 10f + phase * 36f
-                val alpha = (1f - phase) * 0.85f
-                val bubbleColor = if (i % 2 == 0) Color(0xFF89CFF0) else Color(0xFFFF85A1)
-                drawCircle(color = bubbleColor.copy(alpha = alpha), radius = r, center = center, style = Stroke(2.5f))
-                drawCircle(color = Color.White.copy(alpha = alpha * 0.9f), radius = r * 0.2f, center = Offset(center.x - r * 0.4f, center.y - r * 0.4f))
-            }
-            drawCircle(color = Color.White, radius = 5f, center = center)
+        // Light trail behind each star
+        val trailAngle = angle - 0.4f
+        val tx = center.x + cos(trailAngle) * dist * 0.85f
+        val ty = center.y + sin(trailAngle) * dist * 0.85f
+        drawCircle(color = starCol.copy(alpha = 0.3f), radius = 3f, center = Offset(tx, ty))
+    }
+
+    // Hot white center flash
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xDDFFFFFF), Color(0x44FFD166), Color.Transparent),
+            center = center,
+            radius = 9f
+        ),
+        radius = 9f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+}
+
+/**
+ * Chromatic Halo: Concentric iridescent rings with prismatic light separation.
+ */
+private fun DrawScope.drawChromaticHalo(center: Offset, pulse: Float) {
+    val colors = listOf(
+        Color(0xFFFF595E), Color(0xFFFFCA3A), Color(0xFF8AC926),
+        Color(0xFF1982C4), Color(0xFF6A4C93)
+    )
+
+    // Light bleeding aura
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x22FFFFFF), Color(0x11FFCA3A), Color.Transparent),
+            center = center,
+            radius = 65f
+        ),
+        radius = 65f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    colors.forEachIndexed { idx, col ->
+        val phaseOffset = pulse * PI.toFloat() * 2f + idx * 0.8f
+        val r = 14f + idx * 8f + sin(phaseOffset) * 4f
+        val weight = 2.2f + sin(phaseOffset + 1f) * 0.8f
+        drawCircle(
+            color = col.copy(alpha = 0.75f),
+            radius = r,
+            center = center,
+            style = Stroke(weight),
+            blendMode = BlendMode.Screen
+        )
+    }
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xBBFFFFFF), Color(0x448AC926), Color.Transparent),
+            center = center,
+            radius = 8f
+        ),
+        radius = 8f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+}
+
+/**
+ * Shockwave Ripples: Concentric expanding rings with velocity-based distortion.
+ */
+private fun DrawScope.drawShockwaveRipples(center: Offset, pulse: Float) {
+    // Ambient aquatic glow
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x2200B4D8), Color(0x1190E0EF), Color.Transparent),
+            center = center,
+            radius = 70f
+        ),
+        radius = 70f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    for (i in 0..3) {
+        val phase = (pulse + i * 0.25f) % 1f
+        val r = 10f + phase * 55f
+        val alpha = ((1f - phase).pow(1.5f) * 0.8f).coerceIn(0f, 1f)
+        val width = 2.5f * (1f - phase) + 0.5f
+
+        drawCircle(
+            color = Color(0xFF00B4D8).copy(alpha = alpha),
+            radius = r,
+            center = center,
+            style = Stroke(width)
+        )
+
+        // Inner bright edge on each wave
+        if (phase < 0.6f) {
+            drawCircle(
+                color = Color(0xFFE0FBFC).copy(alpha = alpha * 0.5f),
+                radius = r - 1.5f,
+                center = center,
+                style = Stroke(0.8f)
+            )
         }
+    }
 
-        FingerEffect.CAT_PAW_PRINTS -> {
-            val pawColor = Color(0xFFFF758F).copy(alpha = 0.9f)
-            // Main palm pad
-            drawOval(color = pawColor, topLeft = Offset(center.x - 13f, center.y - 7f), size = Size(26f, 20f))
-            drawOval(color = Color(0xFFFFB3C1), topLeft = Offset(center.x - 9f, center.y - 5f), size = Size(18f, 14f))
-            // 4 Toe beans
-            drawCircle(color = pawColor, radius = 4.5f, center = Offset(center.x - 11f, center.y - 16f))
-            drawCircle(color = pawColor, radius = 5f, center = Offset(center.x - 4f, center.y - 20f))
-            drawCircle(color = pawColor, radius = 5f, center = Offset(center.x + 4f, center.y - 20f))
-            drawCircle(color = pawColor, radius = 4.5f, center = Offset(center.x + 11f, center.y - 16f))
-        }
+    // Bright center drop impact
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xCCE0FBFC), Color(0x4400B4D8), Color.Transparent),
+            center = center,
+            radius = 7f
+        ),
+        radius = 7f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+}
 
-        FingerEffect.STAR_GLITTER -> {
-            for (i in 0 until 6) {
-                val angle = (i * Math.PI / 3.0 + pulse * Math.PI * 2.0).toFloat()
-                val dist = 18f + (i % 2) * 10f
-                val px = center.x + cos(angle) * dist
-                val py = center.y + sin(angle) * dist
-                val starCol = if (i % 3 == 0) Color(0xFFFFD166) else if (i % 3 == 1) Color(0xFF06D6A0) else Color(0xFFEF476F)
-                drawCircle(color = starCol, radius = 4f, center = Offset(px, py))
-                drawCircle(color = Color.White, radius = 2f, center = Offset(px, py))
-            }
-            drawCircle(color = Color.White, radius = 5f, center = center)
-        }
+/**
+ * Plasma Core: Pulsing energetic nucleus with electric aura field.
+ */
+private fun DrawScope.drawPlasmaCore(center: Offset, pulse: Float) {
+    val coreRadius = 6f + sin(pulse * PI.toFloat() * 6f) * 2f
 
-        FingerEffect.RAINBOW_RIBBON -> {
-            val colors = listOf(Color(0xFFFF595E), Color(0xFFFFCA3A), Color(0xFF8AC926), Color(0xFF1982C4), Color(0xFF6A4C93))
-            colors.forEachIndexed { idx, col ->
-                val r = 12f + idx * 6f + sin(pulse * 6.28f + idx) * 3f
-                drawCircle(color = col.copy(alpha = 0.8f), radius = r, center = center, style = Stroke(2.5f))
-            }
-            drawCircle(color = Color.White, radius = 5f, center = center)
-        }
+    // Outer energy field
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x447B2CBF), Color(0x2200F5D4), Color.Transparent),
+            center = center,
+            radius = 55f
+        ),
+        radius = 55f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
 
-        FingerEffect.WATER_RIPPLES -> {
-            for (i in 0..2) {
-                val phase = (pulse + i * 0.33f) % 1f
-                val r = 8f + phase * 45f
-                val alpha = (1f - phase) * 0.8f
-                drawCircle(color = Color(0xFF00B4D8).copy(alpha = alpha), radius = r, center = center, style = Stroke(2f))
-            }
-            drawCircle(color = Color(0xFFE0FBFC), radius = 5f, center = center)
-        }
+    // Spinning energy arcs
+    for (i in 0 until 4) {
+        val angle = (i * PI.toFloat() / 2f) + pulse * PI.toFloat() * 3f
+        val arcLen = 18f + sin(pulse * PI.toFloat() * 4f + i) * 6f
+        val ax = center.x + cos(angle) * arcLen
+        val ay = center.y + sin(angle) * arcLen
+        drawLine(
+            color = Color(0xCC00F5D4),
+            start = center,
+            end = Offset(ax, ay),
+            strokeWidth = 1.8f,
+            blendMode = BlendMode.Screen
+        )
+        drawCircle(color = Color(0xDDFFFFFF), radius = 2.5f, center = Offset(ax, ay))
+    }
 
-        FingerEffect.PLASMA_LIGHTNING -> {
-            drawCircle(color = Color(0xFF7B2CBF), radius = 18f, center = center, style = Stroke(2.5f))
-            drawCircle(color = Color(0xFF00F5D4), radius = 10f, center = center, style = Stroke(1.5f))
-            drawCircle(color = Color.White, radius = 5f, center = center)
-        }
+    // Bright plasma core
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xEEFFFFFF), Color(0xBB00F5D4), Color(0x557B2CBF), Color.Transparent),
+            center = center,
+            radius = coreRadius + 5f
+        ),
+        radius = coreRadius + 5f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+    drawCircle(color = Color.White, radius = coreRadius, center = center)
+}
 
-        FingerEffect.NEON_RETICLE -> {
-            drawCircle(color = AccentCyan.copy(alpha = 0.85f), radius = 22f, center = center, style = Stroke(2f))
-            drawLine(color = AccentCyan, start = Offset(center.x - 28f, center.y), end = Offset(center.x - 8f, center.y), strokeWidth = 2f)
-            drawLine(color = AccentCyan, start = Offset(center.x + 8f, center.y), end = Offset(center.x + 28f, center.y), strokeWidth = 2f)
-            drawLine(color = AccentCyan, start = Offset(center.x, center.y - 28f), end = Offset(center.x, center.y - 8f), strokeWidth = 2f)
-            drawLine(color = AccentCyan, start = Offset(center.x, center.y + 8f), end = Offset(center.x, center.y + 28f), strokeWidth = 2f)
-            drawCircle(color = Color.White, radius = 4f, center = center)
-        }
+/**
+ * Holographic Reticle: Precision tech crosshair with scanning sweep and distance indicators.
+ */
+private fun DrawScope.drawHolographicReticle(center: Offset, pulse: Float) {
+    val sweepAngle = pulse * 360f
 
-        FingerEffect.FIRE_HEARTS -> {
-            for (i in 0 until 4) {
-                val angle = (i * Math.PI / 2.0 + pulse * Math.PI).toFloat()
-                val dist = 18f + (i % 2) * 8f
-                val hx = center.x + cos(angle) * dist
-                val hy = center.y + sin(angle) * dist
-                drawHeart(Offset(hx, hy), size = 11f, color = Color(0xFFFF1493).copy(alpha = 0.85f))
-            }
-            drawCircle(color = Color(0xFFFFB6C1), radius = 6f, center = center)
-            drawCircle(color = Color.White, radius = 3f, center = center)
-        }
+    // Scanning sweep glow
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x2200E5FF), Color(0x1100B4D8), Color.Transparent),
+            center = center,
+            radius = 50f
+        ),
+        radius = 50f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
 
-        FingerEffect.MINIMAL_DOT -> {
-            drawCircle(color = Color(0x66FFFFFF), radius = 12f, center = center)
-            drawCircle(color = Color.White, radius = 4f, center = center)
+    // Outer targeting ring
+    drawCircle(
+        color = AccentCyan.copy(alpha = 0.7f),
+        radius = 28f,
+        center = center,
+        style = Stroke(1.8f)
+    )
+
+    // Inner precision ring
+    drawCircle(
+        color = AccentCyan.copy(alpha = 0.5f),
+        radius = 16f,
+        center = center,
+        style = Stroke(1.2f)
+    )
+
+    // Crosshair lines with gaps
+    val armLen = 35f
+    val gapInner = 10f
+    val gapOuter = 32f
+    val lineAlpha = 0.8f
+    // Horizontal
+    drawLine(color = AccentCyan.copy(alpha = lineAlpha), start = Offset(center.x - armLen, center.y), end = Offset(center.x - gapInner, center.y), strokeWidth = 1.5f)
+    drawLine(color = AccentCyan.copy(alpha = lineAlpha), start = Offset(center.x + gapInner, center.y), end = Offset(center.x + armLen, center.y), strokeWidth = 1.5f)
+    // Vertical
+    drawLine(color = AccentCyan.copy(alpha = lineAlpha), start = Offset(center.x, center.y - armLen), end = Offset(center.x, center.y - gapInner), strokeWidth = 1.5f)
+    drawLine(color = AccentCyan.copy(alpha = lineAlpha), start = Offset(center.x, center.y + gapInner), end = Offset(center.x, center.y + armLen), strokeWidth = 1.5f)
+
+    // Rotating sweep indicator
+    val sweepRad = Math.toRadians(sweepAngle.toDouble()).toFloat()
+    val sx = center.x + cos(sweepRad) * 28f
+    val sy = center.y + sin(sweepRad) * 28f
+    drawCircle(color = Color.White, radius = 2.5f, center = Offset(sx, sy))
+
+    // Center dot
+    drawCircle(color = AccentCyan, radius = 3f, center = center)
+}
+
+/**
+ * Ember Hearts: Warm glowing heart shapes with fire particle trails.
+ */
+private fun DrawScope.drawEmberHearts(center: Offset, pulse: Float) {
+    // Warm glow aura
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x33FF1493), Color(0x22FF69B4), Color.Transparent),
+            center = center,
+            radius = 50f
+        ),
+        radius = 50f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    for (i in 0 until 5) {
+        val angle = (i * PI.toFloat() * 2f / 5f) + pulse * PI.toFloat() * 1.5f
+        val dist = 18f + (i % 2) * 9f + sin(pulse * PI.toFloat() * 3f + i) * 3f
+        val hx = center.x + cos(angle) * dist
+        val hy = center.y + sin(angle) * dist
+        val heartAlpha = (0.75f + sin(pulse * PI.toFloat() * 4f + i * 1.3f) * 0.25f).coerceIn(0f, 1f)
+        val heartSize = 10f + sin(pulse * PI.toFloat() * 2f + i) * 2f
+
+        drawHeartShape(Offset(hx, hy), size = heartSize, color = Color(0xFFFF1493).copy(alpha = heartAlpha))
+
+        // Ember trail sparks
+        val trailAngle = angle - 0.5f
+        val tx = center.x + cos(trailAngle) * dist * 0.7f
+        val ty = center.y + sin(trailAngle) * dist * 0.7f
+        drawCircle(color = Color(0x55FF6B6B), radius = 2.5f, center = Offset(tx, ty), blendMode = BlendMode.Screen)
+    }
+
+    // Warm center glow
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xAAFFB6C1), Color(0x44FF69B4), Color.Transparent),
+            center = center,
+            radius = 10f
+        ),
+        radius = 10f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+}
+
+/**
+ * Glass Dot: Minimal refractive glass bead with subtle ambient light warp.
+ */
+private fun DrawScope.drawGlassDot(center: Offset, pulse: Float) {
+    // Very subtle ambient glow
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x1AFFFFFF), Color(0x0DFFFFFF), Color.Transparent),
+            center = center,
+            radius = 30f
+        ),
+        radius = 30f,
+        center = center,
+        blendMode = BlendMode.Screen
+    )
+
+    // Glass body
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0x88FFFFFF), Color(0x33FFFFFF), Color(0x11FFFFFF)),
+            center = Offset(center.x - 2f, center.y - 2f),
+            radius = 9f
+        ),
+        radius = 9f,
+        center = center
+    )
+
+    // Specular highlight
+    drawCircle(color = Color(0xCCFFFFFF), radius = 3f, center = Offset(center.x - 2.5f, center.y - 3f))
+}
+
+// ===== MULTI-TOUCH INTERACTIONS =====
+
+private fun DrawScope.drawPlasmaArcs(touchPoints: List<TouchPoint>, pulse: Float) {
+    for (i in 0 until touchPoints.size - 1) {
+        val p1 = Offset(touchPoints[i].x, touchPoints[i].y)
+        val p2 = Offset(touchPoints[i + 1].x, touchPoints[i + 1].y)
+
+        // Electric arc with jitter
+        val mid = Offset(
+            (p1.x + p2.x) / 2f + sin(pulse * PI.toFloat() * 8f) * 14f,
+            (p1.y + p2.y) / 2f + cos(pulse * PI.toFloat() * 6f) * 10f
+        )
+
+        // Main arc
+        drawLine(color = Color(0xBB00F5D4), start = p1, end = mid, strokeWidth = 2f, blendMode = BlendMode.Screen)
+        drawLine(color = Color(0xBB00F5D4), start = mid, end = p2, strokeWidth = 2f, blendMode = BlendMode.Screen)
+
+        // Glow around midpoint
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(Color(0x88FFFFFF), Color(0x4400F5D4), Color.Transparent),
+                center = mid,
+                radius = 12f
+            ),
+            radius = 12f,
+            center = mid,
+            blendMode = BlendMode.Screen
+        )
+    }
+}
+
+private fun DrawScope.drawRainbowConnections(touchPoints: List<TouchPoint>, pulse: Float) {
+    val colors = listOf(Color(0xFFFF595E), Color(0xFFFFCA3A), Color(0xFF8AC926), Color(0xFF1982C4), Color(0xFF6A4C93))
+    for (i in 0 until touchPoints.size - 1) {
+        val p1 = Offset(touchPoints[i].x, touchPoints[i].y)
+        val p2 = Offset(touchPoints[i + 1].x, touchPoints[i + 1].y)
+        colors.forEachIndexed { idx, col ->
+            val offset = (idx - 2) * 3f
+            drawLine(
+                color = col.copy(alpha = 0.5f),
+                start = Offset(p1.x, p1.y + offset),
+                end = Offset(p2.x, p2.y + offset),
+                strokeWidth = 1.8f,
+                blendMode = BlendMode.Screen
+            )
         }
     }
 }
 
-private fun DrawScope.drawHeart(center: Offset, size: Float, color: Color) {
+private fun DrawScope.drawHeartShape(center: Offset, size: Float, color: Color) {
     val path = Path().apply {
-        moveTo(center.x, center.y + size * 0.4f)
-        cubicTo(center.x - size * 0.6f, center.y - size * 0.2f, center.x - size * 0.6f, center.y - size * 0.8f, center.x, center.y - size * 0.4f)
-        cubicTo(center.x + size * 0.6f, center.y - size * 0.8f, center.x + size * 0.6f, center.y - size * 0.2f, center.x, center.y + size * 0.4f)
+        moveTo(center.x, center.y + size * 0.35f)
+        cubicTo(
+            center.x - size * 0.65f, center.y - size * 0.15f,
+            center.x - size * 0.65f, center.y - size * 0.75f,
+            center.x, center.y - size * 0.35f
+        )
+        cubicTo(
+            center.x + size * 0.65f, center.y - size * 0.75f,
+            center.x + size * 0.65f, center.y - size * 0.15f,
+            center.x, center.y + size * 0.35f
+        )
         close()
     }
     drawPath(path, color = color)
