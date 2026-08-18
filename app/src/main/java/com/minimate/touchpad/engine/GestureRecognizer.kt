@@ -167,13 +167,6 @@ class GestureRecognizer(
     }
 
     private fun processHistorical1FingerMovement(event: MotionEvent) {
-        val historySize = event.historySize
-        for (h in 0 until historySize) {
-            val hx = event.getHistoricalX(0, h)
-            val hy = event.getHistoricalY(0, h)
-            val ht = event.getHistoricalEventTime(h)
-            step1Finger(hx, hy, ht)
-        }
         step1Finger(event.getX(0), event.getY(0), event.eventTime)
     }
 

@@ -26,7 +26,9 @@ class TouchpadEngine(
 
     val hapticEngine = HapticFeedbackEngine(context)
 
-    private val _settings = MutableStateFlow(TouchpadSettings())
+    private val prefs = com.minimate.touchpad.model.TouchpadPreferences(context)
+
+    private val _settings = MutableStateFlow(prefs.loadSettings())
     val settings: StateFlow<TouchpadSettings> = _settings.asStateFlow()
 
     private val _activeTouchPoints = MutableStateFlow<List<TouchPoint>>(emptyList())
@@ -45,6 +47,7 @@ class TouchpadEngine(
     private val gestureRecognizer = GestureRecognizer(context) { event ->
         handleGestureEvent(event)
     }.apply {
+        settings = _settings.value
         onTouchPointsUpdated = { points ->
             _activeTouchPoints.value = points
         }
@@ -53,6 +56,7 @@ class TouchpadEngine(
     fun updateSettings(newSettings: TouchpadSettings) {
         _settings.value = newSettings
         gestureRecognizer.settings = newSettings
+        prefs.saveSettings(newSettings)
     }
 
     fun setScreenDimensions(width: Float, height: Float) {
