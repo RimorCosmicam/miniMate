@@ -1,32 +1,24 @@
 package com.minimate.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BluetoothSearching
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,8 +54,8 @@ import kotlin.math.sin
 enum class RadialAction {
     NONE,
     PAIRING,
-    THEME,
-    PICK_IMAGE,
+    SETTINGS,
+    THEMES,
     LOCK
 }
 
@@ -71,7 +63,7 @@ data class PetalConfig(
     val action: RadialAction,
     val label: String,
     val icon: ImageVector,
-    val angleDeg: Float, // Angle in degrees (0 = right, 90 = down, -90 = up)
+    val angleDeg: Float, // Negative angles: fan upwards & right from bottom-left corner
     val color: Color
 )
 
@@ -79,29 +71,31 @@ data class PetalConfig(
 fun FloatingInteractionBall(
     isDimMode: Boolean,
     isLocked: Boolean,
-    onDimModeChange: (Boolean) -> Unit,
+    onTapShortcut: () -> Unit,
     onActionSelected: (RadialAction) -> Unit,
+    onTouchDown: () -> Unit,
     onHapticTick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (isLocked) return // Hides the ball completely in Lock mode!
+    if (isLocked) return // Hides ball completely in Lock mode
 
     var isDragging by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var activeAction by remember { mutableStateOf(RadialAction.NONE) }
     val density = LocalDensity.current
 
+    // The 4 essential petals fanning perfectly into the screen viewable area
     val petals = remember {
         listOf(
-            PetalConfig(RadialAction.PAIRING, "Pair Host", Icons.Default.BluetoothSearching, -15f, AccentBlue),
-            PetalConfig(RadialAction.THEME, "Next Theme", Icons.Default.Palette, -50f, AccentPurple),
-            PetalConfig(RadialAction.PICK_IMAGE, "Custom BG", Icons.Default.Image, -85f, AccentCyan),
-            PetalConfig(RadialAction.LOCK, "Lock Screen", Icons.Default.Lock, -120f, Color(0xFFEF4444))
+            PetalConfig(RadialAction.PAIRING, "Pair", Icons.Default.Bluetooth, -15f, AccentBlue),
+            PetalConfig(RadialAction.SETTINGS, "Settings", Icons.Default.Settings, -40f, AccentCyan),
+            PetalConfig(RadialAction.THEMES, "Themes", Icons.Default.Palette, -65f, AccentPurple),
+            PetalConfig(RadialAction.LOCK, "Lock", Icons.Default.Lock, -90f, Color(0xFFEF4444))
         )
     }
 
     val ballSize by animateDpAsState(
-        targetValue = if (isDimMode || isDragging) 34.dp else 48.dp,
+        targetValue = if (isDimMode || isDragging) 38.dp else 48.dp,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
         label = "BallSize"
     )
@@ -114,13 +108,13 @@ fun FloatingInteractionBall(
 
     Box(
         modifier = modifier
-            .padding(start = 22.dp, bottom = 22.dp)
-            .size(64.dp),
+            .padding(start = 18.dp, bottom = 18.dp)
+            .size(56.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Radial Action Petals Fan Arc (when holding and sliding)
+        // Radial Action Petals Fan Arc (Active while holding & dragging)
         if (isDragging) {
-            val radiusPx = with(density) { 95.dp.toPx() }
+            val radiusPx = with(density) { 68.dp.toPx() } // Compact radius so it NEVER clips
             petals.forEach { petal ->
                 val angleRad = Math.toRadians(petal.angleDeg.toDouble())
                 val targetX = (cos(angleRad) * radiusPx).toFloat()
@@ -129,7 +123,7 @@ fun FloatingInteractionBall(
                 val isSelected = activeAction == petal.action
 
                 val petalScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.25f else 1.0f,
+                    targetValue = if (isSelected) 1.22f else 1.0f,
                     animationSpec = spring(dampingRatio = 0.7f),
                     label = "PetalScale"
                 )
@@ -137,9 +131,9 @@ fun FloatingInteractionBall(
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(targetX.roundToInt(), targetY.roundToInt()) }
-                        .size(52.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(if (isSelected) petal.color else Color(0xDD181922))
+                        .background(if (isSelected) petal.color else Color(0xEE161722))
                         .padding(2.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -148,13 +142,13 @@ fun FloatingInteractionBall(
                             imageVector = petal.icon,
                             contentDescription = petal.label,
                             tint = if (isSelected) Color.White else petal.color,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Text(
                             text = petal.label,
                             color = if (isSelected) Color.White else Color(0xFF9E9EA7),
                             fontSize = 8.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1
                         )
                     }
@@ -162,7 +156,7 @@ fun FloatingInteractionBall(
             }
         }
 
-        // The Floating Sphere (with hold & slide gesture tracking)
+        // The Floating Sphere
         Canvas(
             modifier = Modifier
                 .size(ballSize)
@@ -172,19 +166,20 @@ fun FloatingInteractionBall(
                             isDragging = true
                             dragOffset = Offset.Zero
                             activeAction = RadialAction.NONE
+                            onTouchDown() // Immediate physical haptic feedback on touch!
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             dragOffset += dragAmount
 
                             val dist = hypot(dragOffset.x, dragOffset.y)
-                            val triggerDist = with(density) { 45.dp.toPx() }
+                            val triggerDist = with(density) { 32.dp.toPx() }
 
                             if (dist > triggerDist) {
                                 val angleRad = atan2(dragOffset.y.toDouble(), dragOffset.x.toDouble())
                                 val angleDeg = Math.toDegrees(angleRad).toFloat()
 
-                                // Find nearest petal
+                                // Select closest petal
                                 val closest = petals.minByOrNull { petal ->
                                     var diff = Math.abs(petal.angleDeg - angleDeg)
                                     if (diff > 180) diff = 360 - diff
@@ -207,8 +202,8 @@ fun FloatingInteractionBall(
                             if (activeAction != RadialAction.NONE) {
                                 onActionSelected(activeAction)
                             } else {
-                                // Simple tap/hold without slide -> toggles Stealth Dim
-                                onDimModeChange(!isDimMode)
+                                // Tap / press without dragging -> triggers user's configured shortcut
+                                onTapShortcut()
                             }
                             isDragging = false
                             dragOffset = Offset.Zero
@@ -227,7 +222,7 @@ fun FloatingInteractionBall(
 
             // Tactile shadow
             drawCircle(
-                color = Color(0x66000000),
+                color = Color(0x77000000),
                 radius = radius + 3f,
                 center = centerOffset + Offset(0f, 4f)
             )

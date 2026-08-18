@@ -8,7 +8,7 @@ import android.os.VibratorManager
 import com.minimate.touchpad.model.HapticIntensity
 
 /**
- * High-fidelity haptic feedback engine for physical click feel.
+ * High-fidelity haptic feedback engine providing instant physical click feel.
  */
 class HapticFeedbackEngine(private val context: Context) {
 
@@ -18,6 +18,28 @@ class HapticFeedbackEngine(private val context: Context) {
     } else {
         @Suppress("DEPRECATION")
         context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    }
+
+    fun playTouchDown(intensity: HapticIntensity) {
+        if (intensity == HapticIntensity.OFF || vibrator == null || !vibrator.hasVibrator()) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val effect = when (intensity) {
+                HapticIntensity.SUBTLE -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                HapticIntensity.CRISP, HapticIntensity.STRONG -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+                HapticIntensity.OFF -> return
+            }
+            vibrator.vibrate(effect)
+        } else {
+            val duration = when (intensity) {
+                HapticIntensity.SUBTLE -> 8L
+                HapticIntensity.CRISP -> 18L
+                HapticIntensity.STRONG -> 30L
+                HapticIntensity.OFF -> return
+            }
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(duration)
+        }
     }
 
     fun playClick(intensity: HapticIntensity) {
@@ -61,7 +83,7 @@ class HapticFeedbackEngine(private val context: Context) {
             vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
         } else {
             @Suppress("DEPRECATION")
-            vibrator.vibrate(25L)
+            vibrator.vibrate(28L)
         }
     }
 }

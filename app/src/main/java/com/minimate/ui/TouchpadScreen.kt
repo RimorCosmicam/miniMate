@@ -1,6 +1,5 @@
 package com.minimate.ui
 
-import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.net.Uri
@@ -14,11 +13,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,14 +35,17 @@ import androidx.compose.ui.unit.dp
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.bluetooth.BluetoothUiState
 import com.minimate.bluetooth.ConnectionStatus
+import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.BackgroundTheme
+import com.minimate.touchpad.model.ButtonPressAction
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.ui.components.FingerEffectsLayer
 import com.minimate.ui.components.FloatingInteractionBall
 import com.minimate.ui.components.HudToast
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.RadialAction
+import com.minimate.ui.components.SettingsSheet
 import com.minimate.ui.shader.BackgroundShaderCanvas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -63,6 +64,7 @@ fun TouchpadScreen(
     val settings by touchpadEngine.settings.collectAsState()
     val activeTouchPoints by touchpadEngine.activeTouchPoints.collectAsState()
     var isDimMode by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
     var hudMessage by remember { mutableStateOf<String?>(null) }
     var hudIcon by remember { mutableStateOf<ImageVector?>(null) }
     val scope = rememberCoroutineScope()
@@ -102,6 +104,19 @@ fun TouchpadScreen(
         }
     }
 
+    fun startPairing() {
+        try {
+            val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            showToast("Pairing Mode • Connect on Host", Icons.Default.Bluetooth)
+        } catch (_: Exception) {
+            showToast("Bluetooth Discovery Triggered")
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -110,7 +125,7 @@ fun TouchpadScreen(
                 touchpadEngine.setScreenDimensions(size.width.toFloat(), size.height.toFloat())
             }
     ) {
-        // 1. Interactive GPU Background Shader
+        // 1. Interactive GPU Background Shader / Custom Wallpaper
         BackgroundShaderCanvas(
             theme = settings.backgroundTheme,
             touchPoints = activeTouchPoints,
@@ -119,7 +134,7 @@ fun TouchpadScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Multi-Touch Finger Effects Layer (glowing rings & trails)
+        // 2. Multi-Touch Finger Effects Layer
         FingerEffectsLayer(
             touchPoints = activeTouchPoints,
             enabled = settings.fingerEffectsEnabled && dimRatio < 0.8f,
@@ -148,54 +163,75 @@ fun TouchpadScreen(
         FloatingInteractionBall(
             isDimMode = isDimMode,
             isLocked = settings.isLocked,
-            onDimModeChange = { dim ->
-                isDimMode = dim
-                onDimModeChanged(dim)
-                touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+            onTapShortcut = {
+                touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+                when (settings.buttonPressAction) {
+                    ButtonPressAction.STEALTH_DIM -> {
+                        isDimMode = !isDimMode
+                        onDimModeChanged(isDimMode)
+                        touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                    }
+                    ButtonPressAction.OPEN_SETTINGS -> {
+                        hidManager.refreshPairedDevices()
+                        showSettingsSheet = true
+                    }
+                    ButtonPressAction.PAIRING_MODE -> {
+                        startPairing()
+                    }
+                    ButtonPressAction.MIDDLE_CLICK -> {
+                        scope.launch {
+                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_MIDDLE, dx = 0, dy = 0)
+                            delay(16)
+                            hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
+                        }
+                    }
+                }
             },
             onActionSelected = { action ->
                 touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
                 when (action) {
                     RadialAction.PAIRING -> {
-                        try {
-                            val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                            showToast("Pairing Mode Active • Connect on Host", Icons.Default.BluetoothSearching)
-                        } catch (_: Exception) {
-                            showToast("Bluetooth Discovery Triggered")
-                        }
+                        startPairing()
                     }
-
-                    RadialAction.THEME -> {
-                        val themes = BackgroundTheme.values().filter { it != BackgroundTheme.CUSTOM_IMAGE }
+                    RadialAction.SETTINGS -> {
+                        hidManager.refreshPairedDevices()
+                        showSettingsSheet = true
+                    }
+                    RadialAction.THEMES -> {
+                        val themes = listOf(
+                            BackgroundTheme.COSMIC_WARP,
+                            BackgroundTheme.FLUID_AURORA,
+                            BackgroundTheme.LIQUID_GLASS,
+                            BackgroundTheme.CYBER_GRID,
+                            BackgroundTheme.OLED_BLACK
+                        )
                         val nextIndex = (themes.indexOf(settings.backgroundTheme) + 1) % themes.size
                         val nextTheme = themes[nextIndex]
-                        touchpadEngine.updateSettings(settings.copy(backgroundTheme = nextTheme))
+                        touchpadEngine.updateSettings(
+                            settings.copy(
+                                backgroundTheme = nextTheme,
+                                customImageUri = null
+                            )
+                        )
                         val themeName = when (nextTheme) {
                             BackgroundTheme.COSMIC_WARP -> "Cosmic Warp"
                             BackgroundTheme.FLUID_AURORA -> "Fluid Aurora"
                             BackgroundTheme.LIQUID_GLASS -> "Liquid Glass"
                             BackgroundTheme.CYBER_GRID -> "Cyber Grid"
                             BackgroundTheme.OLED_BLACK -> "Pure OLED Black"
-                            else -> "Dynamic Shader"
+                            else -> "Shader Theme"
                         }
                         showToast("Theme: $themeName", Icons.Default.Palette)
                     }
-
-                    RadialAction.PICK_IMAGE -> {
-                        imagePickerLauncher.launch("image/*")
-                    }
-
                     RadialAction.LOCK -> {
                         touchpadEngine.updateSettings(settings.copy(isLocked = true))
                         showToast("Locked • Press Vol+ & Vol- to Unlock", Icons.Default.Lock)
                     }
-
                     RadialAction.NONE -> Unit
                 }
+            },
+            onTouchDown = {
+                touchpadEngine.hapticEngine.playTouchDown(settings.hapticIntensity)
             },
             onHapticTick = {
                 touchpadEngine.hapticEngine.playClick(HapticIntensity.SUBTLE)
@@ -203,7 +239,35 @@ fun TouchpadScreen(
             modifier = Modifier.align(Alignment.BottomStart)
         )
 
-        // 6. Minimal HUD Feedback Toast
+        // 6. Settings & Theme Manager Modal Sheet
+        if (showSettingsSheet) {
+            SettingsSheet(
+                settings = settings,
+                bluetoothState = bluetoothState,
+                batteryPercentage = batteryPercentage,
+                onSettingsChange = { newSettings ->
+                    touchpadEngine.updateSettings(newSettings)
+                },
+                onPickCustomImage = {
+                    imagePickerLauncher.launch("image/*")
+                },
+                onConnectAddress = { address ->
+                    hidManager.connectByAddress(address)
+                },
+                onDisconnect = {
+                    hidManager.disconnect()
+                },
+                onPairNewDevice = {
+                    startPairing()
+                },
+                onRefreshDevices = {
+                    hidManager.refreshPairedDevices()
+                },
+                onDismiss = { showSettingsSheet = false }
+            )
+        }
+
+        // 7. Minimal HUD Toast Feedback
         HudToast(
             message = hudMessage,
             icon = hudIcon,
@@ -212,7 +276,7 @@ fun TouchpadScreen(
                 .padding(top = 24.dp)
         )
 
-        // 7. Bluetooth Permission Prompt if missing
+        // 8. Bluetooth Permission Prompt if needed
         if (bluetoothState.status == ConnectionStatus.NO_PERMISSION) {
             PermissionPrompt(
                 onRequestPermission = onRequestPermissions

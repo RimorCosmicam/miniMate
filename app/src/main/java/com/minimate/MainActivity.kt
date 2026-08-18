@@ -24,6 +24,7 @@ import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.ui.TouchpadScreen
 import com.minimate.ui.theme.MinimateTheme
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
 
@@ -34,7 +35,8 @@ class MainActivity : ComponentActivity() {
     // State tracking for Volume Up + Down combo unlock
     private var isVolUpPressed = false
     private var isVolDownPressed = false
-    private var lastVolPressTime = 0L
+    private var lastVolUpTime = 0L
+    private var lastVolDownTime = 0L
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -84,36 +86,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val keyCode = event.keyCode
+        val isDown = event.action == KeyEvent.ACTION_DOWN
         val now = SystemClock.uptimeMillis()
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-            isVolUpPressed = true
-            lastVolPressTime = now
-            if (checkAndHandleUnlock()) return true
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            isVolDownPressed = true
-            lastVolPressTime = now
-            if (checkAndHandleUnlock()) return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
 
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-            isVolUpPressed = false
+            isVolUpPressed = isDown
+            if (isDown) lastVolUpTime = now
+            if (isDown && checkAndHandleUnlock()) return true
         } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            isVolDownPressed = false
+            isVolDownPressed = isDown
+            if (isDown) lastVolDownTime = now
+            if (isDown && checkAndHandleUnlock()) return true
         }
-        return super.onKeyUp(keyCode, event)
+
+        return super.dispatchKeyEvent(event)
     }
 
     private fun checkAndHandleUnlock(): Boolean {
         val currentSettings = touchpadEngine.settings.value
         if (currentSettings.isLocked) {
-            // Unlock when both volume keys are pressed together or in rapid succession
-            if (isVolUpPressed && isVolDownPressed) {
+            val bothHeld = isVolUpPressed && isVolDownPressed
+            val bothPressedRecently = (abs(lastVolUpTime - lastVolDownTime) < 450L) && (lastVolUpTime > 0 && lastVolDownTime > 0)
+            if (bothHeld || bothPressedRecently) {
                 touchpadEngine.updateSettings(currentSettings.copy(isLocked = false))
                 touchpadEngine.hapticEngine.playModeTransition(HapticIntensity.STRONG)
+                isVolUpPressed = false
+                isVolDownPressed = false
+                lastVolUpTime = 0L
+                lastVolDownTime = 0L
                 return true
             }
         }

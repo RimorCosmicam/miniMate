@@ -16,6 +16,13 @@ enum class BackgroundTheme {
     OLED_BLACK       // Pure OLED black
 }
 
+enum class ButtonPressAction {
+    STEALTH_DIM,        // Dims screen to OLED black
+    OPEN_SETTINGS,      // Opens settings overlay
+    PAIRING_MODE,       // Activates discoverable mode
+    MIDDLE_CLICK        // Emits middle click
+}
+
 data class TouchpadSettings(
     val trackingSpeed: Float = 1.15f,
     val acceleration: Float = 1.20f,
@@ -33,6 +40,7 @@ data class TouchpadSettings(
     val backgroundTheme: BackgroundTheme = BackgroundTheme.COSMIC_WARP,
     val fingerEffectsEnabled: Boolean = true,
     val customImageUri: String? = null,
+    val buttonPressAction: ButtonPressAction = ButtonPressAction.STEALTH_DIM,
     val stealthDimHold: Boolean = true,
     val isLocked: Boolean = false
 )
