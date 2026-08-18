@@ -1,7 +1,6 @@
 package com.minimate.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,6 +26,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Grain
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Water
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,15 +48,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.engine.TouchPoint
 import com.minimate.touchpad.model.FingerEffect
 import com.minimate.ui.theme.AccentCyan
-import com.minimate.ui.theme.AccentGold
 import com.minimate.ui.theme.AccentPink
-import com.minimate.ui.theme.TextPrimary
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -110,6 +117,8 @@ fun FingerEffectPreviewPopup(
         label = "PreviewPulseFloat"
     )
 
+    val icon = getEffectPreviewIcon(effect)
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn() + scaleIn(initialScale = 0.8f),
@@ -130,7 +139,15 @@ fun FingerEffectPreviewPopup(
                 verticalArrangement = Arrangement.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(effect.iconEmoji, fontSize = 16.sp)
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(AccentPink.copy(alpha = 0.25f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(icon, contentDescription = null, tint = AccentPink, modifier = Modifier.size(13.dp))
+                    }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         effect.displayName,
@@ -167,6 +184,21 @@ fun FingerEffectPreviewPopup(
                 )
             }
         }
+    }
+}
+
+private fun getEffectPreviewIcon(effect: FingerEffect): ImageVector {
+    return when (effect) {
+        FingerEffect.CHERRY_PETALS -> Icons.Default.AutoAwesome
+        FingerEffect.BUBBLE_SPLASH -> Icons.Default.Water
+        FingerEffect.CAT_PAW_PRINTS -> Icons.Default.Pets
+        FingerEffect.STAR_GLITTER -> Icons.Default.Star
+        FingerEffect.RAINBOW_RIBBON -> Icons.Default.Waves
+        FingerEffect.WATER_RIPPLES -> Icons.Default.Water
+        FingerEffect.PLASMA_LIGHTNING -> Icons.Default.AutoAwesome
+        FingerEffect.NEON_RETICLE -> Icons.Default.Tune
+        FingerEffect.FIRE_HEARTS -> Icons.Default.AutoAwesome
+        FingerEffect.MINIMAL_DOT -> Icons.Default.Grain
     }
 }
 

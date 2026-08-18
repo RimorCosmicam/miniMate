@@ -3,7 +3,6 @@ package com.minimate.ui
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.net.Uri
-import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
@@ -40,8 +39,8 @@ import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.BackgroundTheme
 import com.minimate.touchpad.model.ButtonPressAction
 import com.minimate.touchpad.model.HapticIntensity
-import com.minimate.touchpad.model.ThemeVariant
 import com.minimate.ui.components.BluetoothPairingDialog
+import com.minimate.ui.components.ClockBatteryOverlay
 import com.minimate.ui.components.FingerEffectsLayer
 import com.minimate.ui.components.FloatingInteractionBall
 import com.minimate.ui.components.HudToast
@@ -128,7 +127,7 @@ fun TouchpadScreen(
                 touchpadEngine.setScreenDimensions(size.width.toFloat(), size.height.toFloat())
             }
     ) {
-        // 1. Interactive GPU Background Shader with 10 Themes and 3 Subthemes
+        // 1. Interactive GPU Background Shader with 10 Procedural Themes and 3 Subthemes
         BackgroundShaderCanvas(
             theme = settings.backgroundTheme,
             variant = settings.themeVariant,
@@ -146,7 +145,19 @@ fun TouchpadScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 3. Fullscreen Touch Surface
+        // 3. Customizable Clock & Battery HUD Widget
+        ClockBatteryOverlay(
+            clockStyle = settings.clockStyle,
+            clockPosition = settings.clockPosition,
+            show24Hour = settings.show24HourFormat,
+            showSeconds = settings.showSeconds,
+            showBattery = settings.showBatteryPercentage,
+            batteryPercentage = batteryPercentage,
+            bluetoothState = bluetoothState,
+            dimRatio = dimRatio
+        )
+
+        // 4. Fullscreen Touch Surface
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -155,7 +166,7 @@ fun TouchpadScreen(
                 }
         )
 
-        // 4. Stealth Dim Overlay
+        // 5. Stealth Dim Overlay
         if (dimRatio > 0.01f) {
             Box(
                 modifier = Modifier
@@ -164,7 +175,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 5. Floating Interaction Ball (Hold & Slide Radial Action Ring)
+        // 6. Floating Interaction Ball (Hold & Slide Radial Action Ring)
         FloatingInteractionBall(
             isDimMode = isDimMode,
             isLocked = settings.isLocked,
@@ -214,7 +225,7 @@ fun TouchpadScreen(
                                 customImageUri = null
                             )
                         )
-                        showToast("${nextTheme.iconEmoji} ${nextTheme.displayName}")
+                        showToast(nextTheme.displayName, Icons.Default.Palette)
                     }
                     RadialAction.LOCK -> {
                         touchpadEngine.updateSettings(settings.copy(isLocked = true))
@@ -232,7 +243,7 @@ fun TouchpadScreen(
             modifier = Modifier.align(Alignment.BottomStart)
         )
 
-        // 6. Settings & Theme Manager Modal Sheet
+        // 7. Settings & Theme Manager Modal Sheet (4 Modern Tabs)
         if (showSettingsSheet) {
             SettingsSheet(
                 settings = settings,
@@ -261,7 +272,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 7. Dedicated In-App Bluetooth Pairing Hub Dialog
+        // 8. Dedicated In-App Bluetooth Pairing Hub Dialog
         if (showPairingDialog) {
             BluetoothPairingDialog(
                 bluetoothState = bluetoothState,
@@ -273,7 +284,7 @@ fun TouchpadScreen(
             )
         }
 
-        // 8. Minimal HUD Toast Feedback
+        // 9. Minimal HUD Toast Feedback
         HudToast(
             message = hudMessage,
             icon = hudIcon,
@@ -282,7 +293,7 @@ fun TouchpadScreen(
                 .padding(top = 24.dp)
         )
 
-        // 9. Bluetooth Permission Prompt if needed
+        // 10. Bluetooth Permission Prompt if needed
         if (bluetoothState.status == ConnectionStatus.NO_PERMISSION) {
             PermissionPrompt(
                 onRequestPermission = onRequestPermissions

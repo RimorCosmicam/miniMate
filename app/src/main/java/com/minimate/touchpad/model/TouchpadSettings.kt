@@ -7,44 +7,60 @@ enum class HapticIntensity {
     STRONG
 }
 
-enum class BackgroundTheme(val displayName: String, val description: String, val iconEmoji: String) {
-    SAKURA_PETALS("Sakura Petals", "Floating cherry blossom petals & spring breeze", "🌸"),
-    BUBBLE_POP("Bubble Pop", "Cute floating pastel soap bubbles that pop on touch", "🫧"),
-    KAWAII_PAWS("Kawaii Paws", "Cute cat paw prints and subtle sparkles", "🐾"),
-    RAINBOW_PASTEL("Rainbow Dreams", "Soothing iridescent pastel waves", "🌈"),
-    MATCHA_CAFE("Matcha Cafe", "Creamy matcha latte art ripples & warm cafe vibe", "🍵"),
-    RETRO_ARCADE("Retro Arcade", "8-bit pixel clouds and neon arcade glow", "👾"),
-    TROPICAL_OCEAN("Ocean Waves", "Crystal clear turquoise water & sun caustics", "🌊"),
-    STRAWBERRY_MOCHI("Berry Mochi", "Bouncy strawberry gelatin physics", "🍓"),
-    STARRY_GALAXY("Starry Sky", "Twinkling starfield with shooting star trails", "✨"),
-    CLEAN_MINIMAL("Clean Minimal", "Aesthetic minimal matte paper & pure OLED", "🖤"),
-    CUSTOM_IMAGE("Custom Wallpaper", "User-picked image or animated GIF", "🖼️")
+enum class BackgroundTheme(val displayName: String, val description: String) {
+    SAKURA_PETALS("Sakura Petals", "Procedural drifting cherry blossoms with breeze physics"),
+    BUBBLE_POP("Bubble Aquarium", "Spherical soap bubbles with surface tension & touch burst"),
+    KAWAII_PAWS("Cat Paw Cafe", "Kitten paw print stamps with floating heart particles"),
+    PRISM_WAVES("Prism Waves", "Iridescent chromatic diffraction & fluid ribbon waves"),
+    MATCHA_CAFE("Matcha Latte Art", "Viscous fluid froth swirls and organic latte art flow"),
+    RETRO_ARCADE("Retro 8-Bit", "Procedural pixel starfield, arcade blocks & scanlines"),
+    TROPICAL_OCEAN("Bioluminescent Sea", "Caustic sun rays, deep aqua water & touch ripple physics"),
+    STRAWBERRY_MOCHI("Jelly Mochi", "Elastic jiggling jelly grid with glossy specular shine"),
+    STARRY_GALAXY("Cosmic Galaxy", "Spiral nebula vortex with twinkling stars & meteors"),
+    CLEAN_MINIMAL("Stealth Titanium", "Brushed titanium texture with pure OLED black mode"),
+    CUSTOM_IMAGE("Custom Wallpaper", "User-selected photo or animated GIF from gallery")
 }
 
 enum class ThemeVariant(val index: Int, val label: String) {
-    VARIANT_A(0, "Palette 1"),
-    VARIANT_B(1, "Palette 2"),
-    VARIANT_C(2, "Palette 3")
+    VARIANT_A(0, "Soft Palette"),
+    VARIANT_B(1, "Warm Palette"),
+    VARIANT_C(2, "Cool Palette")
 }
 
-enum class FingerEffect(val displayName: String, val description: String, val iconEmoji: String) {
-    CHERRY_PETALS("Sakura Trail", "Floating flower petals bursting under fingers", "🌸"),
-    BUBBLE_SPLASH("Soap Bubbles", "Colorful cartoon bubbles that wobble and pop", "🫧"),
-    CAT_PAW_PRINTS("Cat Paws", "Cute kitten paw prints stamped on touch", "🐾"),
-    STAR_GLITTER("Star Glitter", "Sparkling anime fairy dust & star glitter trail", "✨"),
-    RAINBOW_RIBBON("Rainbow Ribbon", "Glowing fluid rainbow ribbon following drag", "🌈"),
-    WATER_RIPPLES("Water Droplets", "Realistic concentric liquid water shockwaves", "💧"),
-    PLASMA_LIGHTNING("Plasma Bolts", "Electric neon energy arcs between contact points", "⚡"),
-    NEON_RETICLE("Neon Reticle", "High-tech precision glowing crosshair target", "🎯"),
-    FIRE_HEARTS("Floating Hearts", "Cute glowing heart sparks trailing your finger", "💖"),
-    MINIMAL_DOT("Clean Dot", "Minimalist surgical micro-dot with zero clutter", "🔘")
+enum class FingerEffect(val displayName: String, val description: String) {
+    CHERRY_PETALS("Sakura Trail", "Floating flower petals bursting under fingers"),
+    BUBBLE_SPLASH("Soap Bubbles", "Cartoon bubbles that wobble and pop with highlights"),
+    CAT_PAW_PRINTS("Cat Paws", "Soft kitten paw prints stamped on touch"),
+    STAR_GLITTER("Star Glitter", "Sparkling fairy dust & star glitter trail"),
+    RAINBOW_RIBBON("Rainbow Ribbon", "Glowing fluid rainbow ribbon following drag"),
+    WATER_RIPPLES("Water Droplets", "Realistic concentric liquid water shockwaves"),
+    PLASMA_LIGHTNING("Plasma Bolts", "Electric neon energy arcs between contact points"),
+    NEON_RETICLE("Neon Reticle", "High-tech precision glowing crosshair target"),
+    FIRE_HEARTS("Floating Hearts", "Glowing heart sparks trailing touch movement"),
+    MINIMAL_DOT("Clean Dot", "Minimalist precision micro-dot with zero clutter")
 }
 
 enum class ButtonPressAction {
-    STEALTH_DIM,        // Dims screen to OLED black
-    OPEN_SETTINGS,      // Opens settings overlay
-    PAIRING_MODE,       // Opens pairing hub
-    MIDDLE_CLICK        // Emits middle click
+    STEALTH_DIM,
+    OPEN_SETTINGS,
+    PAIRING_MODE,
+    MIDDLE_CLICK
+}
+
+enum class ClockStyle(val label: String) {
+    MINIMAL_PILL("Glass Pill"),
+    DIGITAL_BOLD("Bold Digital"),
+    CLEAN_SANS("Clean Sans"),
+    MONOSPACE("Retro Mono"),
+    OFF("Hidden")
+}
+
+enum class ClockPosition(val label: String) {
+    TOP_LEFT("Top Left"),
+    TOP_CENTER("Top Center"),
+    TOP_RIGHT("Top Right"),
+    BOTTOM_RIGHT("Bottom Right"),
+    BOTTOM_CENTER("Bottom Center")
 }
 
 data class TouchpadSettings(
@@ -68,5 +84,11 @@ data class TouchpadSettings(
     val customImageUri: String? = null,
     val buttonPressAction: ButtonPressAction = ButtonPressAction.STEALTH_DIM,
     val stealthDimHold: Boolean = true,
-    val isLocked: Boolean = false
+    val isLocked: Boolean = false,
+    // Clock & Battery HUD customization
+    val clockStyle: ClockStyle = ClockStyle.MINIMAL_PILL,
+    val clockPosition: ClockPosition = ClockPosition.TOP_CENTER,
+    val show24HourFormat: Boolean = false,
+    val showSeconds: Boolean = false,
+    val showBatteryPercentage: Boolean = true
 )

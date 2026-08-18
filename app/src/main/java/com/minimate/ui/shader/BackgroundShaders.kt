@@ -37,7 +37,7 @@ import com.minimate.ui.theme.Black
 import kotlin.math.cos
 import kotlin.math.sin
 
-private const val AGSL_CUTE_SHADER = """
+private const val AGSL_MINIMATE_SHADER = """
     uniform float2 iResolution;
     uniform float iTime;
     uniform float2 uTouchPos;
@@ -45,175 +45,252 @@ private const val AGSL_CUTE_SHADER = """
     uniform int uTheme;
     uniform int uVariant;
 
+    // Fast procedural pseudo-random hash
+    float hash(float2 p) {
+        return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453123);
+    }
+
+    // 2D Noise
+    float noise(float2 p) {
+        float2 i = floor(p);
+        float2 f = fract(p);
+        float2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i + float2(0.0, 0.0)), hash(i + float2(1.0, 0.0)), u.x),
+                   mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x), u.y);
+    }
+
+    // Voronoi distance field
+    float voronoi(float2 p) {
+        float2 n = floor(p);
+        float2 f = fract(p);
+        float md = 8.0;
+        for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+                float2 g = float2(float(i), float(j));
+                float2 o = float2(hash(n + g), hash(n + g + 13.7));
+                o = 0.5 + 0.5 * sin(iTime * 1.5 + 6.2831 * o);
+                float2 r = g + o - f;
+                float d = dot(r, r);
+                if (d < md) md = d;
+            }
+        }
+        return sqrt(md);
+    }
+
     half4 main(in float2 fragCoord) {
         float2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
         float2 touch = (uTouchPos - 0.5 * iResolution.xy) / iResolution.y;
         float distToTouch = length(uv - touch);
-        float time = iTime * 0.5;
+        float time = iTime * 0.6;
 
-        // Dynamic Color Palettes for each theme and variant
-        half3 colA = half3(1.0, 0.7, 0.85);  // Soft Pink
-        half3 colB = half3(0.6, 0.85, 1.0);  // Soft Sky Blue
-        half3 bg   = half3(0.05, 0.03, 0.06); // Dark Pastel Base
+        half3 colA = half3(1.0, 0.5, 0.7);
+        half3 colB = half3(0.4, 0.8, 1.0);
+        half3 bg   = half3(0.04, 0.04, 0.07);
 
-        if (uTheme == 0) { // SAKURA_PETALS (Cherry Blossoms)
-            if (uVariant == 0) { // Spring Sakura
-                colA = half3(1.0, 0.45, 0.7); colB = half3(1.0, 0.85, 0.9); bg = half3(0.08, 0.03, 0.06);
-            } else if (uVariant == 1) { // Midnight Bloom
-                colA = half3(0.85, 0.2, 0.95); colB = half3(0.4, 0.6, 1.0); bg = half3(0.03, 0.02, 0.08);
-            } else { // Golden Blossom
-                colA = half3(1.0, 0.7, 0.4); colB = half3(1.0, 0.9, 0.6); bg = half3(0.07, 0.05, 0.02);
+        // 1. SAKURA PETALS (Procedural 5-lobed cherry blossoms drifting in wind)
+        if (uTheme == 0) {
+            if (uVariant == 0) { colA = half3(1.0, 0.6, 0.75); colB = half3(1.0, 0.85, 0.9); bg = half3(0.08, 0.03, 0.06); }
+            else if (uVariant == 1) { colA = half3(1.0, 0.35, 0.6); colB = half3(0.95, 0.7, 0.4); bg = half3(0.09, 0.04, 0.03); }
+            else { colA = half3(0.65, 0.45, 0.95); colB = half3(0.85, 0.75, 1.0); bg = half3(0.04, 0.02, 0.08); }
+
+            half3 col = bg;
+            // Drifting petal field
+            float2 pUv = uv * 3.5;
+            pUv.y += time * 0.8;
+            pUv.x += sin(pUv.y * 1.5 + time) * 0.4;
+            
+            float2 cell = fract(pUv) - 0.5;
+            float2 cellId = floor(pUv);
+            float angle = atan2(cell.y, cell.x) + time * (hash(cellId) - 0.5) * 2.0;
+            float r = length(cell);
+            // 5 petal flower polar shape: r = cos(5 * theta)
+            float flower = 0.18 + 0.06 * cos(5.0 * angle);
+            float petalMask = smoothstep(flower + 0.02, flower - 0.01, r);
+            col += mix(colA, colB, hash(cellId)) * petalMask * 0.85;
+
+            // Touch interaction ripple
+            if (uTouchActive > 0.01) {
+                float ripple = sin(distToTouch * 30.0 - time * 10.0) * exp(-distToTouch * 6.0);
+                col += colA * max(0.0, ripple) * 1.5 * uTouchActive;
             }
-        } else if (uTheme == 1) { // BUBBLE_POP (Cute Floating Bubbles)
-            if (uVariant == 0) { // Cotton Candy
-                colA = half3(0.4, 0.8, 1.0); colB = half3(1.0, 0.5, 0.8); bg = half3(0.04, 0.04, 0.08);
-            } else if (uVariant == 1) { // Lemon Soda
-                colA = half3(1.0, 0.9, 0.3); colB = half3(0.3, 0.9, 0.7); bg = half3(0.03, 0.06, 0.04);
-            } else { // Grape Fizz
-                colA = half3(0.75, 0.4, 1.0); colB = half3(0.9, 0.7, 1.0); bg = half3(0.06, 0.02, 0.08);
-            }
-        } else if (uTheme == 2) { // KAWAII_PAWS
-            if (uVariant == 0) { // Calico Peach
-                colA = half3(1.0, 0.6, 0.35); colB = half3(1.0, 0.85, 0.7); bg = half3(0.07, 0.04, 0.03);
-            } else if (uVariant == 1) { // Berry Kitten
-                colA = half3(1.0, 0.35, 0.55); colB = half3(1.0, 0.75, 0.85); bg = half3(0.08, 0.03, 0.05);
-            } else { // Midnight Cat
-                colA = half3(0.65, 0.7, 0.9); colB = half3(0.85, 0.75, 1.0); bg = half3(0.03, 0.03, 0.06);
-            }
-        } else if (uTheme == 3) { // RAINBOW_PASTEL
-            if (uVariant == 0) { // Sunset Pastel
-                colA = half3(1.0, 0.5, 0.6); colB = half3(1.0, 0.8, 0.4); bg = half3(0.06, 0.03, 0.04);
-            } else if (uVariant == 1) { // Cloud 9
-                colA = half3(0.45, 0.75, 1.0); colB = half3(0.6, 0.95, 0.75); bg = half3(0.03, 0.05, 0.07);
-            } else { // Unicorn Aura
-                colA = half3(1.0, 0.3, 0.8); colB = half3(0.4, 0.9, 0.95); bg = half3(0.05, 0.02, 0.07);
-            }
-        } else if (uTheme == 4) { // MATCHA_CAFE
-            if (uVariant == 0) { // Matcha Latte
-                colA = half3(0.45, 0.8, 0.45); colB = half3(0.95, 0.92, 0.8); bg = half3(0.03, 0.06, 0.03);
-            } else if (uVariant == 1) { // Caramel Macchiato
-                colA = half3(0.9, 0.65, 0.35); colB = half3(0.98, 0.9, 0.75); bg = half3(0.06, 0.04, 0.02);
-            } else { // Taro Milk
-                colA = half3(0.65, 0.55, 0.85); colB = half3(0.95, 0.92, 0.98); bg = half3(0.05, 0.03, 0.07);
-            }
-        } else if (uTheme == 5) { // RETRO_ARCADE
-            if (uVariant == 0) { // Neon Cyber
-                colA = half3(0.0, 1.0, 0.8); colB = half3(1.0, 0.2, 0.7); bg = half3(0.02, 0.02, 0.05);
-            } else if (uVariant == 1) { // Game Boy Lime
-                colA = half3(0.6, 0.85, 0.1); colB = half3(0.8, 0.95, 0.3); bg = half3(0.04, 0.07, 0.02);
-            } else { // Synthwave Sunset
-                colA = half3(1.0, 0.45, 0.0); colB = half3(0.7, 0.1, 0.9); bg = half3(0.06, 0.02, 0.05);
-            }
-        } else if (uTheme == 6) { // TROPICAL_OCEAN
-            if (uVariant == 0) { // Maldives Aqua
-                colA = half3(0.0, 0.8, 0.95); colB = half3(0.5, 0.95, 0.95); bg = half3(0.02, 0.05, 0.08);
-            } else if (uVariant == 1) { // Sunset Beach
-                colA = half3(1.0, 0.5, 0.2); colB = half3(1.0, 0.85, 0.35); bg = half3(0.07, 0.03, 0.02);
-            } else { // Deep Lagoon
-                colA = half3(0.0, 0.5, 0.9); colB = half3(0.0, 0.85, 0.85); bg = half3(0.01, 0.03, 0.07);
-            }
-        } else if (uTheme == 7) { // STRAWBERRY_MOCHI
-            if (uVariant == 0) { // Fresh Berry
-                colA = half3(1.0, 0.25, 0.4); colB = half3(1.0, 0.9, 0.9); bg = half3(0.08, 0.02, 0.04);
-            } else if (uVariant == 1) { // Blueberry Mochi
-                colA = half3(0.4, 0.35, 0.85); colB = half3(0.85, 0.7, 1.0); bg = half3(0.04, 0.02, 0.07);
-            } else { // Banana Pudding
-                colA = half3(1.0, 0.85, 0.35); colB = half3(1.0, 0.98, 0.85); bg = half3(0.07, 0.06, 0.02);
-            }
-        } else if (uTheme == 8) { // STARRY_GALAXY
-            if (uVariant == 0) { // Starlight Blue
-                colA = half3(0.5, 0.75, 1.0); colB = half3(1.0, 1.0, 1.0); bg = half3(0.02, 0.02, 0.06);
-            } else if (uVariant == 1) { // Rose Twilight
-                colA = half3(0.95, 0.45, 0.65); colB = half3(1.0, 0.85, 0.7); bg = half3(0.06, 0.02, 0.04);
-            } else { // Emerald Starlight
-                colA = half3(0.2, 0.9, 0.6); colB = half3(0.85, 1.0, 0.9); bg = half3(0.02, 0.05, 0.04);
-            }
-        } else if (uTheme == 9) { // CLEAN_MINIMAL
-            if (uVariant == 0) { // Pure OLED
-                return half4(0.0, 0.0, 0.0, 1.0);
-            } else if (uVariant == 1) { // Charcoal Matte
-                return half4(0.06, 0.06, 0.07, 1.0);
-            } else { // Warm Muted Minimal
-                return half4(0.07, 0.065, 0.06, 1.0);
-            }
+            return half4(col, 1.0);
         }
 
-        half3 finalCol = bg;
+        // 2. BUBBLE AQUARIUM (Spherical bubbles with Fresnel rim lighting & burst)
+        else if (uTheme == 1) {
+            if (uVariant == 0) { colA = half3(0.3, 0.8, 1.0); colB = half3(1.0, 0.5, 0.85); bg = half3(0.02, 0.05, 0.09); }
+            else if (uVariant == 1) { colA = half3(0.2, 0.95, 0.7); colB = half3(0.9, 0.95, 0.3); bg = half3(0.02, 0.07, 0.05); }
+            else { colA = half3(0.8, 0.4, 1.0); colB = half3(0.3, 0.7, 1.0); bg = half3(0.05, 0.02, 0.09); }
 
-        // Theme Animations & Dynamics
-        if (uTheme == 0) { // SAKURA_PETALS
-            float p1 = sin(uv.x * 6.0 + time + uv.y * 3.0);
-            float p2 = cos(uv.y * 5.0 - time * 0.8 + uv.x * 2.0);
-            float petals = smoothstep(0.6, 0.95, sin(p1 * p2 * 8.0));
-            finalCol += mix(colA, colB, petals) * petals * 0.8;
+            half3 col = bg;
+            float2 bUv = uv * 3.0;
+            bUv.y -= time * 0.7; // Float upwards
+            bUv.x += sin(bUv.y * 2.0 + time * 1.2) * 0.2;
+            
+            float2 cell = fract(bUv) - 0.5;
+            float d = length(cell);
+            float bubbleRadius = 0.22;
+            // Fresnel rim & specular shine
+            float rim = smoothstep(bubbleRadius, bubbleRadius - 0.03, d) * smoothstep(bubbleRadius - 0.08, bubbleRadius - 0.01, d);
+            float spec = smoothstep(0.06, 0.01, length(cell - float2(-0.07, 0.07)));
+            
+            col += colA * rim * 1.2;
+            col += colB * spec * 1.4;
+
             if (uTouchActive > 0.01) {
-                finalCol += colA * exp(-distToTouch * 5.0) * uTouchActive * 0.9;
+                col += colA * exp(-distToTouch * 5.0) * uTouchActive * 1.2;
             }
-        } else if (uTheme == 1) { // BUBBLE_POP
-            float2 bUv = uv * 4.0 + float2(sin(time * 0.5), time * 0.8);
-            float2 grid = fract(bUv) - 0.5;
-            float bubble = length(grid);
-            float ring = smoothstep(0.35, 0.30, bubble) - smoothstep(0.30, 0.22, bubble);
-            finalCol += mix(colA, colB, grid.x + 0.5) * ring * 0.85;
-            if (uTouchActive > 0.01) {
-                finalCol += colB * exp(-distToTouch * 6.0) * uTouchActive;
-            }
-        } else if (uTheme == 2) { // KAWAII_PAWS
-            float p = sin(uv.x * 5.0 + time * 0.3) * cos(uv.y * 5.0);
-            float pawGlow = smoothstep(0.4, 0.9, p);
-            finalCol += mix(colA, colB, pawGlow) * pawGlow * 0.6;
-            if (uTouchActive > 0.01) {
-                finalCol += colA * exp(-distToTouch * 6.0) * uTouchActive * 1.2;
-            }
-        } else if (uTheme == 3) { // RAINBOW_PASTEL
-            float w = sin(uv.x * 3.0 + uv.y * 3.0 + time);
-            float wave = sin(w * 3.14 + time);
-            finalCol += mix(colA, colB, wave * 0.5 + 0.5) * 0.6;
-            if (uTouchActive > 0.01) {
-                finalCol += mix(colB, colA, sin(time * 3.0) * 0.5 + 0.5) * exp(-distToTouch * 5.0) * uTouchActive;
-            }
-        } else if (uTheme == 4) { // MATCHA_CAFE
-            float latte = sin(uv.x * 4.0 + sin(uv.y * 4.0 + time * 0.4));
-            float foam = smoothstep(-0.2, 0.8, latte);
-            finalCol += mix(colA * 0.5, colB, foam) * 0.55;
-            if (uTouchActive > 0.01) {
-                finalCol += colB * exp(-distToTouch * 6.0) * uTouchActive * 0.7;
-            }
-        } else if (uTheme == 5) { // RETRO_ARCADE
-            float2 pUv = floor(uv * 20.0) / 20.0;
-            float pixel = sin(pUv.x * 12.0 + time * 2.0) * cos(pUv.y * 12.0 - time);
-            float gridLine = smoothstep(0.5, 0.9, pixel);
-            finalCol += mix(colA, colB, pUv.y + 0.5) * gridLine * 0.7;
-            if (uTouchActive > 0.01) {
-                finalCol += colA * exp(-distToTouch * 7.0) * uTouchActive * 1.3;
-            }
-        } else if (uTheme == 6) { // TROPICAL_OCEAN
-            float water = sin(uv.x * 8.0 + time) * cos(uv.y * 8.0 + time);
-            water += sin((uv.x + uv.y) * 10.0 - time * 1.5) * 0.5;
-            float caustic = smoothstep(0.2, 0.9, water);
-            finalCol += mix(colA, colB, caustic) * caustic * 0.75;
-            if (uTouchActive > 0.01) {
-                float ripple = sin(distToTouch * 25.0 - time * 8.0) * exp(-distToTouch * 5.0) * uTouchActive;
-                finalCol += colB * max(0.0, ripple) * 1.4;
-            }
-        } else if (uTheme == 7) { // STRAWBERRY_MOCHI
-            float dist = length(uv);
-            float squish = sin(dist * 12.0 - time * 2.0) * exp(-dist * 2.0);
-            finalCol += mix(colA, colB, squish * 0.5 + 0.5) * 0.65;
-            if (uTouchActive > 0.01) {
-                finalCol += colA * exp(-distToTouch * 5.0) * uTouchActive;
-            }
-        } else if (uTheme == 8) { // STARRY_GALAXY
-            float2 sUv = uv * 15.0;
-            float star = sin(sUv.x * 10.0) * sin(sUv.y * 10.0);
-            float twinkle = smoothstep(0.94, 0.99, star) * (sin(time * 3.0 + sUv.x) * 0.5 + 0.5);
-            finalCol += mix(colA, colB, twinkle) * twinkle * 1.8;
-            if (uTouchActive > 0.01) {
-                finalCol += colA * exp(-distToTouch * 5.0) * uTouchActive;
-            }
+            return half4(col, 1.0);
         }
 
-        return half4(finalCol, 1.0);
+        // 3. CAT PAW CAFE (Soft paw prints & drifting heart particles)
+        else if (uTheme == 2) {
+            if (uVariant == 0) { colA = half3(1.0, 0.55, 0.65); colB = half3(1.0, 0.85, 0.7); bg = half3(0.07, 0.03, 0.04); }
+            else if (uVariant == 1) { colA = half3(0.95, 0.65, 0.35); colB = half3(1.0, 0.9, 0.75); bg = half3(0.07, 0.05, 0.02); }
+            else { colA = half3(0.55, 0.65, 0.95); colB = half3(0.85, 0.8, 1.0); bg = half3(0.03, 0.03, 0.07); }
+
+            half3 col = bg;
+            float2 gridUv = uv * 4.0;
+            float2 cell = fract(gridUv) - 0.5;
+            float2 id = floor(gridUv);
+
+            // Paw main pad & 3 toe beans
+            float pad = smoothstep(0.14, 0.11, length(cell + float2(0.0, 0.04)));
+            float toe1 = smoothstep(0.06, 0.04, length(cell - float2(-0.10, 0.12)));
+            float toe2 = smoothstep(0.07, 0.05, length(cell - float2(0.0, 0.16)));
+            float toe3 = smoothstep(0.06, 0.04, length(cell - float2(0.10, 0.12)));
+            float paw = max(pad, max(toe1, max(toe2, toe3)));
+
+            float pulse = sin(time * 2.0 + hash(id) * 6.28) * 0.5 + 0.5;
+            col += mix(colA, colB, pulse) * paw * 0.75;
+
+            if (uTouchActive > 0.01) {
+                col += colA * exp(-distToTouch * 6.0) * uTouchActive * 1.5;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 4. PRISM WAVES (Chromatic light diffraction & fluid ribbon waves)
+        else if (uTheme == 3) {
+            float wave1 = sin(uv.x * 4.0 + uv.y * 3.0 + time);
+            float wave2 = cos(uv.x * 3.0 - uv.y * 5.0 + time * 1.2);
+            float w = sin(wave1 + wave2);
+
+            half3 col;
+            col.r = sin(w * 3.14 + 0.0 + time) * 0.5 + 0.5;
+            col.g = sin(w * 3.14 + 2.09 + time) * 0.5 + 0.5;
+            col.b = sin(w * 3.14 + 4.18 + time) * 0.5 + 0.5;
+
+            col *= 0.55;
+            if (uTouchActive > 0.01) {
+                col += half3(1.0, 1.0, 1.0) * exp(-distToTouch * 5.0) * uTouchActive * 0.9;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 5. MATCHA LATTE ART (Fluid froth swirls with touch vortex)
+        else if (uTheme == 4) {
+            if (uVariant == 0) { colA = half3(0.4, 0.75, 0.4); colB = half3(0.96, 0.93, 0.82); bg = half3(0.03, 0.06, 0.03); }
+            else if (uVariant == 1) { colA = half3(0.85, 0.6, 0.35); colB = half3(0.98, 0.92, 0.8); bg = half3(0.06, 0.04, 0.02); }
+            else { colA = half3(0.65, 0.5, 0.85); colB = half3(0.95, 0.9, 0.98); bg = half3(0.05, 0.03, 0.07); }
+
+            float2 fUv = uv * 3.0;
+            float n1 = noise(fUv + time * 0.2);
+            float n2 = noise(fUv * 2.0 + n1 * 2.0 + time * 0.15);
+            float swirl = smoothstep(0.35, 0.75, n2);
+
+            half3 col = mix(bg, colA, swirl * 0.8);
+            col = mix(col, colB, smoothstep(0.6, 0.9, n2) * 0.9);
+
+            if (uTouchActive > 0.01) {
+                col += colB * exp(-distToTouch * 6.0) * uTouchActive;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 6. RETRO 8-BIT ARCADE (Pixel starfield & scanlines)
+        else if (uTheme == 5) {
+            float2 pUv = floor(uv * 32.0) / 32.0;
+            float star = hash(pUv + floor(time * 4.0) * 0.001);
+            float starGlow = smoothstep(0.96, 1.0, star);
+
+            float scanline = sin(fragCoord.y * 1.5) * 0.15 + 0.85;
+            half3 col = half3(0.02, 0.02, 0.06);
+            col += half3(0.0, 0.9, 0.8) * starGlow * 1.6;
+            col += half3(0.9, 0.1, 0.6) * (sin(pUv.y * 6.0 + time * 2.0) * 0.5 + 0.5) * 0.35;
+            col *= scanline;
+
+            if (uTouchActive > 0.01) {
+                col += half3(0.0, 1.0, 0.8) * exp(-distToTouch * 7.0) * uTouchActive * 1.4;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 7. BIOLUMINESCENT SEA (Caustic sun rays & aquatic shockwaves)
+        else if (uTheme == 6) {
+            float v1 = voronoi(uv * 6.0 + time * 0.8);
+            float v2 = voronoi(uv * 10.0 - time * 0.5);
+            float caustic = pow(1.0 - (v1 * 0.6 + v2 * 0.4), 2.5);
+
+            half3 col = half3(0.01, 0.05, 0.09);
+            col += half3(0.0, 0.8, 0.95) * caustic * 0.85;
+
+            if (uTouchActive > 0.01) {
+                float ripple = sin(distToTouch * 35.0 - time * 12.0) * exp(-distToTouch * 5.0);
+                col += half3(0.3, 0.95, 0.95) * max(0.0, ripple) * 1.8 * uTouchActive;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 8. JELLY MOCHI SQUISH (Elastic jiggling jelly with glossy specular highlights)
+        else if (uTheme == 7) {
+            float2 jUv = uv * 5.0;
+            float jelly = sin(length(jUv) * 4.0 - time * 3.0) * exp(-length(jUv) * 0.8);
+            float spec = pow(max(0.0, sin(uv.x * 8.0 + uv.y * 8.0 + time)), 16.0);
+
+            half3 col = half3(0.07, 0.02, 0.04);
+            col += half3(1.0, 0.3, 0.5) * (jelly * 0.5 + 0.5) * 0.7;
+            col += half3(1.0, 1.0, 1.0) * spec * 0.6;
+
+            if (uTouchActive > 0.01) {
+                col += half3(1.0, 0.5, 0.7) * exp(-distToTouch * 5.0) * uTouchActive * 1.3;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 9. COSMIC GALAXY (Spiral nebula vortex & twinkling star clusters)
+        else if (uTheme == 8) {
+            float r = length(uv);
+            float a = atan2(uv.y, uv.x) + r * 3.5 - time * 0.5;
+            float spiral = sin(a * 2.0) * 0.5 + 0.5;
+            float core = exp(-r * 3.0);
+
+            half3 col = half3(0.02, 0.02, 0.06);
+            col += half3(0.4, 0.2, 0.9) * spiral * exp(-r * 1.5) * 0.9;
+            col += half3(0.2, 0.8, 1.0) * core * 1.5;
+
+            // Twinkling stars
+            float stars = hash(floor(uv * 40.0));
+            col += half3(1.0, 1.0, 1.0) * smoothstep(0.985, 1.0, stars) * (sin(time * 4.0 + stars * 100.0) * 0.5 + 0.5);
+
+            if (uTouchActive > 0.01) {
+                col += half3(0.5, 0.8, 1.0) * exp(-distToTouch * 5.0) * uTouchActive * 1.5;
+            }
+            return half4(col, 1.0);
+        }
+
+        // 10. STEALTH TITANIUM (Luxury brushed titanium & OLED black)
+        else {
+            if (uVariant == 0) {
+                return half4(0.0, 0.0, 0.0, 1.0); // Pure OLED
+            } else if (uVariant == 1) {
+                float brush = hash(float2(fragCoord.x * 0.1, fragCoord.y * 0.01)) * 0.04;
+                return half4(half3(0.06 + brush), 1.0);
+            } else {
+                float carbon = sin(fragCoord.x * 0.3) * sin(fragCoord.y * 0.3) * 0.03;
+                return half4(half3(0.07 + carbon), 1.0);
+            }
+        }
     }
 """
 
@@ -236,15 +313,15 @@ fun BackgroundShaderCanvas(
         return
     }
 
-    val transition = rememberInfiniteTransition(label = "CuteShaderTime")
+    val transition = rememberInfiniteTransition(label = "ShaderTimeTransition")
     val time by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 6.28318f,
+        targetValue = 62.8318f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 8000, easing = LinearEasing),
+            animation = tween(durationMillis = 80000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "Time"
+        label = "TimeFloat"
     )
 
     val primaryTouch = touchPoints.firstOrNull()
@@ -253,7 +330,7 @@ fun BackgroundShaderCanvas(
     val touchActive = if (primaryTouch != null) 1.0f else 0.0f
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        AgslCuteBackground(
+        AgslProceduralBackground(
             theme = theme,
             variant = variant,
             time = time,
@@ -264,7 +341,7 @@ fun BackgroundShaderCanvas(
             modifier = modifier
         )
     } else {
-        FallbackCuteBackground(
+        FallbackProceduralBackground(
             theme = theme,
             variant = variant,
             time = time,
@@ -279,7 +356,7 @@ fun BackgroundShaderCanvas(
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun AgslCuteBackground(
+private fun AgslProceduralBackground(
     theme: BackgroundTheme,
     variant: ThemeVariant,
     time: Float,
@@ -289,7 +366,7 @@ private fun AgslCuteBackground(
     dimRatio: Float,
     modifier: Modifier
 ) {
-    val shader = remember { RuntimeShader(AGSL_CUTE_SHADER) }
+    val shader = remember { RuntimeShader(AGSL_MINIMATE_SHADER) }
 
     Canvas(modifier = modifier.fillMaxSize()) {
         shader.setFloatUniform("iResolution", size.width, size.height)
@@ -307,7 +384,7 @@ private fun AgslCuteBackground(
 }
 
 @Composable
-private fun FallbackCuteBackground(
+private fun FallbackProceduralBackground(
     theme: BackgroundTheme,
     variant: ThemeVariant,
     time: Float,
@@ -325,14 +402,14 @@ private fun FallbackCuteBackground(
         val centerOffset = if (touchActive > 0.5f) {
             Offset(touchX, touchY)
         } else {
-            Offset(w * 0.5f + cos(time) * 40f, h * 0.5f + sin(time) * 40f)
+            Offset(w * 0.5f + cos(time * 0.5f) * 40f, h * 0.5f + sin(time * 0.5f) * 40f)
         }
 
         val colors = when (theme) {
             BackgroundTheme.SAKURA_PETALS -> listOf(Color(0xFFFFB7B2), Color(0xFFFF69B4), Color(0xFF1F0C16))
             BackgroundTheme.BUBBLE_POP -> listOf(Color(0xFF89CFF0), Color(0xFFFF6EC7), Color(0xFF0A0F1F))
             BackgroundTheme.KAWAII_PAWS -> listOf(Color(0xFFF4A261), Color(0xFFFF758F), Color(0xFF1E1018))
-            BackgroundTheme.RAINBOW_PASTEL -> listOf(Color(0xFFFF9A8B), Color(0xFF70A6FF), Color(0xFF120A1C))
+            BackgroundTheme.PRISM_WAVES -> listOf(Color(0xFFFF9A8B), Color(0xFF70A6FF), Color(0xFF120A1C))
             BackgroundTheme.MATCHA_CAFE -> listOf(Color(0xFF588157), Color(0xFFF3E9D2), Color(0xFF0F1A0F))
             BackgroundTheme.RETRO_ARCADE -> listOf(Color(0xFF00F5D4), Color(0xFF7B2CBF), Color(0xFF050514))
             BackgroundTheme.TROPICAL_OCEAN -> listOf(Color(0xFF00B4D8), Color(0xFF90E0EF), Color(0xFF031926))
@@ -345,9 +422,9 @@ private fun FallbackCuteBackground(
             brush = Brush.radialGradient(
                 colors = colors,
                 center = centerOffset,
-                radius = w * 0.85f
+                radius = w * 0.9f
             ),
-            alpha = alpha * 0.5f
+            alpha = alpha * 0.55f
         )
     }
 }
@@ -387,7 +464,7 @@ private fun CustomImageBackground(
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(Color.Transparent, Color(0x77000000), Color(0xDD000000))
+                        colors = listOf(Color.Transparent, Color(0x66000000), Color(0xCC000000))
                     )
                 )
         )

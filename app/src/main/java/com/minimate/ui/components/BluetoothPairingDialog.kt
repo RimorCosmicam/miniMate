@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -127,12 +128,17 @@ fun BluetoothPairingDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("📡", fontSize = 20.sp)
+                        Icon(
+                            Icons.Default.Bluetooth,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "Pairing & Host Manager",
                             color = TextPrimary,
-                            fontSize = 17.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -311,17 +317,21 @@ fun BluetoothPairingDialog(
                         .background(GlassSurface.copy(alpha = 0.6f))
                         .padding(14.dp)
                 ) {
-                    Text(
-                        "💡 How to Pair with your Mac / PC / iPad:",
-                        color = TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "Pairing Instructions",
+                            color = TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     GuideStep(number = "1", text = "Tap 'Make Discoverable' above")
-                    GuideStep(number = "2", text = "On your computer/tablet, open Bluetooth Settings")
-                    GuideStep(number = "3", text = "Select your Galaxy Z Flip from other devices")
-                    GuideStep(number = "4", text = "Click Pair — Minimate trackpad will connect instantly!")
+                    GuideStep(number = "2", text = "On host computer/tablet, open Bluetooth Settings")
+                    GuideStep(number = "3", text = "Select your Galaxy Z Flip from available devices")
+                    GuideStep(number = "4", text = "Click Pair to connect as wireless trackpad")
                 }
             }
 
@@ -369,7 +379,7 @@ fun BluetoothPairingDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "No paired devices yet.\nMake discoverable to connect your first host!",
+                            "No paired devices found.\nMake discoverable to connect your first host.",
                             color = TextTertiary,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center
@@ -412,7 +422,7 @@ fun BluetoothPairingDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "Open Android Bluetooth Settings",
+                        "Android Bluetooth Settings",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium

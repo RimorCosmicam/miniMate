@@ -1,93 +1,99 @@
-# Minimate ⚡
-> **The ultimate wireless Bluetooth trackpad experience designed specifically for the Samsung Galaxy Z Flip 7 Cover Screen.**
+# Minimate
+> **High-performance wireless Bluetooth trackpad engineered for the Samsung Galaxy Z Flip cover screen.**
 
-Minimate turns your Samsung Galaxy Z Flip 7 Flex Window into an ultra-responsive, physics-modeled wireless trackpad for **Mac, iPad, tablet, PC, or Android**.
+Minimate turns the Samsung Galaxy Z Flip Flex Window into an ultra-responsive, physics-modeled wireless trackpad for **macOS, iPadOS, Windows, Linux, and Android**.
 
-Designed with the precision, tactile feedback, and fluid momentum of an **Apple Magic Trackpad**, Minimate connects directly as a standard **Bluetooth HID (Human Interface Device)** with **zero companion apps required** on the host.
-
----
-
-## ✨ Zero-Menu Hardware UX
-
-Minimate has **no traditional settings menus or cluttered sheets**. The entire cover screen is a pure, edge-to-edge touch canvas.
-
-### 🪐 The Floating Interaction Ball
-Located in the bottom-left corner, the ball is your single gestural control point:
-
-- **Hold & Slide Radial Action Ring**:
-  Press and slide your finger in any direction to reveal orbital action petals:
-  - 🔵 **Pair Host**: Instantly activates Bluetooth discoverable mode for pairing on Mac/PC/iPad.
-  - 🟣 **Themes**: Cycles through live GPU-accelerated interactive shader backgrounds.
-  - 🟡 **Custom BG**: Pick any custom image or animated GIF from your device as background.
-  - 🔴 **Lock Mode**: Hides the floating ball completely for 100% uninterrupted touchpad immersion.
-- **Hold (without sliding)**: **Stealth Dim Mode** — dims the screen to pitch OLED black while the ball morphs into a soft luminous white orb.
-
-### 🔓 Hardware Unlock Mechanism
-When **Locked**, the ball is completely hidden and the entire screen is an active touchpad.
-- **To Unlock**: Press **Volume Up (+) and Volume Down (-)** simultaneously.
-- Restores the ball instantly with a confirming haptic pulse and transient HUD badge.
+Designed with the precision, tactile feedback, and fluid momentum of standard glass trackpads, Minimate connects directly as a standard **Bluetooth HID (Human Interface Device)** with **zero companion software required** on the host machine.
 
 ---
 
-## 🎨 Touch-Reactive GPU Shaders & Finger Effects
+## Architecture & Features
 
-Minimate features GPU-accelerated AGSL runtime shaders (Android 13+) with Canvas fallbacks:
-1. **Cosmic Warp**: Gravitational light-bending spacetime distortion warping directly under active fingers.
-2. **Fluid Aurora Plasma**: Interactive harmonic plasma waves radiating from finger touch points.
-3. **Liquid Glass Prism**: Refractive caustic prism light waves warping under multi-touch gestures.
-4. **Cyber Matrix Grid**: Reactive digital matrix grid emitting radiant pulse waves on touch.
-5. **Custom Image / GIF**: Load any wallpaper or animated GIF with subtle ambient glass overlays.
-6. **Pure OLED Black**: True zero-power `#000000` dark mode.
+### 1. The Floating Interaction Ball
+Located in the bottom-left corner of the cover screen, the ball is the primary tactile controller:
+- **Instant Touch Down Response**: Low-level pointer event polling ensures instantaneous tactile scaling and haptic feedback on touch down.
+- **Hold & Slide Radial Action Arc**:
+  - **Pair**: Opens the dedicated in-app Bluetooth Pairing Hub and discovery manager.
+  - **Settings**: Opens the 4-tab translucent control center (Themes, Touch FX, Clock & HUD, Settings).
+  - **Themes**: Cycles through live procedural GPU shader backgrounds.
+  - **Lock**: Hides the ball completely for 100% full-screen touch immersion.
+- **Configurable Single-Tap Action**: Instant trigger for Stealth Dim, Menu, Pairing Hub, or Middle Click without dragging.
 
-### 🖐️ Multi-Touch Finger Effects
-- Interactive glowing halo rings, bioluminescent particle wakes, and center contact points follow all active fingers in real-time.
+### 2. Physical Hardware Unlock
+When in **Locked Mode**, the UI disappears completely for uninterrupted full-display touch operation.
+- **To Unlock**: Press **Volume Up (+)** and **Volume Down (-)** simultaneously.
+- Instantly restores controls with confirming haptic pulses and transient HUD toast.
 
 ---
 
-## 🎛️ High-Precision Touchpad Engine
+## Live Procedural AGSL Shaders & Touch Effects
 
-- **Sub-Millisecond Touch Sampling**: Ingests historical digitizer points (`MotionEvent.getHistoricalX/Y`) from high refresh rate panels.
-- **1€ Filter Delta Smoothing**: Adaptive dual-cutoff jitter filter that removes finger tremors at slow speeds without adding phase lag during fast flicks.
-- **macOS Dynamic Acceleration Curve**: Non-linear power-law curve ($v_{out} = v_{in} \cdot (1 + \alpha \cdot v_{in}^\beta)$) with fractional sub-pixel carryover accumulator.
+### Procedural Background Shaders (3 Color Palettes Each)
+1. **Sakura Petals**: Procedural parametric cherry blossoms drifting with dynamic wind turbulence.
+2. **Bubble Aquarium**: Transparent spherical refraction bubbles with Fresnel highlights and touch bursts.
+3. **Cat Paw Cafe**: Procedural kitten paw print stamps with drifting particle trails.
+4. **Prism Waves**: Iridescent chromatic diffraction and fluid ribbon harmonics.
+5. **Matcha Latte Art**: Viscous fluid dynamics simulation creating creamy latte froth swirls.
+6. **Retro 8-Bit**: Procedural pixel starfield, arcade blocks, and CRT scanlines.
+7. **Bioluminescent Sea**: Caustic sun rays and aquatic shockwaves on touch.
+8. **Jelly Mochi**: Elastic jiggling grid mesh with specular glossy highlights.
+9. **Cosmic Galaxy**: Rotating spiral nebula vortex with twinkling star clusters.
+10. **Stealth Titanium**: Brushed titanium micro-texture with pure OLED power-saver mode.
+11. **Custom Wallpaper**: Load any image or animated GIF from local gallery.
+
+### Multi-Touch Finger Effects
+1. **Sakura Trail**: Floating flower petals under active contact points.
+2. **Soap Bubbles**: Wobbling cartoon soap bubbles with specular shines.
+3. **Cat Paws**: Soft kitten paw prints stamped on touch.
+4. **Star Glitter**: Twinkling fairy dust and star glitter trails.
+5. **Rainbow Ribbon**: Concentric glowing fluid rainbow rings.
+6. **Water Droplets**: Liquid concentric expanding shockwaves.
+7. **Plasma Bolts**: Electric neon energy arcs linking multi-touch fingers.
+8. **Neon Reticle**: Precision targeting crosshair reticle.
+9. **Floating Hearts**: Glowing love heart particles trailing finger drag.
+10. **Clean Dot**: Minimalist precision micro-dots.
+
+---
+
+## Clock & Battery HUD Customization
+
+Configurable HUD widget overlay:
+- **Styles**: Glass Pill, Bold Digital, Clean Sans, Retro Monospace, Hidden.
+- **Positions**: Top Left, Top Center, Top Right, Bottom Right, Bottom Center.
+- **Time Formats**: 12-Hour (AM/PM) and 24-Hour Military Format, Optional live seconds ticker.
+- **Battery Indicator**: Real-time connected host and phone battery percentage.
+
+---
+
+## High-Precision Touchpad Engine
+
+- **Sub-Millisecond Sampling**: Ingests historical digitizer points (`MotionEvent.getHistoricalX/Y`).
+- **1€ Filter Delta Smoothing**: Adaptive dual-cutoff jitter filter that eliminates finger tremors at slow speeds without adding phase lag during fast flicks.
+- **Dynamic Acceleration Curve**: Non-linear power-law curve with sub-pixel carryover accumulator.
 - **Correct Coordinate Mapping**: Natural scrolling applies strictly to 2-finger scrolling; 1-finger cursor movement tracks 1:1 with natural finger orientation.
 - **Kinetic Momentum Scrolling**: Physics-based fluid inertial deceleration when lifting fingers during a scroll.
 - **Gestures**:
   - **1-Finger Move**: Precision pointer tracking.
   - **1-Finger Tap**: Left click with crisp haptic response.
   - **1-Finger Double-Tap & Drag**: Double-tap lock to drag windows and files.
-  - **2-Finger Scroll**: Vertical scrolling & horizontal pan.
+  - **2-Finger Scroll**: Vertical scrolling and horizontal pan.
   - **2-Finger Tap**: Secondary / Right click.
   - **Bezel Palm Rejection**: Filters accidental edge contacts along the Z Flip cover frame.
 
 ---
 
-## 🔵 Native Bluetooth HID Profile (HOGP)
-
-- **No Companion App Needed**: Host machines (macOS, iPadOS, Windows 11, Linux, Android) recognize Minimate as a physical Bluetooth Mouse/Trackpad.
-- **16-Bit High-Resolution Coordinate Descriptors**: Hand-crafted USB-IF HID 1.11 report descriptor supporting 16-bit relative X/Y coordinate deltas (`-32767..32767`), vertical scroll wheel, horizontal AC pan, and 5 buttons.
-- **Guaranteed Low-Latency QOS**: Optimized SDP & QOS profile settings targeting sub-10ms packet dispatching.
-- **Battery Reporting**: Broadcasts host phone battery percentage over standard HID battery reports.
-
----
-
-## 🚀 Building & Installation
+## Building & Installation
 
 ```bash
 # Build Debug & Release APKs
 chmod +x gradlew
 ./gradlew test assembleDebug assembleRelease
 ```
-Compiled APKs:
+Compiled APK artifacts:
 - **Debug**: `app/build/outputs/apk/debug/app-debug.apk`
 - **Release**: `app/build/outputs/apk/release/app-release.apk`
 
 ---
 
-## 🤖 GitHub Actions Automated Builds
-
-The repository includes `.github/workflows/build.yml` which automatically compiles both Debug and Release APKs and uploads them as workflow artifacts on every push.
-
----
-
-## 📄 License
-Created with ❤️ for the Samsung Galaxy Z Flip community.
+## Automated GitHub Actions
+Automated APK compilation and verification runs on every push via `.github/workflows/build.yml`.
