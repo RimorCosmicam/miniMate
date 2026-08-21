@@ -2,6 +2,7 @@ package com.minimate.touchpad.engine
 
 import android.content.Context
 import android.view.MotionEvent
+import android.os.SystemClock
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.model.GestureEvent
@@ -9,6 +10,7 @@ import com.minimate.touchpad.model.TouchpadSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +35,9 @@ class TouchpadEngine(
 
     private val _activeTouchPoints = MutableStateFlow<List<TouchPoint>>(emptyList())
     val activeTouchPoints: StateFlow<List<TouchPoint>> = _activeTouchPoints.asStateFlow()
+    private val _shaderTouchPoints = MutableStateFlow<List<TouchPoint>>(emptyList())
+    val shaderTouchPoints: StateFlow<List<TouchPoint>> = _shaderTouchPoints.asStateFlow()
+    private val touchImpulseHistory = TouchImpulseHistory()
 
     private val momentumScroller = PhysicsMomentumScroller(scope) { vScroll, hScroll ->
         hidManager.sendMouseInput(
@@ -50,6 +55,7 @@ class TouchpadEngine(
         settings = _settings.value
         onTouchPointsUpdated = { points ->
             _activeTouchPoints.value = points
+            updateShaderTouchHistory(points)
         }
     }
 
@@ -71,6 +77,37 @@ class TouchpadEngine(
         return gestureRecognizer.onTouchEvent(event)
     }
 
+    /** Updates visual touch effects without emitting HID input while Theme Tester is open. */
+    fun onPreviewTouchEvent(event: MotionEvent): Boolean {
+        _activeTouchPoints.value = if (
+            event.actionMasked == MotionEvent.ACTION_UP ||
+            event.actionMasked == MotionEvent.ACTION_CANCEL
+        ) {
+            emptyList()
+        } else {
+            List(event.pointerCount) { index ->
+                TouchPoint(
+                    x = event.getX(index),
+                    y = event.getY(index),
+                    id = event.getPointerId(index),
+                    pressure = event.getPressure(index)
+                )
+            }
+        }
+        updateShaderTouchHistory(_activeTouchPoints.value)
+        return true
+    }
+
+    private fun updateShaderTouchHistory(activePoints: List<TouchPoint>) {
+        val now = SystemClock.elapsedRealtime() / 1000f
+        _shaderTouchPoints.value = touchImpulseHistory.update(activePoints, now)
+    }
+
+    fun close() {
+        momentumScroller.stop()
+        scope.cancel()
+    }
+
     private fun handleGestureEvent(event: GestureEvent) {
         val currentSettings = _settings.value
 
@@ -87,25 +124,23 @@ class TouchpadEngine(
             }
 
             is GestureEvent.Scroll -> {
-                if (event.vScroll == 0 && event.hScroll == 0) {
-                    // Momentum trigger
-                    val tracker = gestureRecognizer.getVelocityTracker()
-                    if (tracker != null) {
-                        momentumScroller.startFling(
-                            initialVelocityY = tracker.yVelocity,
-                            initialVelocityX = tracker.xVelocity,
-                            friction = currentSettings.momentumFriction,
-                            scrollSpeed = currentSettings.scrollSpeed,
-                            isNatural = currentSettings.naturalScrolling
-                        )
-                    }
-                } else {
-                    hidManager.sendMouseInput(
-                        buttons = HidDescriptor.BUTTON_NONE,
-                        dx = 0,
-                        dy = 0,
-                        wheel = event.vScroll,
-                        pan = event.hScroll
+                hidManager.sendMouseInput(
+                    buttons = HidDescriptor.BUTTON_NONE,
+                    dx = 0,
+                    dy = 0,
+                    wheel = event.vScroll,
+                    pan = event.hScroll
+                )
+            }
+
+            is GestureEvent.ScrollFling -> {
+                if (currentSettings.momentumScrolling) {
+                    momentumScroller.startFling(
+                        initialVelocityY = event.velocityY,
+                        initialVelocityX = event.velocityX,
+                        friction = currentSettings.momentumFriction,
+                        scrollSpeed = currentSettings.scrollSpeed,
+                        isNatural = currentSettings.naturalScrolling
                     )
                 }
             }

@@ -5,16 +5,13 @@ import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 
 /**
  * Standard USB HID Report Descriptor and SDP/QOS configurations for Minimate.
- * Configured as a high-precision composite Human Interface Device:
- * - Report ID 1: 5-Button Mouse / Multi-touch Trackpad with Rel X/Y, Vertical Wheel, and Horizontal AC Pan.
- * - Report ID 2: Consumer Control (Media, Volume, Brightness).
- * - Report ID 3: Battery Status.
+ * Uses an unnumbered, boot-compatible mouse report. Some hosts cache or negotiate
+ * boot mouse mode; numbered composite reports then become byte-shifted and map X
+ * movement onto Y. This layout works identically in boot and report mode.
  */
 object HidDescriptor {
 
-    const val REPORT_ID_MOUSE: Byte = 1
-    const val REPORT_ID_CONSUMER: Byte = 2
-    const val REPORT_ID_BATTERY: Byte = 3
+    const val REPORT_ID_MOUSE: Byte = 0
 
     // Button masks
     const val BUTTON_NONE: Byte = 0x00
@@ -28,13 +25,9 @@ object HidDescriptor {
      * Complete USB HID Report Descriptor conforming to USB-IF HID 1.11.
      */
     val MOUSE_REPORT_DESCRIPTOR = byteArrayOf(
-        // ==========================================
-        // 1. Mouse / High-Precision Trackpad (Report ID 1)
-        // ==========================================
         0x05.toByte(), 0x01.toByte(),       // USAGE_PAGE (Generic Desktop)
         0x09.toByte(), 0x02.toByte(),       // USAGE (Mouse)
         0xA1.toByte(), 0x01.toByte(),       // COLLECTION (Application)
-        0x85.toByte(), REPORT_ID_MOUSE,     //   REPORT_ID (1)
         0x09.toByte(), 0x01.toByte(),       //   USAGE (Pointer)
         0xA1.toByte(), 0x00.toByte(),       //   COLLECTION (Physical)
 
@@ -51,13 +44,13 @@ object HidDescriptor {
         0x75.toByte(), 0x03.toByte(),       //     REPORT_SIZE (3)
         0x81.toByte(), 0x03.toByte(),       //     INPUT (Cnst,Var,Abs) - Padding
 
-        // X & Y Relative Movement (16-bit for sub-pixel precision: -32767..32767)
+        // X & Y Relative Movement (8-bit boot-compatible values)
         0x05.toByte(), 0x01.toByte(),       //     USAGE_PAGE (Generic Desktop)
         0x09.toByte(), 0x30.toByte(),       //     USAGE (X)
         0x09.toByte(), 0x31.toByte(),       //     USAGE (Y)
-        0x16.toByte(), 0x01.toByte(), 0x80.toByte(), // LOGICAL_MINIMUM (-32767)
-        0x26.toByte(), 0xFF.toByte(), 0x7F.toByte(), // LOGICAL_MAXIMUM (32767)
-        0x75.toByte(), 0x10.toByte(),       //     REPORT_SIZE (16)
+        0x15.toByte(), 0x81.toByte(),       //     LOGICAL_MINIMUM (-127)
+        0x25.toByte(), 0x7F.toByte(),       //     LOGICAL_MAXIMUM (127)
+        0x75.toByte(), 0x08.toByte(),       //     REPORT_SIZE (8)
         0x95.toByte(), 0x02.toByte(),       //     REPORT_COUNT (2)
         0x81.toByte(), 0x06.toByte(),       //     INPUT (Data,Var,Rel)
 
@@ -79,38 +72,6 @@ object HidDescriptor {
         0x81.toByte(), 0x06.toByte(),       //     INPUT (Data,Var,Rel)
 
         0xC0.toByte(),                      //   END_COLLECTION
-        0xC0.toByte(),                      // END_COLLECTION
-
-        // ==========================================
-        // 2. Consumer Control (Report ID 2)
-        // ==========================================
-        0x05.toByte(), 0x0C.toByte(),       // USAGE_PAGE (Consumer Devices)
-        0x09.toByte(), 0x01.toByte(),       // USAGE (Consumer Control)
-        0xA1.toByte(), 0x01.toByte(),       // COLLECTION (Application)
-        0x85.toByte(), REPORT_ID_CONSUMER,  //   REPORT_ID (2)
-        0x15.toByte(), 0x00.toByte(),       //   LOGICAL_MINIMUM (0)
-        0x26.toByte(), 0xFF.toByte(), 0x03.toByte(), // LOGICAL_MAXIMUM (1023)
-        0x19.toByte(), 0x00.toByte(),       //   USAGE_MINIMUM (0)
-        0x2A.toByte(), 0xFF.toByte(), 0x03.toByte(), // USAGE_MAXIMUM (1023)
-        0x75.toByte(), 0x10.toByte(),       //   REPORT_SIZE (16)
-        0x95.toByte(), 0x01.toByte(),       //   REPORT_COUNT (1)
-        0x81.toByte(), 0x00.toByte(),       //   INPUT (Data,Array,Abs)
-        0xC0.toByte(),                      // END_COLLECTION
-
-        // ==========================================
-        // 3. Battery Report (Report ID 3)
-        // ==========================================
-        0x05.toByte(), 0x0C.toByte(),       // USAGE_PAGE (Consumer Devices)
-        0x09.toByte(), 0x01.toByte(),       // USAGE (Consumer Control)
-        0xA1.toByte(), 0x01.toByte(),       // COLLECTION (Application)
-        0x85.toByte(), REPORT_ID_BATTERY,   //   REPORT_ID (3)
-        0x05.toByte(), 0x06.toByte(),       //   USAGE_PAGE (Generic Device Controls)
-        0x09.toByte(), 0x20.toByte(),       //   USAGE (Battery Strength)
-        0x15.toByte(), 0x00.toByte(),       //   LOGICAL_MINIMUM (0)
-        0x25.toByte(), 0x64.toByte(),       //   LOGICAL_MAXIMUM (100)
-        0x75.toByte(), 0x08.toByte(),       //   REPORT_SIZE (8)
-        0x95.toByte(), 0x01.toByte(),       //   REPORT_COUNT (1)
-        0x81.toByte(), 0x02.toByte(),       //   INPUT (Data,Var,Abs)
         0xC0.toByte()                       // END_COLLECTION
     )
 

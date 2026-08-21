@@ -1,9 +1,7 @@
 package com.minimate.touchpad.engine
 
 import android.content.Context
-import android.os.SystemClock
 import android.view.MotionEvent
-import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.model.GestureEvent
@@ -15,7 +13,9 @@ data class TouchPoint(
     val x: Float,
     val y: Float,
     val id: Int,
-    val pressure: Float = 1f
+    val pressure: Float = 1f,
+    val startedAtSeconds: Float = 0f,
+    val active: Boolean = true
 )
 
 /**
@@ -35,8 +35,6 @@ class GestureRecognizer(
     private val filterDy = OneEuroFilter(minCutoff = 1.5, beta = 0.08)
     private val accelerationCurve = MacAccelerationCurve()
 
-    private var velocityTracker: VelocityTracker? = null
-
     // 1-finger tracking state
     private var downTime1 = 0L
     private var downX1 = 0f
@@ -46,7 +44,12 @@ class GestureRecognizer(
     private var lastTime1 = 0L
     private var totalMovedDistance1 = 0f
     private var isDragging = false
+    private var dragArmed = false
+    private var gestureAccepted = false
+    private var suppressSingleFingerUntilUp = false
     private var lastTapUpTime = 0L
+    private var lastTapX = Float.NaN
+    private var lastTapY = Float.NaN
 
     // 2-finger tracking state
     private var downTime2 = 0L
@@ -58,6 +61,10 @@ class GestureRecognizer(
     private var totalMovedDistance2 = 0f
     private var initialPinchSpan = 0f
     private var isTwoFingerGestureActive = false
+    private var isScrollingTwoFinger = false
+    private var didScrollTwoFinger = false
+    private var scrollVelocityX = 0f
+    private var scrollVelocityY = 0f
 
     // Subpixel scroll accumulation for effortless, silky smooth scrolling
     private var subpixelScrollX = 0f
@@ -72,11 +79,6 @@ class GestureRecognizer(
     var onTouchPointsUpdated: ((List<TouchPoint>) -> Unit)? = null
 
     fun onTouchEvent(event: MotionEvent): Boolean {
-        if (velocityTracker == null) {
-            velocityTracker = VelocityTracker.obtain()
-        }
-        velocityTracker?.addMovement(event)
-
         updateActiveTouchPoints(event)
 
         when (event.actionMasked) {
@@ -94,6 +96,7 @@ class GestureRecognizer(
         activeTouchPoints.clear()
         if (event.actionMasked != MotionEvent.ACTION_UP && event.actionMasked != MotionEvent.ACTION_CANCEL) {
             for (i in 0 until event.pointerCount) {
+                if (event.actionMasked == MotionEvent.ACTION_POINTER_UP && i == event.actionIndex) continue
                 activeTouchPoints.add(
                     TouchPoint(
                         x = event.getX(i),
@@ -109,6 +112,7 @@ class GestureRecognizer(
 
     private fun isEdgeTouch(x: Float, y: Float): Boolean {
         val marginPx = settings.edgeMarginDp * context.resources.displayMetrics.density
+        if (screenWidth <= marginPx * 2f || screenHeight <= marginPx * 2f) return false
         return x < marginPx || x > (screenWidth - marginPx) || y < marginPx || y > (screenHeight - marginPx)
     }
 
@@ -117,7 +121,10 @@ class GestureRecognizer(
         val y = event.y
         val now = event.eventTime
 
-        if (isEdgeTouch(x, y)) return
+        gestureAccepted = !isEdgeTouch(x, y)
+        suppressSingleFingerUntilUp = false
+        dragArmed = false
+        if (!gestureAccepted) return
 
         downX1 = x
         downY1 = y
@@ -131,20 +138,31 @@ class GestureRecognizer(
         filterDy.reset()
         accelerationCurve.reset()
 
-        // Check for Double-Tap & Drag
-        if (settings.doubleTapDrag && (now - lastTapUpTime) < doubleTapTimeout) {
-            val distFromLastTap = hypot(x - downX1, y - downY1)
-            if (distFromLastTap < touchSlop * 2) {
-                isDragging = true
-                onGesture(GestureEvent.Click(HidDescriptor.BUTTON_LEFT, down = true))
-                onGesture(GestureEvent.DoubleTapDragStart)
-            }
-        }
+        // Arm on the second tap, but do not press the button until the finger moves.
+        // This preserves an ordinary double-click when the second tap is released.
+        dragArmed = settings.doubleTapDrag &&
+            now - lastTapUpTime in 1 until doubleTapTimeout &&
+            !lastTapX.isNaN() && hypot(x - lastTapX, y - lastTapY) < touchSlop * 2f
     }
 
     private fun handlePointerDown(event: MotionEvent) {
+        if (!gestureAccepted) return
+        if (event.pointerCount > 2) {
+            isTwoFingerGestureActive = false
+            isScrollingTwoFinger = false
+            suppressSingleFingerUntilUp = true
+            return
+        }
+        if (event.pointerCount != 2) return
         if (event.pointerCount >= 2) {
+            if (isDragging) {
+                onGesture(GestureEvent.Click(HidDescriptor.BUTTON_LEFT, down = false))
+                onGesture(GestureEvent.DragEnd)
+                isDragging = false
+            }
+            dragArmed = false
             isTwoFingerGestureActive = true
+            suppressSingleFingerUntilUp = true
             downTime2 = event.eventTime
             val x0 = event.getX(0)
             val y0 = event.getY(0)
@@ -157,6 +175,10 @@ class GestureRecognizer(
             lastAvgY = downAvgY
             lastTime2 = downTime2
             totalMovedDistance2 = 0f
+            isScrollingTwoFinger = false
+            didScrollTwoFinger = false
+            scrollVelocityX = 0f
+            scrollVelocityY = 0f
             initialPinchSpan = hypot(x0 - x1, y0 - y1)
             subpixelScrollX = 0f
             subpixelScrollY = 0f
@@ -166,7 +188,8 @@ class GestureRecognizer(
     private fun handleActionMove(event: MotionEvent) {
         val pointerCount = event.pointerCount
 
-        if (pointerCount == 1 && !isTwoFingerGestureActive) {
+        if (!gestureAccepted) return
+        if (pointerCount == 1 && !isTwoFingerGestureActive && !suppressSingleFingerUntilUp) {
             processHistorical1FingerMovement(event)
         } else if (pointerCount >= 2) {
             processHistorical2FingerMovement(event)
@@ -174,6 +197,13 @@ class GestureRecognizer(
     }
 
     private fun processHistorical1FingerMovement(event: MotionEvent) {
+        for (historyIndex in 0 until event.historySize) {
+            step1Finger(
+                event.getHistoricalX(0, historyIndex),
+                event.getHistoricalY(0, historyIndex),
+                event.getHistoricalEventTime(historyIndex)
+            )
+        }
         step1Finger(event.getX(0), event.getY(0), event.eventTime)
     }
 
@@ -182,12 +212,19 @@ class GestureRecognizer(
         val rawDx = rawX - lastX1
         val rawDy = rawY - lastY1
 
-        totalMovedDistance1 += hypot(rawDx, rawDy)
+        totalMovedDistance1 = maxOf(totalMovedDistance1, hypot(rawX - downX1, rawY - downY1))
         lastX1 = rawX
         lastY1 = rawY
         lastTime1 = timeMs
 
         if (rawDx == 0f && rawDy == 0f) return
+
+        if (dragArmed && totalMovedDistance1 >= touchSlop) {
+            dragArmed = false
+            isDragging = true
+            onGesture(GestureEvent.Click(HidDescriptor.BUTTON_LEFT, down = true))
+            onGesture(GestureEvent.DoubleTapDragStart)
+        }
 
         // Filter deltas with 1€ Filter
         val smoothDx = filterDx.filter(rawDx.toDouble(), timeMs.toDouble()).toFloat()
@@ -210,6 +247,15 @@ class GestureRecognizer(
 
     private fun processHistorical2FingerMovement(event: MotionEvent) {
         if (event.pointerCount < 2) return
+        for (historyIndex in 0 until event.historySize) {
+            step2Finger(
+                event.getHistoricalX(0, historyIndex),
+                event.getHistoricalY(0, historyIndex),
+                event.getHistoricalX(1, historyIndex),
+                event.getHistoricalY(1, historyIndex),
+                event.getHistoricalEventTime(historyIndex)
+            )
+        }
         step2Finger(event.getX(0), event.getY(0), event.getX(1), event.getY(1), event.eventTime)
     }
 
@@ -218,8 +264,9 @@ class GestureRecognizer(
         val avgY = (y0 + y1) / 2f
         val rawDx = avgX - lastAvgX
         val rawDy = avgY - lastAvgY
+        val dtSeconds = ((timeMs - lastTime2).coerceAtLeast(1L)) / 1000f
 
-        totalMovedDistance2 += hypot(rawDx, rawDy)
+        totalMovedDistance2 = maxOf(totalMovedDistance2, hypot(avgX - downAvgX, avgY - downAvgY))
 
         lastAvgX = avgX
         lastAvgY = avgY
@@ -227,12 +274,29 @@ class GestureRecognizer(
 
         if (rawDx == 0f && rawDy == 0f) return
 
+        // A small centroid threshold prevents stationary fingers from slowly
+        // accumulating wheel ticks due to digitizer noise.
+        if (!isScrollingTwoFinger) {
+            if (totalMovedDistance2 < touchSlop) return
+            isScrollingTwoFinger = true
+            subpixelScrollX = 0f
+            subpixelScrollY = 0f
+            scrollVelocityX = 0f
+            scrollVelocityY = 0f
+            return
+        }
+
+        val instantVelocityX = rawDx / dtSeconds
+        val instantVelocityY = rawDy / dtSeconds
+        scrollVelocityX = scrollVelocityX * 0.65f + instantVelocityX * 0.35f
+        scrollVelocityY = scrollVelocityY * 0.65f + instantVelocityY * 0.35f
+
         // Natural scrolling ONLY affects two-finger scroll, never pointer cursor
         val scrollSign = if (settings.naturalScrolling) -1 else 1
 
         // Calibrated scroll scaling with subpixel accumulation (effortless scrolling at any swipe speed)
-        val targetV = rawDy * 0.40f * settings.scrollSpeed * scrollSign + subpixelScrollY
-        val targetH = rawDx * 0.40f * settings.scrollSpeed * scrollSign + subpixelScrollX
+        val targetV = rawDy * 0.035f * settings.scrollSpeed * scrollSign + subpixelScrollY
+        val targetH = rawDx * 0.035f * settings.scrollSpeed * scrollSign + subpixelScrollX
 
         val intV = targetV.toInt()
         val intH = targetH.toInt()
@@ -241,6 +305,7 @@ class GestureRecognizer(
         subpixelScrollX = targetH - intH
 
         if (intV != 0 || intH != 0) {
+            didScrollTwoFinger = true
             onGesture(GestureEvent.Scroll(intV, intH))
         }
 
@@ -253,21 +318,26 @@ class GestureRecognizer(
     }
 
     private fun handlePointerUp(event: MotionEvent) {
-        if (event.pointerCount <= 2 && isTwoFingerGestureActive) {
+        if (!gestureAccepted) return
+        if (event.pointerCount == 2 && isTwoFingerGestureActive) {
             val duration = event.eventTime - downTime2
             if (totalMovedDistance2 < touchSlop && duration < tapTimeout && settings.twoFingerRightClick) {
                 onGesture(GestureEvent.RightClick)
-            } else if (settings.momentumScrolling) {
-                velocityTracker?.computeCurrentVelocity(1000)
-                onGesture(GestureEvent.Scroll(0, 0))
+            } else if (didScrollTwoFinger && settings.momentumScrolling) {
+                onGesture(GestureEvent.ScrollFling(scrollVelocityX, scrollVelocityY))
             }
             isTwoFingerGestureActive = false
+            isScrollingTwoFinger = false
             subpixelScrollX = 0f
             subpixelScrollY = 0f
         }
     }
 
     private fun handleActionUp(event: MotionEvent) {
+        if (!gestureAccepted) {
+            resetState()
+            return
+        }
         val now = event.eventTime
         val duration = now - downTime1
 
@@ -275,9 +345,15 @@ class GestureRecognizer(
             isDragging = false
             onGesture(GestureEvent.Click(HidDescriptor.BUTTON_LEFT, down = false))
             onGesture(GestureEvent.DragEnd)
-        } else if (totalMovedDistance1 < touchSlop && duration < tapTimeout && settings.tapToClick) {
+        } else if (!suppressSingleFingerUntilUp && totalMovedDistance1 < touchSlop && duration < tapTimeout && settings.tapToClick) {
             onGesture(GestureEvent.TapClick)
             lastTapUpTime = now
+            lastTapX = event.x
+            lastTapY = event.y
+        } else if (!dragArmed) {
+            lastTapUpTime = 0L
+            lastTapX = Float.NaN
+            lastTapY = Float.NaN
         }
 
         resetState()
@@ -298,15 +374,15 @@ class GestureRecognizer(
         lastX1 = 0f
         lastY1 = 0f
         totalMovedDistance1 = 0f
+        gestureAccepted = false
+        suppressSingleFingerUntilUp = false
+        dragArmed = false
         isTwoFingerGestureActive = false
+        isScrollingTwoFinger = false
         subpixelScrollX = 0f
         subpixelScrollY = 0f
         filterDx.reset()
         filterDy.reset()
         accelerationCurve.reset()
-        velocityTracker?.recycle()
-        velocityTracker = null
     }
-
-    fun getVelocityTracker(): VelocityTracker? = velocityTracker
 }

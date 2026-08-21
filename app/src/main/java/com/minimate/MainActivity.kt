@@ -2,6 +2,7 @@ package com.minimate
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -49,9 +50,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_NOSENSOR
 
         // Keep screen alive while touchpad is active
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // MiniMate is a dedicated-device experience: request the fastest native cover-display
+        // mode so shader motion and touch distortion are not artificially capped at 60 Hz.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            @Suppress("DEPRECATION")
+            val fastestMode = windowManager.defaultDisplay.supportedModes.maxByOrNull { it.refreshRate }
+            if (fastestMode != null) {
+                window.attributes = window.attributes.apply {
+                    preferredDisplayModeId = fastestMode.modeId
+                    preferredRefreshRate = fastestMode.refreshRate
+                }
+            }
+        }
 
         // Immersive edge-to-edge fullscreen
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -86,35 +101,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            if (checkAndHandleUnlock()) return true
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val now = SystemClock.uptimeMillis()
+
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            isVolUpPressed = true
+            lastVolUpTime = now
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            isVolDownPressed = true
+            lastVolDownTime = now
+        } else {
+            return super.onKeyDown(keyCode, event)
+        }
+
+        if (touchpadEngine.settings.value.isLocked) {
+            checkAndHandleUnlock()
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        val isDown = event.action == KeyEvent.ACTION_DOWN
-        val now = SystemClock.uptimeMillis()
-
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-            isVolUpPressed = isDown
-            if (isDown) lastVolUpTime = now
-            if (isDown && checkAndHandleUnlock()) return true
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            isVolDownPressed = isDown
-            if (isDown) lastVolDownTime = now
-            if (isDown && checkAndHandleUnlock()) return true
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> isVolUpPressed = false
+            KeyEvent.KEYCODE_VOLUME_DOWN -> isVolDownPressed = false
+            else -> return super.onKeyUp(keyCode, event)
         }
-
-        return super.dispatchKeyEvent(event)
+        return if (touchpadEngine.settings.value.isLocked) true else super.onKeyUp(keyCode, event)
     }
 
     private fun checkAndHandleUnlock(): Boolean {
         val currentSettings = touchpadEngine.settings.value
-        if (currentSettings.isLocked) {
-            // Unlock on any volume button press while locked
+        val chordIsPressed = isVolUpPressed && isVolDownPressed &&
+            abs(lastVolUpTime - lastVolDownTime) <= 500L
+        if (currentSettings.isLocked && chordIsPressed) {
             touchpadEngine.updateSettings(currentSettings.copy(isLocked = false))
             touchpadEngine.hapticEngine.playModeTransition(HapticIntensity.STRONG)
             isVolUpPressed = false
@@ -154,6 +174,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_NOSENSOR
         batteryReporter.start()
     }
 
@@ -164,6 +185,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        touchpadEngine.close()
         hidManager.stop()
     }
 }

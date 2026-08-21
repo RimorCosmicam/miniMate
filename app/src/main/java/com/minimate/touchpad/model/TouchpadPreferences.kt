@@ -7,7 +7,7 @@ import org.json.JSONObject
 
 /**
  * Robust persistent storage for TouchpadSettings using Android SharedPreferences.
- * Preserves all user configurations, themes, presets, analog stick settings, and layout coordinates across launches.
+ * Preserves all user configurations, themes, analog stick settings, and layout coordinates across launches.
  */
 class TouchpadPreferences(context: Context) {
 
@@ -35,29 +35,24 @@ class TouchpadPreferences(context: Context) {
                 put("edgeMarginDp", settings.edgeMarginDp.toDouble())
                 put("hapticIntensity", settings.hapticIntensity.name)
 
-                // Theme & presets
+                // Active theme
                 put("backgroundTheme", settings.backgroundTheme.name)
                 put("themeVariantIndex", settings.themeVariantIndex)
+                put("backgroundAnimation", settings.backgroundAnimation.name)
+                put("themeFilter", settings.themeFilter.name)
+                put("abstractShaderTheme", settings.abstractShaderTheme.name)
+                put("abstractSubthemeIndex", settings.abstractSubthemeIndex)
+                put("shaderRecolor", settings.shaderRecolor.name)
+                put("customShaderColors", JSONArray(settings.customShaderColors))
                 put("customImageUri", settings.customImageUri ?: "")
-                put("currentPresetIndex", settings.currentPresetIndex)
-
-                val presetsArray = JSONArray()
-                settings.themePresets.forEach { preset ->
-                    val pObj = JSONObject().apply {
-                        put("theme", preset.theme.name)
-                        put("variantIndex", preset.variantIndex)
-                        put("customUri", preset.customUri ?: "")
-                    }
-                    presetsArray.put(pObj)
-                }
-                put("themePresets", presetsArray)
 
                 // Finger FX
-                put("fingerEffect", settings.fingerEffect.name)
                 put("fingerEffectsEnabled", settings.fingerEffectsEnabled)
 
                 // Analog Stick (Single Hand Mode)
                 put("analogStickMode", settings.analogStickMode.name)
+                put("stickEnabled", settings.stickEnabled)
+                put("stickTheme", settings.stickTheme.name)
                 put("stickSingleTapAction", settings.stickSingleTapAction.name)
                 put("stickDoubleTapAction", settings.stickDoubleTapAction.name)
                 put("stickHoldAction", settings.stickHoldAction.name)
@@ -88,25 +83,6 @@ class TouchpadPreferences(context: Context) {
         return try {
             val json = JSONObject(jsonStr)
 
-            val presetsList = mutableListOf<ThemePreset>()
-            if (json.has("themePresets")) {
-                val pArray = json.getJSONArray("themePresets")
-                for (i in 0 until pArray.length()) {
-                    val pObj = pArray.getJSONObject(i)
-                    val theme = try {
-                        BackgroundTheme.valueOf(pObj.getString("theme"))
-                    } catch (_: Exception) {
-                        BackgroundTheme.CHROME_FLUID
-                    }
-                    val vIdx = pObj.optInt("variantIndex", 0)
-                    val uri = pObj.optString("customUri", "").takeIf { it.isNotEmpty() }
-                    presetsList.add(ThemePreset(theme, vIdx, uri))
-                }
-            }
-            if (presetsList.isEmpty()) {
-                presetsList.addAll(TouchpadSettings().themePresets)
-            }
-
             TouchpadSettings(
                 trackingSpeed = json.optDouble("trackingSpeed", 1.0).toFloat(),
                 acceleration = json.optDouble("acceleration", 1.15).toFloat(),
@@ -129,21 +105,42 @@ class TouchpadPreferences(context: Context) {
                     BackgroundTheme.valueOf(json.optString("backgroundTheme", "CHROME_FLUID"))
                 } catch (_: Exception) {
                     BackgroundTheme.CHROME_FLUID
-                },
+                }.takeIf {
+                    it.ordinal <= BackgroundTheme.CUSTOM_IMAGE.ordinal || it.isScenery
+                } ?: BackgroundTheme.CHROME_FLUID,
                 themeVariantIndex = json.optInt("themeVariantIndex", 0),
-                customImageUri = json.optString("customImageUri", "").takeIf { it.isNotEmpty() },
-                themePresets = presetsList,
-                currentPresetIndex = json.optInt("currentPresetIndex", 0),
-                fingerEffect = try {
-                    FingerEffect.valueOf(json.optString("fingerEffect", "CHERRY_PETALS"))
+                backgroundAnimation = try {
+                    BackgroundAnimation.valueOf(json.optString("backgroundAnimation", "FLOW"))
                 } catch (_: Exception) {
-                    FingerEffect.CHERRY_PETALS
+                    BackgroundAnimation.FLOW
                 },
-                fingerEffectsEnabled = json.optBoolean("fingerEffectsEnabled", false),
+                themeFilter = try {
+                    ThemeFilter.valueOf(json.optString("themeFilter", "NONE"))
+                } catch (_: Exception) {
+                    ThemeFilter.NONE
+                },
+                abstractShaderTheme = runCatching {
+                    AbstractShaderTheme.valueOf(json.optString("abstractShaderTheme", "ARCADE"))
+                }.getOrDefault(AbstractShaderTheme.ARCADE),
+                abstractSubthemeIndex = json.optInt("abstractSubthemeIndex", 1).coerceIn(0, 9),
+                shaderRecolor = runCatching {
+                    ShaderRecolor.valueOf(json.optString("shaderRecolor", "AUTHORED"))
+                }.getOrDefault(ShaderRecolor.AUTHORED),
+                customShaderColors = json.optJSONArray("customShaderColors")?.let { values ->
+                    List(values.length().coerceAtMost(4)) { values.optLong(it) }
+                }?.takeIf { it.size == 4 } ?: DEFAULT_CUSTOM_SHADER_COLORS,
+                customImageUri = json.optString("customImageUri", "").takeIf { it.isNotEmpty() },
+                fingerEffectsEnabled = json.optBoolean("fingerEffectsEnabled", true),
                 analogStickMode = try {
                     AnalogStickMode.valueOf(json.optString("analogStickMode", "ANALOG_SCROLL"))
                 } catch (_: Exception) {
                     AnalogStickMode.ANALOG_SCROLL
+                },
+                stickEnabled = json.optBoolean("stickEnabled", true),
+                stickTheme = try {
+                    StickTheme.valueOf(json.optString("stickTheme", "PRECISION_DISC"))
+                } catch (_: Exception) {
+                    StickTheme.PRECISION_DISC
                 },
                 stickSingleTapAction = try {
                     BallAction.valueOf(json.optString("stickSingleTapAction", "MIDDLE_CLICK"))

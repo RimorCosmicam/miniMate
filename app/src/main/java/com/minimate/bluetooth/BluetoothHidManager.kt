@@ -252,44 +252,51 @@ class BluetoothHidManager(private val context: Context) {
     /**
      * Send mouse movement and button report with sub-millisecond precision.
      */
+    @Synchronized
     fun sendMouseInput(buttons: Byte, dx: Int, dy: Int, wheel: Int = 0, pan: Int = 0): Boolean {
         val device = currentHostDevice ?: return false
         val hid = hidDevice ?: return false
 
         val startNs = System.nanoTime()
-        HidReport.packMouseReport(mouseBuffer, buttons, dx, dy, wheel, pan)
+        var remainingDx = dx
+        var remainingDy = dy
+        var remainingWheel = wheel
+        var remainingPan = pan
+        var packetsSent = 0L
+        var success: Boolean
 
-        val success = try {
-            hid.sendReport(device, HidDescriptor.REPORT_ID_MOUSE.toInt(), mouseBuffer)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending HID report", e)
-            false
-        }
+        do {
+            val packetDx = remainingDx.coerceIn(-127, 127)
+            val packetDy = remainingDy.coerceIn(-127, 127)
+            val packetWheel = remainingWheel.coerceIn(-127, 127)
+            val packetPan = remainingPan.coerceIn(-127, 127)
+            HidReport.packMouseReport(mouseBuffer, buttons, packetDx, packetDy, packetWheel, packetPan)
 
-        if (success) {
+            success = try {
+                hid.sendReport(device, HidDescriptor.REPORT_ID_MOUSE.toInt(), mouseBuffer)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending HID report", e)
+                false
+            }
+            if (!success) break
+
+            packetsSent++
+            remainingDx -= packetDx
+            remainingDy -= packetDy
+            remainingWheel -= packetWheel
+            remainingPan -= packetPan
+        } while (remainingDx != 0 || remainingDy != 0 || remainingWheel != 0 || remainingPan != 0)
+
+        if (packetsSent > 0) {
             val latencyUs = (System.nanoTime() - startNs) / 1000
             _uiState.update {
                 it.copy(
                     latencyMs = latencyUs / 1000,
-                    packetsSent = it.packetsSent + 1
+                    packetsSent = it.packetsSent + packetsSent
                 )
             }
         }
-        return success
-    }
-
-    /**
-     * Send battery percentage report.
-     */
-    fun sendBatteryReport(level: Int): Boolean {
-        val device = currentHostDevice ?: return false
-        val hid = hidDevice ?: return false
-        val report = HidReport.createBatteryReport(level)
-        return try {
-            hid.sendReport(device, HidDescriptor.REPORT_ID_BATTERY.toInt(), report)
-        } catch (e: Exception) {
-            false
-        }
+        return success && remainingDx == 0 && remainingDy == 0 && remainingWheel == 0 && remainingPan == 0
     }
 
     /**

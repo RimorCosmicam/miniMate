@@ -5,15 +5,16 @@ package com.minimate.bluetooth
  */
 object HidReport {
 
-    const val REPORT_MOUSE_SIZE = 7
+    // Boot-compatible mouse payload: buttons, X, Y, vertical wheel, horizontal pan.
+    const val REPORT_MOUSE_SIZE = 5
     const val REPORT_CONSUMER_SIZE = 2
     const val REPORT_BATTERY_SIZE = 1
 
     /**
      * Constructs a mouse input report.
      * @param buttons Bitmask of active buttons (BUTTON_LEFT, BUTTON_RIGHT, etc.)
-     * @param dx Relative X movement (-32767..32767)
-     * @param dy Relative Y movement (-32767..32767)
+     * @param dx Relative X movement (-127..127)
+     * @param dy Relative Y movement (-127..127)
      * @param wheel Vertical wheel scroll (-127..127)
      * @param pan Horizontal wheel / AC pan (-127..127)
      */
@@ -25,18 +26,17 @@ object HidReport {
         wheel: Int = 0,
         pan: Int = 0
     ): ByteArray {
-        val clampedDx = dx.coerceIn(-32767, 32767)
-        val clampedDy = dy.coerceIn(-32767, 32767)
+        require(buffer.size >= REPORT_MOUSE_SIZE) { "Mouse report buffer must be at least $REPORT_MOUSE_SIZE bytes" }
+        val clampedDx = dx.coerceIn(-127, 127)
+        val clampedDy = dy.coerceIn(-127, 127)
         val clampedWheel = wheel.coerceIn(-127, 127)
         val clampedPan = pan.coerceIn(-127, 127)
 
         buffer[0] = buttons
-        buffer[1] = (clampedDx and 0xFF).toByte()
-        buffer[2] = ((clampedDx shr 8) and 0xFF).toByte()
-        buffer[3] = (clampedDy and 0xFF).toByte()
-        buffer[4] = ((clampedDy shr 8) and 0xFF).toByte()
-        buffer[5] = clampedWheel.toByte()
-        buffer[6] = clampedPan.toByte()
+        buffer[1] = clampedDx.toByte()
+        buffer[2] = clampedDy.toByte()
+        buffer[3] = clampedWheel.toByte()
+        buffer[4] = clampedPan.toByte()
         return buffer
     }
 

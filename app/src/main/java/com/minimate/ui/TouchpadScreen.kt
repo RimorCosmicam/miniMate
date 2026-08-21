@@ -2,9 +2,6 @@ package com.minimate.ui
 
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -16,7 +13,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Brightness2
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,17 +36,20 @@ import com.minimate.bluetooth.BluetoothUiState
 import com.minimate.bluetooth.ConnectionStatus
 import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.engine.TouchpadEngine
-import com.minimate.touchpad.model.BackgroundTheme
 import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.HapticIntensity
+import com.minimate.touchpad.model.TouchpadSettings
+import com.minimate.touchpad.model.validColorway
 import com.minimate.ui.components.BluetoothPairingDialog
 import com.minimate.ui.components.ClockBatteryOverlay
-import com.minimate.ui.components.FingerEffectsLayer
 import com.minimate.ui.components.HudToast
 import com.minimate.ui.components.LiquidGlassAnalogStick
+import com.minimate.ui.components.LiveCalibrationMode
+import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.SettingsSheet
+import com.minimate.ui.components.ThemeTesterOverlay
 import com.minimate.ui.shader.BackgroundShaderCanvas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -66,11 +66,14 @@ fun TouchpadScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by touchpadEngine.settings.collectAsState()
-    val activeTouchPoints by touchpadEngine.activeTouchPoints.collectAsState()
+    val shaderTouchPoints by touchpadEngine.shaderTouchPoints.collectAsState()
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
     var showScreenEditor by remember { mutableStateOf(false) }
+    var showThemeTester by remember { mutableStateOf(false) }
+    var liveCalibrationMode by remember { mutableStateOf<LiveCalibrationMode?>(null) }
+    var themeTesterOriginal by remember { mutableStateOf<TouchpadSettings?>(null) }
     var hudMessage by remember { mutableStateOf<String?>(null) }
     var hudIcon by remember { mutableStateOf<ImageVector?>(null) }
     
@@ -79,25 +82,6 @@ fun TouchpadScreen(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            touchpadEngine.updateSettings(
-                settings.copy(
-                    backgroundTheme = BackgroundTheme.CUSTOM_IMAGE,
-                    customImageUri = it.toString()
-                )
-            )
-            hudIcon = Icons.Default.Palette
-            hudMessage = "Custom Wallpaper Loaded"
-            scope.launch {
-                delay(2500)
-                hudMessage = null
-            }
-        }
-    }
 
     val dimRatio by animateFloatAsState(
         targetValue = if (isDimMode) 1f else 0f,
@@ -124,24 +108,6 @@ fun TouchpadScreen(
             showToast("Discoverable for 180s • Connect on Host", Icons.Default.Bluetooth)
         } catch (_: Exception) {
             showToast("Bluetooth Discovery Request Sent")
-        }
-    }
-
-    fun cycleNextThemePreset() {
-        val presets = settings.themePresets
-        if (presets.isNotEmpty()) {
-            val nextIndex = (settings.currentPresetIndex + 1) % presets.size
-            val nextPreset = presets[nextIndex]
-            touchpadEngine.updateSettings(
-                settings.copy(
-                    backgroundTheme = nextPreset.theme,
-                    themeVariantIndex = nextPreset.variantIndex,
-                    customImageUri = nextPreset.customUri,
-                    currentPresetIndex = nextIndex
-                )
-            )
-            touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-            showToast("Theme Preset ${nextIndex + 1}/${presets.size}: ${nextPreset.theme.displayName}", Icons.Default.Palette)
         }
     }
 
@@ -183,9 +149,6 @@ fun TouchpadScreen(
                     hidManager.sendMouseInput(buttons = HidDescriptor.BUTTON_NONE, dx = 0, dy = 0)
                 }
             }
-            BallAction.CYCLE_THEME -> {
-                cycleNextThemePreset()
-            }
             BallAction.AMOLED_DIM -> {
                 isDimMode = !isDimMode
                 onDimModeChanged(isDimMode)
@@ -224,9 +187,15 @@ fun TouchpadScreen(
         BackgroundShaderCanvas(
             theme = settings.backgroundTheme,
             variantIndex = settings.themeVariantIndex,
-            touchPoints = activeTouchPoints,
+            touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
             customImageUri = settings.customImageUri,
             dimRatio = dimRatio,
+            animationSpeed = settings.backgroundAnimation.speed,
+            themeFilter = settings.themeFilter,
+            shaderTheme = settings.abstractShaderTheme,
+            shaderSubthemeIndex = settings.abstractSubthemeIndex,
+            shaderRecolor = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor),
+            customShaderColors = settings.customShaderColors,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -243,20 +212,13 @@ fun TouchpadScreen(
                 }
         )
 
-        // Layer 3: Multi-Touch Finger Effects Layer (Only if enabled)
-        if (settings.fingerEffectsEnabled && dimRatio < 0.8f) {
-            FingerEffectsLayer(
-                touchPoints = activeTouchPoints,
-                effect = settings.fingerEffect,
-                enabled = true,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Layer 4: Interactive Clock & Battery HUD Widget (Tap = Cycle Themes, Hold = Settings)
+        // Layer 3: touch effects are shader-space distortions inside the scene.
+        // Layer 4: Interactive Clock & Battery HUD Widget (Tap = AMOLED, Hold = Settings)
         ClockBatteryOverlay(
             clockStyle = settings.clockStyle,
-            positionXFraction = settings.clockPositionX,
+            // The main HUD is anchored to the physical cover-screen center. Its measured width is
+            // used by ClockBatteryOverlay, so battery/AM-PM content cannot shift it off-center.
+            positionXFraction = 0.5f,
             positionYFraction = settings.clockPositionY,
             clockScale = settings.clockScale,
             screenWidthPx = screenWidthPx,
@@ -268,7 +230,7 @@ fun TouchpadScreen(
             bluetoothState = bluetoothState,
             dimRatio = dimRatio,
             onTap = {
-                cycleNextThemePreset()
+                executeStickAction(BallAction.AMOLED_DIM)
             },
             onLongPress = {
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
@@ -287,14 +249,16 @@ fun TouchpadScreen(
         }
 
         // Layer 6: Pure Liquid Glass 2D Analog Stick (Single-Hand Scroll / Click Mastery)
-        if (!showScreenEditor && !settings.isLocked) {
+        if (!showScreenEditor && !settings.isLocked && settings.stickEnabled) {
+            val centeringStick = liveCalibrationMode == LiveCalibrationMode.STICK
             LiquidGlassAnalogStick(
                 stickSizeDp = settings.ballSizeDp,
-                positionXFraction = settings.ballPositionX,
-                positionYFraction = settings.ballPositionY,
+                positionXFraction = if (centeringStick) 0.5f else settings.ballPositionX,
+                positionYFraction = if (centeringStick) 0.5f else settings.ballPositionY,
                 screenWidthPx = screenWidthPx,
                 screenHeightPx = screenHeightPx,
                 mode = settings.analogStickMode,
+                theme = settings.stickTheme,
                 scrollSensitivity = settings.stickScrollSensitivity,
                 deadzone = settings.stickDeadzone,
                 isLocked = settings.isLocked,
@@ -355,11 +319,25 @@ fun TouchpadScreen(
                 onSettingsChange = { newSettings ->
                     touchpadEngine.updateSettings(newSettings)
                 },
+                onOpenThemeTester = {
+                    themeTesterOriginal = settings
+                    touchpadEngine.updateSettings(
+                        settings.copy(shaderRecolor = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor))
+                    )
+                    showSettingsSheet = false
+                    showThemeTester = true
+                },
                 onOpenScreenEditor = {
                     showScreenEditor = true
                 },
-                onPickCustomImage = {
-                    imagePickerLauncher.launch("image/*")
+                onOpenTrackpadTester = {
+                    liveCalibrationMode = LiveCalibrationMode.TRACKPAD
+                },
+                onOpenStickTester = {
+                    if (settings.analogStickMode != com.minimate.touchpad.model.AnalogStickMode.ANALOG_SCROLL) {
+                        touchpadEngine.updateSettings(settings.copy(analogStickMode = com.minimate.touchpad.model.AnalogStickMode.ANALOG_SCROLL))
+                    }
+                    liveCalibrationMode = LiveCalibrationMode.STICK
                 },
                 onConnectAddress = { address ->
                     hidManager.connectByAddress(address)
@@ -375,6 +353,33 @@ fun TouchpadScreen(
                     hidManager.refreshPairedDevices()
                 },
                 onDismiss = { showSettingsSheet = false }
+            )
+        }
+
+        liveCalibrationMode?.let { mode ->
+            LiveCalibrationOverlay(
+                mode = mode,
+                settings = settings,
+                onSettingsChange = touchpadEngine::updateSettings,
+                onDone = { liveCalibrationMode = null },
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+        }
+
+        if (showThemeTester) {
+            ThemeTesterOverlay(
+                settings = settings,
+                onSettingsChange = touchpadEngine::updateSettings,
+                onPreviewTouchEvent = touchpadEngine::onPreviewTouchEvent,
+                onKeep = {
+                    themeTesterOriginal = null
+                    showThemeTester = false
+                },
+                onCancel = {
+                    themeTesterOriginal?.let(touchpadEngine::updateSettings)
+                    themeTesterOriginal = null
+                    showThemeTester = false
+                }
             )
         }
 

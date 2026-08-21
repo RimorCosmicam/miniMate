@@ -13,49 +13,44 @@ enum class BackgroundTheme(
     val variantNames: List<String>
 ) {
     CHROME_FLUID(
-        "Liquid Cyber Chrome",
-        "Viscous metallic mercury with specular highlights and environmental reflection",
+        "Liquid Cyber Smoke",
+        "Volumetric turbulent smoke plumes and molten liquid chrome with metallic specular reflections",
         listOf("Mercury Silver", "Cyber Neon Pink", "Golden Amber")
     ),
-    DEEP_ABYSS(
-        "Bioluminescent Abyss",
-        "Deep marine dark waters with pulsing glowing jellyfish light scattering",
-        listOf("Electric Cyan", "Violet Deep", "Coral Glow")
+    NEBULA_SMOKE(
+        "Cosmic Nebula Vapor",
+        "Deep atmospheric galactic vapor clouds swirling with stellar gas and starlight",
+        listOf("Violet Void", "Cosmic Cyan", "Solar Flare")
     ),
-    HYPERDRIVE_WARP(
-        "Hyperdrive Warp Tunnel",
-        "Relativistic space warp tunnel with light speed celestial streaks",
-        listOf("Photon Blue", "Hyperspace Magenta", "Starlight Gold")
+    ABYSSAL_FLUID(
+        "Abyssal Bioluminescent Fluid",
+        "Dark deep-ocean fluid dynamics with radiant underwater pressure waves and vortex eddies",
+        listOf("Electric Cyan", "Abyss Violet", "Coral Luminescence")
     ),
-    AURORA_BOREALIS(
-        "Aurora Borealis",
-        "Silky curtains of polar northern lights dancing over starry skies",
-        listOf("Emerald Polar", "Cosmic Violet", "Arctic Cyan")
+    VOLCANIC_SMOKE(
+        "Molten Volcanic Smolder",
+        "Billowing subterranean volcanic smoke with convective magma heat glow",
+        listOf("Magma Ember", "Plasma Ash", "Obsidian Fire")
     ),
-    MAGMA_CORE(
-        "Molten Magma Fissures",
-        "Cracked glowing tectonic plates with subsurface convective heat glow",
-        listOf("Volcanic Fire", "Plasma Purple", "Solar White-Hot")
+    AURORA_CURRENTS(
+        "Polar Aurora Currents",
+        "Ethereal ionized atmospheric fluid curtains waving across space",
+        listOf("Emerald Polar", "Cosmic Magenta", "Arctic Teal")
     ),
-    HOLO_PRISM(
-        "Holographic Prismatic Glass",
-        "Crystal refractive facets with spectral rainbow dispersion and thin-film sheen",
-        listOf("Prism Rainbow", "Opal Pearl", "Obsidian Iridescent")
+    PRISM_OIL(
+        "Prismatic Oil Sheen",
+        "Iridescent thin-film interference fluid swirling on dark liquid with rainbow dispersion",
+        listOf("Prism Dispersion", "Opal Pearl", "Dark Obsidian")
     ),
-    SYNTHWAVE_3D(
-        "Retro Synthwave 3D",
-        "3D perspective wireframe terrain moving to infinity with glowing sun",
-        listOf("Outrun 1984", "Cyber Tokyo", "Blood Dusk")
+    GRAVITY_WARP(
+        "Dark Matter Spacetime Warp",
+        "Gravitational lensing fluid horizon warping spacetime around finger touches",
+        listOf("Singularity Blue", "Event Horizon Red", "Photon Gold")
     ),
-    SAKURA_BREEZE(
-        "Sakura Wind Breeze",
-        "Swirling cherry blossom petals caught in turbulent wind vortices",
-        listOf("Spring Cherry", "Midnight Blossom", "Sunset Sakura")
-    ),
-    MATRIX_CASCADE(
-        "Cyber Matrix Rain",
-        "Cascading digital glyph waterfalls glitching on touch",
-        listOf("Phosphor Green", "Amber CRT", "Cyan Ghost")
+    CYAN_VAPOR(
+        "Electric Cyan Vapor",
+        "High-energy ionized plasma vapor and turbulent atmospheric eddies",
+        listOf("Electric Cyan", "Neon Violet", "Supercharged Mint")
     ),
     STEALTH_OLED(
         "Stealth Titanium OLED",
@@ -66,20 +61,195 @@ enum class BackgroundTheme(
         "Custom Wallpaper / GIF",
         "User-selected photo or 60fps animated GIF from gallery",
         listOf("Original", "Dimmed 50%", "Vibrant")
+    ),
+    PIXEL_ARCADE(
+        "Arcade Attract Mode",
+        "Three original games play themselves: a falling-block puzzler, pixel football, and an alien cabinet shooter",
+        listOf("Block Drop Autoplay", "Pixel Cup Autoplay", "Alien Cabinet Autoplay")
+    ),
+    NEON_RACER(
+        "Neon Racer",
+        "A synth-speed horizon with luminous lanes, city light streaks, and endless velocity",
+        listOf("Coastal Sprint", "Midnight Traffic", "Desert Rally")
+    ),
+    LOW_POLY_REALMS(
+        "Pocket Game Realms",
+        "Tiny isometric worlds where villagers build, farm, and explore while the trackpad rests",
+        listOf("Village Builder", "Dungeon Party", "Alien Farm")
+    ),
+    JAZZ_CLUB(
+        "Midnight Jazz Session",
+        "A tiny animated trio trades piano, saxophone, and drum solos on a living club stage",
+        listOf("Blue Note Trio", "Velvet Brass", "After Hours Jam")
+    ),
+    SYNTH_WAVEFORM(
+        "Pocket Music Studio",
+        "An autoplaying step sequencer with notes, meters, turntables, and a moving playhead",
+        listOf("Lo-Fi Desk", "Disco Sequencer", "Bass Laboratory")
+    ),
+    COUTURE_SILK(
+        "Living Couture Runway",
+        "Original animated dress silhouettes cross a miniature runway as photographers flash",
+        listOf("Organza Runway", "Noir Salon", "Electric Atelier")
+    ),
+    MATRIX_BREAK(
+        "System Escape",
+        "A tiny pixel runner escapes scanning drones through a collapsing computer city",
+        listOf("Terminal Run", "Red Alert", "White Rabbit Protocol")
+    ),
+    ESCHER_PORTAL(
+        "Impossible Stairwalk",
+        "Small travelers continuously navigate an original looping impossible architecture",
+        listOf("Infinite Rooms", "Golden Staircase", "Violet Observatory")
+    ),
+    GALACTIC_NAVIGATOR(
+        "Living Space Program",
+        "Ships navigate, colony domes work, and orbital stations trade beneath blinking stars",
+        listOf("Starship Voyage", "Pixel Colony", "Orbital Port")
+    ),
+    EXOPLANET_HORIZON(
+        "Exoplanet Expedition",
+        "An autonomous rover surveys alien terrain, samples crystals, and calls its orbiter",
+        listOf("Titan Rover", "Twin-Sun Survey", "Emerald Eclipse Camp")
+    ),
+    KOI_LAGOON(
+        "Living Koi Garden",
+        "Koi weave through lotus pads, bridge shadows, falling petals, and touch-made ripples",
+        listOf("Moon Garden", "Golden Pond", "Sakura Bridge")
+    ),
+    HADAL_OCEAN(
+        "Hadal Expedition",
+        "A tiny research submarine explores jelly migrations, ruins, and hydrothermal vents",
+        listOf("Abyss Dive", "Jelly Migration", "Vent Discovery")
+    ),
+    CANDY_FACTORY(
+        "Candy Factory Shift",
+        "Conveyors sort sweets while gears turn, inspectors bounce, and wrapped candy ships",
+        listOf("Bubblegum Line", "Citrus Works", "Grape Night Shift")
+    ),
+    DESSERT_PLANET(
+        "Dessert Planet Platformer",
+        "A tiny pastry astronaut jumps between cake cliffs, mochi moons, and cookie platforms",
+        listOf("Strawberry Quest", "Matcha Moon", "Blueberry Kingdom")
+    ),
+    ROCOCO_GARDEN(
+        "Rococo Tea Garden",
+        "A living porcelain tea party with animated fountains, cake service, roses, and gilded pavilions",
+        listOf("Rose Tea Party", "Celadon Picnic", "Midnight Masquerade")
+    ),
+    LOLITA_LACE(
+        "Lolita Storybook",
+        "Original pixel friends in elaborate lace dresses share tea, browse an atelier, and promenade",
+        listOf("Sweet Tea Friends", "Gothic Atelier", "Classic Promenade")
+    ),
+    BEACH_WORLD(
+        "Endless Beach Day",
+        "Living coastlines seen from above: rolling tide, a busy tropical cove, and a reef lagoon",
+        listOf("Aerial Shoreline", "Tropical Cove", "Reef Lagoon")
+    ),
+    SCENERY_COAST(
+        "Azure Coast",
+        "Code-rendered high-resolution pixel coastline with living surf, boats, reef shadows, and changing light",
+        listOf("Sunlit Cove", "Golden Tide", "Moonlit Shore")
+    ),
+    SCENERY_ALPINE(
+        "Alpine Sanctuary",
+        "Layered mountain lake, waterfalls, pine silhouettes, cabin light, stars, and weather",
+        listOf("First Light", "Blue Hour Cabin", "Snowfall")
+    ),
+    SCENERY_RAIN_CITY(
+        "Rain City",
+        "A cinematic pixel metropolis with wet reflections, trains, windows, signs, and real rain depth",
+        listOf("Neon Rain", "Last Train", "Quiet Dawn")
+    ),
+    SCENERY_SAKURA(
+        "Sakura Valley",
+        "A hillside shrine landscape with drifting petals, river reflections, lanterns, and distant villages",
+        listOf("Spring Morning", "Lantern Evening", "Petal Storm")
+    ),
+    SCENERY_DESERT(
+        "Desert Monuments",
+        "Vast dunes, ancient silhouettes, caravan lights, heat shimmer, and a deep celestial sky",
+        listOf("Amber Crossing", "Violet Dusk", "Star Caravan")
+    ),
+    SCENERY_COSMOS(
+        "Cosmic Frontier",
+        "A detailed pixel vista of alien terrain, ringed worlds, distant stations, and luminous atmosphere",
+        listOf("Orbital Dawn", "Crystal Moon", "Eclipse Outpost")
     )
 }
 
-enum class FingerEffect(val displayName: String, val description: String) {
-    CHERRY_PETALS("Sakura Trail", "Floating flower petals bursting under fingers"),
-    BUBBLE_SPLASH("Soap Bubbles", "Cartoon bubbles that wobble and pop with highlights"),
-    CAT_PAW_PRINTS("Cat Paws", "Soft kitten paw prints stamped on touch"),
-    STAR_GLITTER("Star Glitter", "Sparkling fairy dust & star glitter trail"),
-    RAINBOW_RIBBON("Rainbow Ribbon", "Glowing fluid rainbow ribbon following drag"),
-    WATER_RIPPLES("Water Droplets", "Realistic concentric liquid water shockwaves"),
-    PLASMA_LIGHTNING("Plasma Bolts", "Electric neon energy arcs between contact points"),
-    NEON_RETICLE("Neon Reticle", "High-tech precision glowing crosshair target"),
-    FIRE_HEARTS("Floating Hearts", "Glowing heart sparks trailing touch movement"),
-    MINIMAL_DOT("Clean Dot", "Minimalist precision micro-dot with zero clutter")
+enum class ThemeCollection(val label: String, val tagline: String) {
+    ABSTRACTS("Abstracts", "Fluid matter, light, smoke, and color"),
+    ARCADE("Arcade", "Pixels, cabinets, speed, and play"),
+    GAME_WORLDS("Game Worlds", "Playable landscapes beyond the glass"),
+    SOUND_AND_SOUL("Sound & Soul", "Jazz, rhythm, and living waveforms"),
+    FASHION("Fashion", "Digital couture and impossible materials"),
+    EXPERIMENTAL("Experimental", "Reality-breaking visual laboratories"),
+    SPACE("Space", "Star charts, exoplanets, and cosmic navigation"),
+    OCEAN("Ocean", "Dream lagoons and the living abyss"),
+    CANDY("Candy", "Sugar physics and confectionery planets"),
+    ROCOCO_LOLITA("Rococo Lolita", "Ornament, lace, porcelain, and fantasy couture"),
+    BEACH("Beach", "Aerial shores, living coves, and reef lagoons"),
+    SCENERY("Scenery", "Authored high-resolution pixel landscapes")
+}
+
+val BackgroundTheme.collection: ThemeCollection
+    get() = when (this) {
+        BackgroundTheme.PIXEL_ARCADE -> ThemeCollection.ARCADE
+        BackgroundTheme.NEON_RACER, BackgroundTheme.LOW_POLY_REALMS -> ThemeCollection.GAME_WORLDS
+        BackgroundTheme.JAZZ_CLUB, BackgroundTheme.SYNTH_WAVEFORM -> ThemeCollection.SOUND_AND_SOUL
+        BackgroundTheme.COUTURE_SILK -> ThemeCollection.FASHION
+        BackgroundTheme.MATRIX_BREAK, BackgroundTheme.ESCHER_PORTAL -> ThemeCollection.EXPERIMENTAL
+        BackgroundTheme.GALACTIC_NAVIGATOR, BackgroundTheme.EXOPLANET_HORIZON -> ThemeCollection.SPACE
+        BackgroundTheme.KOI_LAGOON, BackgroundTheme.HADAL_OCEAN -> ThemeCollection.OCEAN
+        BackgroundTheme.CANDY_FACTORY, BackgroundTheme.DESSERT_PLANET -> ThemeCollection.CANDY
+        BackgroundTheme.ROCOCO_GARDEN, BackgroundTheme.LOLITA_LACE -> ThemeCollection.ROCOCO_LOLITA
+        BackgroundTheme.BEACH_WORLD -> ThemeCollection.BEACH
+        BackgroundTheme.SCENERY_COAST,
+        BackgroundTheme.SCENERY_ALPINE,
+        BackgroundTheme.SCENERY_RAIN_CITY,
+        BackgroundTheme.SCENERY_SAKURA,
+        BackgroundTheme.SCENERY_DESERT,
+        BackgroundTheme.SCENERY_COSMOS -> ThemeCollection.SCENERY
+        else -> ThemeCollection.ABSTRACTS
+    }
+
+val BackgroundTheme.isScenery: Boolean
+    get() = collection == ThemeCollection.SCENERY
+
+val userFacingThemes: List<BackgroundTheme> = BackgroundTheme.values().filter {
+    it.ordinal <= BackgroundTheme.CUSTOM_IMAGE.ordinal || it.isScenery
+}
+
+val userFacingCollections: List<ThemeCollection> = listOf(ThemeCollection.ABSTRACTS, ThemeCollection.SCENERY)
+
+enum class BackgroundAnimation(val label: String, val description: String, val speed: Float) {
+    FROZEN("Still Frame", "A composed, nearly motionless artwork", 0f),
+    DREAM("Slow Dream", "Quiet cinematic drift", 0.32f),
+    FLOW("Living Flow", "Balanced ambient motion", 1f),
+    PULSE("Pulse", "Expressive rhythmic energy", 1.65f),
+    HYPER("Hyperdrive", "Maximum experimental velocity", 2.75f)
+}
+
+enum class ThemeFilter(val label: String, val description: String) {
+    NONE("Clean", "The world exactly as authored"),
+    CHROMATIC("Chromatic", "RGB lens separation and subtle edge distortion"),
+    CRT("CRT", "Scanlines, phosphor shimmer, and curved-screen vignette"),
+    VHS("VHS", "Tape jitter, tracking lines, and soft color drift"),
+    PIXELATE("Pixelate", "Turns every world into chunky display pixels"),
+    DREAM_BLOOM("Dream Bloom", "Soft luminous highlights and a hazy lens"),
+    MONO_INK("Mono Ink", "High-contrast monochrome editorial treatment"),
+    KALEIDOSCOPE("Kaleidoscope", "Mirrored radial sectors turn the scene into moving glass"),
+    FISHEYE("Fisheye", "Strong optical barrel curvature with edge compression"),
+    HALFTONE("Halftone", "Printed-dot screening driven by the scene luminance"),
+    THERMAL("Thermal", "False-color infrared mapping from cold violet to white heat"),
+    NEGATIVE("Negative", "A clean photographic color inversion"),
+    POSTERIZE("Posterize", "Hard tonal bands with graphic screen-print contrast"),
+    FILM_GRAIN("35mm Film", "Organic grain, gate weave, vignette, and warm highlights"),
+    MIRROR_PRISM("Mirror Prism", "Angular mirrored facets fracture the complete scene"),
+    LIQUID_GLASS("Liquid Glass", "Animated refraction bends the artwork like thick glass"),
+    NIGHT_VISION("Night Vision", "Green phosphor response, bloom, noise, and edge falloff")
 }
 
 enum class AnalogStickMode(val label: String, val description: String) {
@@ -88,26 +258,32 @@ enum class AnalogStickMode(val label: String, val description: String) {
     VIRTUAL_DPAD("Directional D-Pad", "Push up/down/left/right to trigger page scroll & navigation")
 }
 
+enum class StickTheme(val label: String, val description: String) {
+    PRECISION_DISC("Optical Glass", "Clear precision glass with a quiet cyan edge"),
+    ALUMINUM_DIAL("Brushed Titanium", "Cool architectural metal and restrained highlights"),
+    CLASSIC_TRACKBALL("Cobalt Lens", "Deep optical blue suspended inside smoked glass"),
+    ARCADE_BALL("Obsidian Lens", "Near-black glass with a warm internal reflection"),
+    PIXEL_DPAD("Jade Glass", "Dark mineral green with a clean luminous edge"),
+    VINYL_JOG("Smoked Quartz", "Neutral charcoal crystal with fine concentric depth"),
+    CANDY_CAP("Ruby Glass", "Dense wine-red optical glass without playful ornament"),
+    CAMEO_SEAL("Champagne Crystal", "Warm translucent mineral glass and pale gold light")
+}
+
 enum class BallAction(val label: String, val description: String) {
     MIDDLE_CLICK("Middle Click (M3)", "Emits standard mouse middle button (Scroll Click)"),
     RIGHT_CLICK("Right Click", "Emits secondary mouse click"),
     LEFT_CLICK("Left Click", "Emits primary mouse click"),
     BACK_BUTTON("Back Button (M4)", "Emits browser/app Back mouse button 4"),
     FORWARD_BUTTON("Forward Button (M5)", "Emits browser/app Forward mouse button 5"),
-    CYCLE_THEME("Cycle Theme Preset", "Instantly switches to next saved theme preset"),
     AMOLED_DIM("Amoled Mode", "Toggles display to pure black battery saver"),
-    OPEN_SETTINGS("Open Settings", "Opens the 3-tab Control Center"),
-    PAIRING_MODE("Pairing Hub", "Opens Bluetooth device manager"),
+    OPEN_SETTINGS("Open Settings", "Opens the Control Center"),
+    PAIRING_MODE("Pairing Hub", "Opens Bluetooth device manager tab"),
     SCREEN_EDITOR("Screen Editor", "Enables freeform dragging & resizing of UI elements"),
     LIQUID_WOBBLE("Liquid Ripple", "Plays elastic liquid glass fluid wave animation"),
     DISABLED("Disabled", "No action performed")
 }
 
-data class ThemePreset(
-    val theme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,
-    val variantIndex: Int = 0,
-    val customUri: String? = null
-)
+val DEFAULT_CUSTOM_SHADER_COLORS = listOf(0xFF02080AL, 0xFF0B5056L, 0xFF25D8C7L, 0xFFF4FFFFL)
 
 enum class ClockStyle(val label: String) {
     MINIMAL_PILL("Glass Pill"),
@@ -132,42 +308,41 @@ data class TouchpadSettings(
     val edgeMarginDp: Float = 12f,
     val hapticIntensity: HapticIntensity = HapticIntensity.CRISP,
     
-    // Active theme & 5 quick presets
+    // One active shader configuration. Theme Studio edits this directly.
     val backgroundTheme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,
     val themeVariantIndex: Int = 0,
+    val backgroundAnimation: BackgroundAnimation = BackgroundAnimation.FLOW,
+    val themeFilter: ThemeFilter = ThemeFilter.NONE,
+    val abstractShaderTheme: AbstractShaderTheme = AbstractShaderTheme.OCEANIC,
+    val abstractSubthemeIndex: Int = 0,
+    val shaderRecolor: ShaderRecolor = ShaderRecolor.AUTHORED,
+    val customShaderColors: List<Long> = DEFAULT_CUSTOM_SHADER_COLORS,
     val customImageUri: String? = null,
-    val themePresets: List<ThemePreset> = listOf(
-        ThemePreset(BackgroundTheme.CHROME_FLUID, 0),
-        ThemePreset(BackgroundTheme.DEEP_ABYSS, 0),
-        ThemePreset(BackgroundTheme.HYPERDRIVE_WARP, 0),
-        ThemePreset(BackgroundTheme.AURORA_BOREALIS, 0),
-        ThemePreset(BackgroundTheme.STEALTH_OLED, 0)
-    ),
-    val currentPresetIndex: Int = 0,
-    val fingerEffect: FingerEffect = FingerEffect.CHERRY_PETALS,
-    val fingerEffectsEnabled: Boolean = false,
+    val fingerEffectsEnabled: Boolean = true, // Shaders react directly to touch
     
     // Analog Stick Configurations (Single Hand Mastery)
     val analogStickMode: AnalogStickMode = AnalogStickMode.ANALOG_SCROLL,
+    val stickEnabled: Boolean = true,
+    val stickTheme: StickTheme = StickTheme.PRECISION_DISC,
     val stickSingleTapAction: BallAction = BallAction.MIDDLE_CLICK,
     val stickDoubleTapAction: BallAction = BallAction.RIGHT_CLICK,
     val stickHoldAction: BallAction = BallAction.AMOLED_DIM,
-    val stickScrollSensitivity: Float = 1.0f,
-    val stickDeadzone: Float = 0.10f,
+    val stickScrollSensitivity: Float = 0.40f, // Calibrated comfortable sensitivity
+    val stickDeadzone: Float = 0.12f,
     
-    // Screen Editor: Freeform Positions & Sizes (Normalized 0.0..1.0 coordinates and dp sizes)
-    val ballPositionX: Float = 0.15f, // Left side comfortable for thumb
-    val ballPositionY: Float = 0.82f, // Bottom corner
-    val ballSizeDp: Float = 64f, // 64dp analog stick base
+    // Screen Editor: Freeform Positions & Sizes
+    val ballPositionX: Float = 0.15f,
+    val ballPositionY: Float = 0.82f,
+    val ballSizeDp: Float = 56f,
     
-    val clockPositionX: Float = 0.50f, // Centered horizontally
-    val clockPositionY: Float = 0.09f, // Near top
+    val clockPositionX: Float = 0.50f,
+    val clockPositionY: Float = 0.09f,
     val clockScale: Float = 1.0f,
     
     val isLocked: Boolean = false,
     val isEditorMode: Boolean = false,
     
-    // Clock & HUD customization (Tap = Cycle Theme, Hold = Open Settings)
+    // Clock & HUD customization (Tap = AMOLED, Hold = Open Settings)
     val clockStyle: ClockStyle = ClockStyle.MINIMAL_PILL,
     val show24HourFormat: Boolean = false,
     val showSeconds: Boolean = false,

@@ -33,9 +33,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothUiState
@@ -54,7 +56,7 @@ import kotlin.math.roundToInt
 
 /**
  * Interactive Clock & Battery HUD Widget.
- * - Tap: Cycle Theme Preset
+ * - Tap: Toggle AMOLED mode immediately
  * - Hold: Open Settings Control Center
  */
 @Composable
@@ -80,6 +82,7 @@ fun ClockBatteryOverlay(
     var currentTimeText by remember { mutableStateOf("") }
     var currentAmPm by remember { mutableStateOf("") }
     var isPressed by remember { mutableStateOf(false) }
+    var measuredSize by remember { mutableStateOf(IntSize.Zero) }
 
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.94f else 1.0f,
@@ -109,14 +112,17 @@ fun ClockBatteryOverlay(
         }
     }
 
-    val widgetWidth = (145f * clockScale) * 2.7f
-    val widgetHeight = (38f * clockScale) * 2.7f
-    val posX = (positionXFraction * screenWidthPx - widgetWidth / 2f).coerceIn(8f, screenWidthPx - widgetWidth - 8f)
-    val posY = (positionYFraction * screenHeightPx - widgetHeight / 2f).coerceIn(8f, screenHeightPx - widgetHeight - 8f)
+    val widgetWidth = measuredSize.width.toFloat()
+    val widgetHeight = measuredSize.height.toFloat()
+    val posX = (positionXFraction * screenWidthPx - widgetWidth / 2f)
+        .coerceIn(8f, (screenWidthPx - widgetWidth - 8f).coerceAtLeast(8f))
+    val posY = (positionYFraction * screenHeightPx - widgetHeight / 2f)
+        .coerceIn(8f, (screenHeightPx - widgetHeight - 8f).coerceAtLeast(8f))
 
     Box(
         modifier = modifier
             .offset { IntOffset(posX.roundToInt(), posY.roundToInt()) }
+            .onSizeChanged { measuredSize = it }
             .scale(clockScale * pressScale)
             .shadow(12.dp, RoundedCornerShape(18.dp), spotColor = AccentCyan.copy(alpha = 0.35f))
             .pointerInput(Unit) {

@@ -42,8 +42,8 @@ class PhysicsMomentumScroller(
                 val dt = frameIntervalMs / 1000f
 
                 // Convert velocity (pixels/sec) to scroll steps
-                val stepY = (vy * dt * 0.04f * sign) + subpixelV
-                val stepX = (vx * dt * 0.04f * sign) + subpixelH
+                val stepY = (vy * dt * 0.0035f * sign) + subpixelV
+                val stepX = (vx * dt * 0.0035f * sign) + subpixelH
 
                 val intY = stepY.toInt()
                 val intX = stepX.toInt()

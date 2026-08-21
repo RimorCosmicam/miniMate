@@ -19,16 +19,14 @@ class HidReportTest {
 
         assertEquals(HidReport.REPORT_MOUSE_SIZE.toLong(), report.size.toLong())
         assertEquals(0x03.toByte(), report[0]) // Buttons Left (0x01) + Right (0x02)
-        assertEquals(0x00.toByte(), report[1]) // dx low
-        assertEquals(0x00.toByte(), report[2]) // dx high
-        assertEquals(0x00.toByte(), report[3]) // dy low
-        assertEquals(0x00.toByte(), report[4]) // dy high
-        assertEquals(0x00.toByte(), report[5]) // wheel
-        assertEquals(0x00.toByte(), report[6]) // pan
+        assertEquals(0x00.toByte(), report[1]) // dx
+        assertEquals(0x00.toByte(), report[2]) // dy
+        assertEquals(0x00.toByte(), report[3]) // wheel
+        assertEquals(0x00.toByte(), report[4]) // pan
     }
 
     @Test
-    fun testMouseReport16BitDeltaPacking() {
+    fun testMouseReportAxisOrderAndClamping() {
         val report = HidReport.createMouseReport(
             buttons = HidDescriptor.BUTTON_NONE,
             dx = 300,
@@ -37,16 +35,10 @@ class HidReportTest {
             pan = -3
         )
 
-        // 300 = 0x012C -> low: 0x2C, high: 0x01
-        assertEquals(0x2C.toByte(), report[1])
-        assertEquals(0x01.toByte(), report[2])
-
-        // -500 = 0xFE0C -> low: 0x0C, high: 0xFE
-        assertEquals(0x0C.toByte(), report[3])
-        assertEquals(0xFE.toByte(), report[4])
-
-        assertEquals(5.toByte(), report[5])
-        assertEquals((-3).toByte(), report[6])
+        assertEquals(127.toByte(), report[1])
+        assertEquals((-127).toByte(), report[2])
+        assertEquals(5.toByte(), report[3])
+        assertEquals((-3).toByte(), report[4])
     }
 
     @Test

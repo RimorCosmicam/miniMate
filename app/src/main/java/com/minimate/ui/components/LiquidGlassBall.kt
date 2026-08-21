@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brightness2
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -56,7 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.ui.theme.AccentBlue
 import com.minimate.ui.theme.AccentCyan
-import com.minimate.ui.theme.AccentEmerald
 import com.minimate.ui.theme.AccentPink
 import com.minimate.ui.theme.TextPrimary
 import com.minimate.ui.theme.TextSecondary
@@ -65,8 +63,7 @@ import kotlin.math.roundToInt
 enum class LiquidMenuAction {
     LOCK,
     AMOLED_MODE,
-    SETTINGS,
-    THEME_CYCLE
+    SETTINGS
 }
 
 /**
@@ -79,8 +76,6 @@ fun LiquidGlassBall(
     isDimMode: Boolean,
     isLocked: Boolean,
     showAmoledInMenu: Boolean,
-    presetIndex: Int,
-    totalPresets: Int,
     ballSizeDp: Float,
     positionXFraction: Float,
     positionYFraction: Float,
@@ -104,14 +99,13 @@ fun LiquidGlassBall(
     val itemBounds = remember { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
 
     // Items present in menu
-    val menuItems = remember(showAmoledInMenu, isDimMode, presetIndex, totalPresets) {
+    val menuItems = remember(showAmoledInMenu, isDimMode) {
         mutableListOf<Pair<LiquidMenuAction, Triple<String, String, ImageVector>>>().apply {
             add(LiquidMenuAction.LOCK to Triple("Lock Trackpad", "Hardware Vol unlock", Icons.Default.Lock))
             if (showAmoledInMenu) {
                 add(LiquidMenuAction.AMOLED_MODE to Triple("Amoled Mode", if (isDimMode) "Active" else "OLED black", if (isDimMode) Icons.Default.Brightness2 else Icons.Default.DarkMode))
             }
             add(LiquidMenuAction.SETTINGS to Triple("Settings", "Control center", Icons.Default.Settings))
-            add(LiquidMenuAction.THEME_CYCLE to Triple("Theme Preset", "Slot ${presetIndex + 1}/$totalPresets", Icons.Default.Palette))
         }
     }
 
@@ -345,7 +339,6 @@ fun LiquidGlassBall(
                             LiquidMenuAction.LOCK -> Color(0xFFEF4444)
                             LiquidMenuAction.AMOLED_MODE -> if (isDimMode) AccentPink else AccentCyan
                             LiquidMenuAction.SETTINGS -> AccentBlue
-                            LiquidMenuAction.THEME_CYCLE -> AccentEmerald
                         }
 
                         Row(
