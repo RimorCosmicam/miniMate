@@ -1,99 +1,123 @@
-# Minimate
-> **High-performance wireless Bluetooth trackpad engineered for the Samsung Galaxy Z Flip cover screen.**
+# MiniMate
 
-Minimate turns the Samsung Galaxy Z Flip Flex Window into an ultra-responsive, physics-modeled wireless trackpad for **macOS, iPadOS, Windows, Linux, and Android**.
+MiniMate turns the Samsung Galaxy Z Flip cover display into a Bluetooth HID trackpad, scroll controller, and procedural artwork surface. It is designed specifically around the Galaxy Z Flip 7 FlexWindow and connects to macOS, Windows, Linux, iPadOS, and Android without host-side companion software.
 
-Designed with the precision, tactile feedback, and fluid momentum of standard glass trackpads, Minimate connects directly as a standard **Bluetooth HID (Human Interface Device)** with **zero companion software required** on the host machine.
+The project is an experimental, privately distributed Android application. It is not prepared for Google Play distribution.
 
----
+## What it does
 
-## Architecture & Features
+- Advertises as a standard Bluetooth mouse using Android's HID device APIs.
+- Provides one-finger pointer movement, tap-to-click, double-tap drag, two-finger scrolling, and two-finger secondary click.
+- Sends vertical wheel and horizontal pan reports independently.
+- Includes momentum scrolling, configurable filtering, acceleration, natural scrolling, edge rejection, and haptic feedback.
+- Provides an optional analog controller for continuous two-dimensional scrolling, cursor movement, or directional-pad navigation.
+- Locks the activity orientation so the cover-screen coordinate system does not rotate.
+- Uses a single active theme configuration rather than theme presets.
+- Toggles AMOLED mode immediately when the clock pill is tapped.
 
-### 1. The Floating Interaction Ball
-Located in the bottom-left corner of the cover screen, the ball is the primary tactile controller:
-- **Instant Touch Down Response**: Low-level pointer event polling ensures instantaneous tactile scaling and haptic feedback on touch down.
-- **Hold & Slide Radial Action Arc**:
-  - **Pair**: Opens the dedicated in-app Bluetooth Pairing Hub and discovery manager.
-  - **Settings**: Opens the 4-tab translucent control center (Themes, Touch FX, Clock & HUD, Settings).
-  - **Themes**: Cycles through live procedural GPU shader backgrounds.
-  - **Lock**: Hides the ball completely for 100% full-screen touch immersion.
-- **Configurable Single-Tap Action**: Instant trigger for Stealth Dim, Menu, Pairing Hub, or Middle Click without dragging.
+## Procedural Theme System
 
-### 2. Physical Hardware Unlock
-When in **Locked Mode**, the UI disappears completely for uninterrupted full-display touch operation.
-- **To Unlock**: Press **Volume Up (+)** and **Volume Down (-)** simultaneously.
-- Instantly restores controls with confirming haptic pulses and transient HUD toast.
+MiniMate contains 50 code-generated scenes organized into five worlds:
 
----
+- **Space** — star travel, astronomical bodies, nebulae, planetary horizons, and spacecraft.
+- **Abstract** — cellular geometry, marble, moiré, woven fields, topography, and mathematical membranes.
+- **Tech** — several Matrix alphabets, code fields, diagnostic displays, and signal treatments.
+- **Arcade** — deterministic miniature game loops inspired by puzzle, racing, football, brick-breaking, maze, crossing, snake, pinball, and platform games.
+- **Beach** — aerial coastlines, open-water horizons, coral ecosystems, tidepools, palm beaches, bioluminescent surf, kelp forests, dunes, storms, and underwater environments.
 
-## Live Procedural AGSL Shaders & Touch Effects
+Scenes are rendered at runtime with Android Graphics Shading Language. They do not use full-scene photographs or generated background images. Arcade scenes contain repeatable state progression rather than unrelated animated decorations: objects are collected or destroyed, routes remain legal, rounds reset, and motion follows each game's rules.
 
-### Procedural Background Shaders (3 Color Palettes Each)
-1. **Sakura Petals**: Procedural parametric cherry blossoms drifting with dynamic wind turbulence.
-2. **Bubble Aquarium**: Transparent spherical refraction bubbles with Fresnel highlights and touch bursts.
-3. **Cat Paw Cafe**: Procedural kitten paw print stamps with drifting particle trails.
-4. **Prism Waves**: Iridescent chromatic diffraction and fluid ribbon harmonics.
-5. **Matcha Latte Art**: Viscous fluid dynamics simulation creating creamy latte froth swirls.
-6. **Retro 8-Bit**: Procedural pixel starfield, arcade blocks, and CRT scanlines.
-7. **Bioluminescent Sea**: Caustic sun rays and aquatic shockwaves on touch.
-8. **Jelly Mochi**: Elastic jiggling grid mesh with specular glossy highlights.
-9. **Cosmic Galaxy**: Rotating spiral nebula vortex with twinkling star clusters.
-10. **Stealth Titanium**: Brushed titanium micro-texture with pure OLED power-saver mode.
-11. **Custom Wallpaper**: Load any image or animated GIF from local gallery.
+Every scene includes authored colorways. Compatible scenes also expose a four-role custom palette. Motion speed and the following full-scene filters can be combined independently:
 
-### Multi-Touch Finger Effects
-1. **Sakura Trail**: Floating flower petals under active contact points.
-2. **Soap Bubbles**: Wobbling cartoon soap bubbles with specular shines.
-3. **Cat Paws**: Soft kitten paw prints stamped on touch.
-4. **Star Glitter**: Twinkling fairy dust and star glitter trails.
-5. **Rainbow Ribbon**: Concentric glowing fluid rainbow rings.
-6. **Water Droplets**: Liquid concentric expanding shockwaves.
-7. **Plasma Bolts**: Electric neon energy arcs linking multi-touch fingers.
-8. **Neon Reticle**: Precision targeting crosshair reticle.
-9. **Floating Hearts**: Glowing love heart particles trailing finger drag.
-10. **Clean Dot**: Minimalist precision micro-dots.
+- Chromatic lens separation
+- CRT
+- VHS
+- Pixelation
+- Dream bloom
+- Monochrome ink
+- Kaleidoscope
+- Fisheye
+- Halftone
+- Thermal
+- Negative
+- Posterize
+- 35 mm film
+- Mirror prism
+- Liquid glass
+- Night vision
 
----
+### Scene-native touch interaction
 
-## Clock & Battery HUD Customization
+Touch input is passed into the shader rather than rendered as a cursor or particle layer. Scenes can bend geometry, redirect currents, focus interference patterns, move game controls, disturb water, or leave persistent changes. The eight most recent released contacts remain available as scene memory until newer contacts replace them.
 
-Configurable HUD widget overlay:
-- **Styles**: Glass Pill, Bold Digital, Clean Sans, Retro Monospace, Hidden.
-- **Positions**: Top Left, Top Center, Top Right, Bottom Right, Bottom Center.
-- **Time Formats**: 12-Hour (AM/PM) and 24-Hour Military Format, Optional live seconds ticker.
-- **Battery Indicator**: Real-time connected host and phone battery percentage.
+## Theme Studio
 
----
+Theme Studio previews changes directly on the trackpad surface. Its neutral dark-glass controller stays in the lower-left portion of the cover screen, leaving the right-side camera area and most of the artwork unobstructed.
 
-## High-Precision Touchpad Engine
+The controller provides direct selectors for:
 
-- **Sub-Millisecond Sampling**: Ingests historical digitizer points (`MotionEvent.getHistoricalX/Y`).
-- **1€ Filter Delta Smoothing**: Adaptive dual-cutoff jitter filter that eliminates finger tremors at slow speeds without adding phase lag during fast flicks.
-- **Dynamic Acceleration Curve**: Non-linear power-law curve with sub-pixel carryover accumulator.
-- **Correct Coordinate Mapping**: Natural scrolling applies strictly to 2-finger scrolling; 1-finger cursor movement tracks 1:1 with natural finger orientation.
-- **Kinetic Momentum Scrolling**: Physics-based fluid inertial deceleration when lifting fingers during a scroll.
-- **Gestures**:
-  - **1-Finger Move**: Precision pointer tracking.
-  - **1-Finger Tap**: Left click with crisp haptic response.
-  - **1-Finger Double-Tap & Drag**: Double-tap lock to drag windows and files.
-  - **2-Finger Scroll**: Vertical scrolling and horizontal pan.
-  - **2-Finger Tap**: Secondary / Right click.
-  - **Bezel Palm Rejection**: Filters accidental edge contacts along the Z Flip cover frame.
+- World
+- Scene
+- Colorway or custom colors
+- Motion
+- Filter
+- Analog-stick appearance
 
----
+The clock pill and analog stick are hidden while Theme Studio is open. The uncovered canvas remains touch-interactive during editing. Changes can be kept or reverted from the same compact panel.
 
-## Building & Installation
+## Trackpad engine
+
+The input pipeline consumes Android historical pointer samples and maintains independent state for pointer movement, multi-touch gestures, and shader interaction.
+
+- Adaptive low-speed smoothing with responsive fast movement
+- Configurable pointer acceleration and tracking speed
+- Correctly separated cursor, wheel, and horizontal-pan axes
+- Two-finger momentum with tunable friction
+- Sub-pixel motion accumulation
+- Tap, secondary tap, and double-tap drag recognition
+- Edge rejection for the cover-display bezel
+- HID button support for left, middle, right, back, and forward
+
+The analog controller defaults to scrolling. Its sensitivity and deadzone are configurable, it can be disabled, and tap/hold gestures can be assigned independently.
+
+## Interface
+
+The main menu uses a single-pane, neutral liquid-glass layout with three primary areas:
+
+- **Themes** — opens Theme Studio.
+- **Mouse** — movement, gestures, scrolling, analog controller, and live calibration.
+- **Pairing** — discoverability, saved hosts, connection state, and reconnection controls.
+
+Trackpad-speed calibration returns to the live surface so changes can be tested immediately. Stick calibration centers the controller and hides overlapping configuration UI.
+
+## Requirements
+
+- Samsung Galaxy Z Flip 7 is the primary target.
+- Android 9 / API 28 or newer.
+- Bluetooth HID device support on the phone firmware.
+- Android 12 and newer require Nearby Devices permissions.
+- JDK 17 and Android SDK 35 for local builds.
+
+Other Android devices may run the application, but layout, camera avoidance, performance decisions, and interaction geometry are tuned for the Z Flip 7 cover display.
+
+## Build and test
 
 ```bash
-# Build Debug & Release APKs
 chmod +x gradlew
-./gradlew test assembleDebug assembleRelease
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
-Compiled APK artifacts:
-- **Debug**: `app/build/outputs/apk/debug/app-debug.apk`
-- **Release**: `app/build/outputs/apk/release/app-release.apk`
 
----
+Artifacts are written to:
 
-## Automated GitHub Actions
-Automated APK compilation and verification runs on every push via `.github/workflows/build.yml`.
+- `app/build/outputs/apk/debug/app-debug.apk`
+- `app/build/outputs/apk/release/app-release.apk`
+
+The current release build uses the debug signing configuration. Replace it with a private release keystore before distributing the APK outside development devices.
+
+## Continuous integration
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs unit tests and creates debug and release APK artifacts for pushes and pull requests targeting `main` or `master`. Tagged builds beginning with `v` run through the same pipeline.
+
+## Source acknowledgements
+
+Procedural techniques adapted from third-party open-source projects are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). MiniMate's scene renderer remains code-generated and does not bundle downloaded full-scene artwork.

@@ -4,7 +4,7 @@ enum class AbstractShaderTheme(val label: String, val description: String) {
     COSMIC("Space", "Astronomical scenes and deep-space journeys"),
     PRISMATIC("Abstract", "Mathematical light, geometry, fields, and materials"),
     TECH("Tech", "Computing systems, instruments, signals, and code"),
-    ARCADE("Arcade", "Playable-looking scenes built from licensed game-art packs"),
+    ARCADE("Arcade", "Deterministic miniature game loops rendered entirely in code"),
     OCEANIC("Beach", "Shorelines, reefs, pools, surf, and underwater light")
 }
 

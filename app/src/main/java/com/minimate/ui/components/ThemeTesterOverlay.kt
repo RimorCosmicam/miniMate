@@ -36,7 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +60,7 @@ private enum class StudioPicker(val label: String) {
     MOTION("Motion"), FILTER("Filter"), STICK("Stick")
 }
 
-/** A two-row direct picker: no hidden cycle order and almost no artwork occlusion. */
+/** Camera-safe Theme Studio: compact bottom-left glass controls over a full-screen live canvas. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ThemeTesterOverlay(
@@ -75,30 +77,44 @@ fun ThemeTesterOverlay(
     val subtheme = subthemesFor(settings.abstractShaderTheme)
         .getOrElse(settings.abstractSubthemeIndex) { subthemesFor(settings.abstractShaderTheme).first() }
 
-    Box(modifier.fillMaxSize().displayCutoutPadding().navigationBarsPadding()) {
+    Box(modifier.fillMaxSize().navigationBarsPadding()) {
         Box(Modifier.fillMaxSize().pointerInteropFilter { onPreviewTouchEvent(it) })
 
-        Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            EdgeAction(Icons.Default.Close, "Revert", Color(0xD617181A), onCancel)
-            Column(Modifier.weight(1f).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${settings.abstractShaderTheme.label} · ${subtheme.label}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor).label, color = Color.White.copy(.7f), fontSize = 8.5.sp, maxLines = 1)
-            }
-            EdgeAction(Icons.Default.Check, "Keep", Color(0xE629292C), onKeep)
-        }
-
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xE0101113), RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).padding(vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(.68f)
+                .displayCutoutPadding()
+                .padding(start = 10.dp, bottom = 10.dp)
+                .shadow(22.dp, RoundedCornerShape(22.dp), spotColor = Color.Black)
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xE91D1E20), Color(0xF2141517))
+                    )
+                )
+                .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(22.dp))
+                .padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(horizontal = 3.dp)) {
+                    Text(settings.abstractShaderTheme.label.uppercase(), color = Color.White.copy(.58f), fontSize = 7.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text(subtheme.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor).label, color = Color.White.copy(.62f), fontSize = 8.sp, maxLines = 1)
+                }
+                EdgeAction(Icons.Default.Close, "", Color.Transparent, onCancel)
+                Spacer(Modifier.width(4.dp))
+                EdgeAction(Icons.Default.Check, "", Color.White.copy(.12f), onKeep)
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 StudioPicker.values().forEach { value -> DirectChip(value.label, picker == value) { picker = value } }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0x4D000000)).padding(vertical = 5.dp)
+            ) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 when (picker) {
                     StudioPicker.THEME -> AbstractShaderTheme.values().forEach { theme ->
                         DirectChip(theme.label, settings.abstractShaderTheme == theme) {
@@ -131,6 +147,7 @@ fun ThemeTesterOverlay(
                         DirectChip(theme.label, settings.stickTheme == theme) { onSettingsChange(settings.copy(stickTheme = theme)) }
                     }
                 }
+            }
             }
             if (picker == StudioPicker.RECOLOR && settings.shaderRecolor == com.minimate.touchpad.model.ShaderRecolor.CUSTOM) {
                 CustomPaletteEditor(settings.customShaderColors, customRole, { customRole = it }) { colors ->
@@ -176,20 +193,22 @@ private fun CompactColorSlider(label: String, value: Float, range: ClosedFloatin
 @Composable
 private fun DirectChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.clip(CircleShape).background(if (selected) Color.White else Color(0xFF202124))
-            .border(1.dp, if (selected) Color.White else Color(0x28FFFFFF), CircleShape)
-            .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 6.dp)
-    ) { Text(label, color = if (selected) Color(0xFF111214) else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+        Modifier.clip(RoundedCornerShape(10.dp)).background(if (selected) Color.White else Color.Transparent)
+            .border(1.dp, if (selected) Color.White else Color(0x22FFFFFF), RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick).padding(horizontal = 9.dp, vertical = 5.dp)
+    ) { Text(label, color = if (selected) Color(0xFF111214) else Color.White.copy(.78f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
 }
 
 @Composable
 private fun EdgeAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, onClick: () -> Unit) {
     Row(
-        Modifier.clip(CircleShape).background(color).border(1.dp, Color(0x33FFFFFF), CircleShape).clickable(onClick = onClick).padding(horizontal = 9.dp, vertical = 6.dp),
+        Modifier.clip(CircleShape).background(color).border(1.dp, Color(0x2AFFFFFF), CircleShape).clickable(onClick = onClick).padding(horizontal = if (label.isEmpty()) 8.dp else 9.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, null, tint = Color.White)
-        Spacer(Modifier.width(4.dp))
-        Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        if (label.isNotEmpty()) {
+            Spacer(Modifier.width(4.dp))
+            Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }

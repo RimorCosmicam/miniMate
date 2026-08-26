@@ -214,30 +214,32 @@ fun TouchpadScreen(
 
         // Layer 3: touch effects are shader-space distortions inside the scene.
         // Layer 4: Interactive Clock & Battery HUD Widget (Tap = AMOLED, Hold = Settings)
-        ClockBatteryOverlay(
-            clockStyle = settings.clockStyle,
-            // The main HUD is anchored to the physical cover-screen center. Its measured width is
-            // used by ClockBatteryOverlay, so battery/AM-PM content cannot shift it off-center.
-            positionXFraction = 0.5f,
-            positionYFraction = settings.clockPositionY,
-            clockScale = settings.clockScale,
-            screenWidthPx = screenWidthPx,
-            screenHeightPx = screenHeightPx,
-            show24Hour = settings.show24HourFormat,
-            showSeconds = settings.showSeconds,
-            showBattery = settings.showBatteryPercentage,
-            batteryPercentage = batteryPercentage,
-            bluetoothState = bluetoothState,
-            dimRatio = dimRatio,
-            onTap = {
-                executeStickAction(BallAction.AMOLED_DIM)
-            },
-            onLongPress = {
-                touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                hidManager.refreshPairedDevices()
-                showSettingsSheet = true
-            }
-        )
+        if (!showThemeTester) {
+            ClockBatteryOverlay(
+                clockStyle = settings.clockStyle,
+                // The main HUD is anchored to the physical cover-screen center. Its measured width is
+                // used by ClockBatteryOverlay, so battery/AM-PM content cannot shift it off-center.
+                positionXFraction = 0.5f,
+                positionYFraction = settings.clockPositionY,
+                clockScale = settings.clockScale,
+                screenWidthPx = screenWidthPx,
+                screenHeightPx = screenHeightPx,
+                show24Hour = settings.show24HourFormat,
+                showSeconds = settings.showSeconds,
+                showBattery = settings.showBatteryPercentage,
+                batteryPercentage = batteryPercentage,
+                bluetoothState = bluetoothState,
+                dimRatio = dimRatio,
+                onTap = {
+                    executeStickAction(BallAction.AMOLED_DIM)
+                },
+                onLongPress = {
+                    touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                    hidManager.refreshPairedDevices()
+                    showSettingsSheet = true
+                }
+            )
+        }
 
         // Layer 5: Stealth Dim Overlay (Amoled Mode)
         if (dimRatio > 0.01f) {
@@ -249,7 +251,7 @@ fun TouchpadScreen(
         }
 
         // Layer 6: Pure Liquid Glass 2D Analog Stick (Single-Hand Scroll / Click Mastery)
-        if (!showScreenEditor && !settings.isLocked && settings.stickEnabled) {
+        if (!showThemeTester && !showScreenEditor && !settings.isLocked && settings.stickEnabled) {
             val centeringStick = liveCalibrationMode == LiveCalibrationMode.STICK
             LiquidGlassAnalogStick(
                 stickSizeDp = settings.ballSizeDp,
