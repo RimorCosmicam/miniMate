@@ -72,12 +72,11 @@ fun ClockBatteryOverlay(
     showBattery: Boolean,
     batteryPercentage: Int,
     bluetoothState: BluetoothUiState,
-    dimRatio: Float,
     onTap: () -> Unit = {},
     onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    if (clockStyle == ClockStyle.OFF || dimRatio > 0.85f) return
+    if (clockStyle == ClockStyle.OFF) return
 
     var currentTimeText by remember { mutableStateOf("") }
     var currentAmPm by remember { mutableStateOf("") }

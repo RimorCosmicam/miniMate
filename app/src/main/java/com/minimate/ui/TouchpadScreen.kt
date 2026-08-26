@@ -213,10 +213,21 @@ fun TouchpadScreen(
         )
 
         // Layer 3: touch effects are shader-space distortions inside the scene.
-        // Layer 4: Interactive Clock & Battery HUD Widget (Tap = AMOLED, Hold = Settings)
+        // Layer 4: AMOLED blackout stays below its exit control.
+        if (dimRatio > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = dimRatio * 0.98f))
+            )
+        }
+
+        // Layer 5: Interactive Clock & Battery HUD Widget (Tap = AMOLED, Hold = Settings).
+        // Force the minimal pill while dimmed so AMOLED mode always has a visible escape hatch,
+        // even when the user's normal clock style is Hidden.
         if (!showThemeTester) {
             ClockBatteryOverlay(
-                clockStyle = settings.clockStyle,
+                clockStyle = if (isDimMode) com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL else settings.clockStyle,
                 // The main HUD is anchored to the physical cover-screen center. Its measured width is
                 // used by ClockBatteryOverlay, so battery/AM-PM content cannot shift it off-center.
                 positionXFraction = 0.5f,
@@ -229,7 +240,6 @@ fun TouchpadScreen(
                 showBattery = settings.showBatteryPercentage,
                 batteryPercentage = batteryPercentage,
                 bluetoothState = bluetoothState,
-                dimRatio = dimRatio,
                 onTap = {
                     executeStickAction(BallAction.AMOLED_DIM)
                 },
@@ -241,17 +251,8 @@ fun TouchpadScreen(
             )
         }
 
-        // Layer 5: Stealth Dim Overlay (Amoled Mode)
-        if (dimRatio > 0.01f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = dimRatio * 0.98f))
-            )
-        }
-
         // Layer 6: Pure Liquid Glass 2D Analog Stick (Single-Hand Scroll / Click Mastery)
-        if (!showThemeTester && !showScreenEditor && !settings.isLocked && settings.stickEnabled) {
+        if (!isDimMode && !showThemeTester && !showScreenEditor && !settings.isLocked && settings.stickEnabled) {
             val centeringStick = liveCalibrationMode == LiveCalibrationMode.STICK
             LiquidGlassAnalogStick(
                 stickSizeDp = settings.ballSizeDp,
