@@ -621,6 +621,7 @@ private class AmbientReferenceCapture private constructor(
     }
 
     companion object {
+        @SuppressLint("MissingPermission")
         fun create(sampleRate: Int, frames: Int, device: AudioDeviceInfo?): AmbientReferenceCapture? = runCatching {
             val min = AudioRecord.getMinBufferSize(
                 sampleRate,

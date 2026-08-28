@@ -39,6 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.setContentSize(NSSize(width: 390, height: 445))
         window.center()
         window.delegate = self
+        // An installer launch must be visible. The app returns to menu-bar-only mode when
+        // this window closes, but its first run should never look like nothing was installed.
+        showWindow()
     }
 
     @objc private func showWindow() {

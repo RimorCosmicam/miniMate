@@ -30,4 +30,8 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$contents/Resources/AppIcon.icns"
 codesign --force --deep --sign - "$app_dir"
+/usr/bin/plutil -lint "$contents/Info.plist"
+/usr/bin/codesign --verify --deep --strict "$app_dir"
+test -x "$contents/MacOS/MiniMateAudio"
+test -x "$contents/Resources/MiniMateAudio.driver/Contents/MacOS/MiniMateAudio"
 echo "$app_dir"

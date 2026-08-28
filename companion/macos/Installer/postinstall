@@ -1,11 +1,21 @@
 #!/bin/zsh
-set -u
+set -euo pipefail
 
 app_path="/Applications/MiniMate Audio.app"
 driver_path="/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver"
 
+if [[ ! -x "$app_path/Contents/MacOS/MiniMateAudio" ]]; then
+  echo "MiniMate application payload is missing" >&2
+  exit 1
+fi
+if [[ ! -x "$driver_path/Contents/MacOS/MiniMateAudio" ]]; then
+  echo "MiniMate CoreAudio driver payload is missing" >&2
+  exit 1
+fi
+
 /usr/sbin/chown -R root:wheel "$app_path" "$driver_path"
 /bin/chmod -R a+rX "$app_path" "$driver_path"
+/usr/bin/xattr -dr com.apple.quarantine "$app_path" "$driver_path" 2>/dev/null || true
 
 # Register the application immediately and reload CoreAudio so the virtual
 # speaker and microphone become visible without a reboot.

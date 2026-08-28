@@ -27,5 +27,9 @@ mkdir -p "$package_root/Applications" "$package_root/Library/Audio/Plug-Ins/HAL"
   --ownership recommended \
   "$package_path"
 
-echo "$package_path"
+# Refuse to publish a cosmetically valid but empty/broken installer.
+payload=$(/usr/sbin/pkgutil --payload-files "$package_path")
+grep -Fq "./Applications/MiniMate Audio.app/Contents/MacOS/MiniMateAudio" <<< "$payload"
+grep -Fq "./Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver/Contents/MacOS/MiniMateAudio" <<< "$payload"
 
+echo "$package_path"

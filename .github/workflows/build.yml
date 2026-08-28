@@ -88,6 +88,15 @@ jobs:
           chmod +x build-installer.sh Installer/postinstall
           ./build-installer.sh
 
+      - name: Verify Installer Actually Installs
+        working-directory: companion/macos
+        run: |
+          sudo installer -pkg dist/MiniMate-Audio-macOS.pkg -target /
+          test -x "/Applications/MiniMate Audio.app/Contents/MacOS/MiniMateAudio"
+          test -x "/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver/Contents/MacOS/MiniMateAudio"
+          codesign --verify --deep --strict "/Applications/MiniMate Audio.app"
+          codesign --verify --strict "/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver"
+
       - name: Upload macOS Installer
         uses: actions/upload-artifact@v4
         with:
