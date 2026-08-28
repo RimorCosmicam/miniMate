@@ -26,7 +26,8 @@ mkdir -p "$package_root/Applications" "$package_root/Library/Audio/Plug-Ins/HAL"
 /usr/bin/pkgbuild --analyze --root "$package_root" "$component_plist"
 component_index=0
 while /usr/libexec/PlistBuddy -c "Print :$component_index" "$component_plist" >/dev/null 2>&1; do
-  /usr/libexec/PlistBuddy -c "Set :$component_index:BundleIsRelocatable false" "$component_plist"
+  /usr/libexec/PlistBuddy -c "Delete :$component_index:BundleIsRelocatable" "$component_plist" >/dev/null 2>&1 || true
+  /usr/libexec/PlistBuddy -c "Add :$component_index:BundleIsRelocatable bool false" "$component_plist"
   component_index=$((component_index + 1))
 done
 
