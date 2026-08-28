@@ -13,8 +13,10 @@ if [[ ! -x "$driver_path/Contents/MacOS/MiniMateAudio" ]]; then
   exit 1
 fi
 
-/usr/sbin/chown -R root:wheel "$app_path" "$driver_path" || exit 1
-/bin/chmod -R a+rX "$app_path" "$driver_path" || exit 1
+# pkgbuild's recommended ownership already installs these as root:wheel. Keep
+# normalization best-effort so an unusual runner ACL cannot invalidate a complete payload.
+/usr/sbin/chown -R root:wheel "$app_path" "$driver_path" || true
+/bin/chmod -R a+rX "$app_path" "$driver_path" || true
 /usr/bin/xattr -dr com.apple.quarantine "$app_path" "$driver_path" 2>/dev/null || true
 
 # Register the application immediately and reload CoreAudio so the virtual
