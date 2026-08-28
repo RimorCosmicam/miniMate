@@ -1,164 +1,152 @@
-import AVFoundation
-import CoreAudio
-import CoreMedia
+import AppKit
+import Darwin
 import Foundation
-import ScreenCaptureKit
 
-final class DesktopAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
-    var onPCM24: ((Data) -> Void)?
-    var onError: ((Error) -> Void)?
-    private var stream: SCStream?
-    private var pending: [Float] = []
-    private let queue = DispatchQueue(label: "MiniMate.ScreenAudio", qos: .userInteractive)
+/// Lossless localhost IPC between the CoreAudio HAL plug-in and the companion.
+final class CoreAudioEndpointBridge {
+    static let installedDriverURL = URL(fileURLWithPath: "/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver")
 
-    func start() async throws {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        guard let display = content.displays.first else { throw MMAudioProtocol.BridgeError.connectionFailed }
-        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-        let configuration = SCStreamConfiguration()
-        configuration.capturesAudio = true
-        configuration.excludesCurrentProcessAudio = true
-        configuration.sampleRate = 48_000
-        configuration.channelCount = 2
-        configuration.width = 2
-        configuration.height = 2
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-        configuration.queueDepth = 3
-        let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
-        self.stream = stream
-        try await stream.startCapture()
-    }
+    var onSpeakerPCM16: ((Data) -> Void)?
+    private let queue = DispatchQueue(label: "MiniMate.CoreAudioEndpoints", qos: .userInteractive)
+    private var speakerSocket: Int32 = -1
+    private var microphoneSocket: Int32 = -1
+    private var source: DispatchSourceRead?
+    private var pendingSpeaker = Data()
 
-    func stop() async {
-        try? await stream?.stopCapture()
-        stream = nil
-        pending.removeAll(keepingCapacity: false)
-    }
+    var isInstalled: Bool { FileManager.default.fileExists(atPath: Self.installedDriverURL.path) }
 
-    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
-        guard outputType == .audio, sampleBuffer.isValid else { return }
-        try? sampleBuffer.withAudioBufferList { list, _ in
-            guard let description = sampleBuffer.formatDescription?.audioStreamBasicDescription,
-                  let format = AVAudioFormat(
-                    standardFormatWithSampleRate: description.mSampleRate,
-                    channels: description.mChannelsPerFrame
-                  ),
-                  let pcm = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: list.unsafePointer),
-                  let channelData = pcm.floatChannelData else { return }
-            let channels = Int(pcm.format.channelCount)
-            for frame in 0..<Int(pcm.frameLength) {
-                let left = channelData[0][frame]
-                let right = channels > 1 ? channelData[1][frame] : left
-                pending.append(left)
-                pending.append(right)
-            }
-            while pending.count >= 960 * 2 {
-                let packet = Array(pending.prefix(960 * 2))
-                pending.removeFirst(960 * 2)
-                onPCM24?(Self.packPCM24(packet))
+    func start() throws {
+        guard source == nil else { return }
+        speakerSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard speakerSocket >= 0 else { throw POSIXError(.ENOTSOCK) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = in_port_t(42310).bigEndian
+        address.sin_addr = in_addr(s_addr: INADDR_LOOPBACK.bigEndian)
+        let bindResult = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(speakerSocket, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-    }
-
-    func stream(_ stream: SCStream, didStopWithError error: Error) { onError?(error) }
-
-    private static func packPCM24(_ samples: [Float]) -> Data {
-        var data = Data(capacity: samples.count * 3)
-        for value in samples {
-            let sample = Int32((max(-1, min(0.9999999, value)) * 8_388_608).rounded())
-            data.append(UInt8(truncatingIfNeeded: sample))
-            data.append(UInt8(truncatingIfNeeded: sample >> 8))
-            data.append(UInt8(truncatingIfNeeded: sample >> 16))
+        guard bindResult == 0 else {
+            let error = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EADDRINUSE)
+            close(speakerSocket); speakerSocket = -1
+            throw error
         }
-        return data
-    }
-}
 
-struct MacAudioDevice: Hashable {
-    let id: AudioDeviceID
-    let name: String
-}
-
-enum MacAudioDevices {
-    static func outputs() -> [MacAudioDevice] {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr else { return [] }
-        var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr else { return [] }
-        return ids.compactMap { id in
-            var streamsAddress = AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyStreams,
-                mScope: kAudioDevicePropertyScopeOutput,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            var streamsSize: UInt32 = 0
-            guard AudioObjectGetPropertyDataSize(id, &streamsAddress, 0, nil, &streamsSize) == noErr, streamsSize > 0 else { return nil }
-            var nameAddress = AudioObjectPropertyAddress(
-                mSelector: kAudioObjectPropertyName,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            var name: CFString = "Unknown" as CFString
-            var nameSize = UInt32(MemoryLayout<CFString>.size)
-            guard AudioObjectGetPropertyData(id, &nameAddress, 0, nil, &nameSize, &name) == noErr else { return nil }
-            return MacAudioDevice(id: id, name: name as String)
-        }.sorted { $0.name < $1.name }
-    }
-}
-
-final class PhoneMicrophonePlayer {
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
-    private var started = false
-
-    init() {
-        engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
-    }
-
-    func selectOutput(_ device: MacAudioDevice) throws {
-        guard let unit = engine.outputNode.audioUnit else { return }
-        var id = device.id
-        let result = AudioUnitSetProperty(
-            unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
-            &id, UInt32(MemoryLayout<AudioDeviceID>.size)
-        )
-        if result != noErr { throw NSError(domain: NSOSStatusErrorDomain, code: Int(result)) }
-    }
-
-    func play(frame: MMAudioProtocol.Frame) {
-        let samples: [Int16]
-        if frame.codec == MMAudioProtocol.codecIMA { samples = IMAADPCM.decode(frame.payload, channels: 1) }
-        else if frame.codec == MMAudioProtocol.codecPCM16 { samples = frame.payload.pcm16Samples }
-        else { return }
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
-              let destination = buffer.floatChannelData?[0] else { return }
-        buffer.frameLength = AVAudioFrameCount(samples.count)
-        for index in samples.indices { destination[index] = Float(samples[index]) / 32768 }
-        if !started {
-            try? engine.start()
-            player.play()
-            started = true
+        microphoneSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard microphoneSocket >= 0 else {
+            close(speakerSocket); speakerSocket = -1
+            throw POSIXError(.ENOTSOCK)
         }
-        player.scheduleBuffer(buffer)
+
+        let source = DispatchSource.makeReadSource(fileDescriptor: speakerSocket, queue: queue)
+        source.setEventHandler { [weak self] in self?.readSpeakerPackets() }
+        source.setCancelHandler { [weak self] in
+            guard let self, self.speakerSocket >= 0 else { return }
+            close(self.speakerSocket)
+            self.speakerSocket = -1
+        }
+        self.source = source
+        source.resume()
     }
 
     func stop() {
-        player.stop(); engine.stop(); started = false
+        source?.cancel()
+        source = nil
+        pendingSpeaker.removeAll(keepingCapacity: false)
+        if microphoneSocket >= 0 { close(microphoneSocket); microphoneSocket = -1 }
+    }
+
+    func sendMicrophonePCM16(_ data: Data) {
+        guard microphoneSocket >= 0, !data.isEmpty else { return }
+        var destination = sockaddr_in()
+        destination.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        destination.sin_family = sa_family_t(AF_INET)
+        destination.sin_port = in_port_t(42311).bigEndian
+        destination.sin_addr = in_addr(s_addr: INADDR_LOOPBACK.bigEndian)
+        data.withUnsafeBytes { bytes in
+            guard let base = bytes.baseAddress else { return }
+            withUnsafePointer(to: &destination) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    _ = sendto(microphoneSocket, base, bytes.count, MSG_DONTWAIT, $0,
+                               socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+        }
+    }
+
+    private func readSpeakerPackets() {
+        var storage = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = recv(speakerSocket, &storage, storage.count, MSG_DONTWAIT)
+            if count <= 0 { break }
+            pendingSpeaker.append(contentsOf: storage.prefix(count))
+            // Exactly 20 ms at 48 kHz, stereo, signed 16-bit. Keeping the network
+            // cadence stable also makes the Bluetooth 48 -> 32 kHz conversion exact.
+            while pendingSpeaker.count >= 3_840 {
+                let packet = Data(pendingSpeaker.prefix(3_840))
+                pendingSpeaker.removeFirst(3_840)
+                onSpeakerPCM16?(packet)
+            }
+        }
+    }
+
+    static func pcm16StereoToPCM24(_ data: Data) -> Data {
+        var output = Data(capacity: data.count / 2 * 3)
+        var index = 0
+        while index + 1 < data.count {
+            let sample = Int16(bitPattern: UInt16(data[index]) | UInt16(data[index + 1]) << 8)
+            let expanded = Int32(sample) << 8
+            output.append(UInt8(truncatingIfNeeded: expanded))
+            output.append(UInt8(truncatingIfNeeded: expanded >> 8))
+            output.append(UInt8(truncatingIfNeeded: expanded >> 16))
+            index += 2
+        }
+        return output
+    }
+
+    static func microphonePCM16(frame: MMAudioProtocol.Frame) -> Data? {
+        if frame.codec == MMAudioProtocol.codecPCM16 { return frame.payload }
+        guard frame.codec == MMAudioProtocol.codecIMA else { return nil }
+        let samples = IMAADPCM.decode(frame.payload, channels: 1)
+        var output = Data(capacity: samples.count * 2)
+        for sample in samples {
+            output.append(UInt8(truncatingIfNeeded: sample))
+            output.append(UInt8(truncatingIfNeeded: sample >> 8))
+        }
+        return output
     }
 }
 
-private extension Data {
-    var pcm16Samples: [Int16] {
-        stride(from: 0, to: count - 1, by: 2).map {
-            Int16(bitPattern: UInt16(self[$0]) | UInt16(self[$0 + 1]) << 8)
+enum CoreAudioDriverInstaller {
+    static func install() throws {
+        guard let bundled = Bundle.main.url(forResource: "MiniMateAudio", withExtension: "driver") else {
+            throw NSError(domain: "MiniMateAudio", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "The MiniMate audio driver is missing from this app build."
+            ])
         }
+        let source = shellQuote(bundled.path)
+        let destination = shellQuote(CoreAudioEndpointBridge.installedDriverURL.path)
+        let command = "mkdir -p /Library/Audio/Plug-Ins/HAL && /usr/bin/ditto \(source) \(destination) && /usr/sbin/chown -R root:wheel \(destination) && /bin/chmod -R a+rX \(destination) && (/usr/bin/killall coreaudiod || true)"
+        let script = "do shell script \(appleScriptQuote(command)) with administrator privileges"
+        var error: NSDictionary?
+        let result = NSAppleScript(source: script)?.executeAndReturnError(&error)
+        if result == nil {
+            throw NSError(domain: "MiniMateAudio", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: error?[NSAppleScript.errorMessage] as? String ?? "Driver installation was cancelled."
+            ])
+        }
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private static func appleScriptQuote(_ value: String) -> String {
+        "\"" + value.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 }

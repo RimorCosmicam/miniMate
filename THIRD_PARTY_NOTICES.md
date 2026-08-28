@@ -1,5 +1,9 @@
 # Third-party shader and simulation sources
 
+## libASPL
+
+The macOS MiniMate CoreAudio endpoint driver uses libASPL, copyright Victor Gaydov and contributors, under the MIT License. The vendored source and complete license texts are stored in `companion/macos/Driver/vendor/libASPL`.
+
 MiniMate's five theme worlds are rendered from code. The application bundles no downloaded
 Space/Beach photographs, Arcade screenshots, sprite sheets, character likenesses, or scene JPEGs.
 

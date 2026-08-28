@@ -7,16 +7,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speaker
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -42,96 +48,108 @@ fun AudioModeOverlay(
     onMicrophoneEnabled: (Boolean) -> Unit,
     onOutputVolume: (Float) -> Unit,
     onMicrophoneGain: (Float) -> Unit,
-    onTransport: (AudioTransport) -> Unit,
+    onConsumerControl: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier.padding(start = 18.dp, top = 20.dp, end = 112.dp).widthIn(max = 360.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(8.dp).clip(CircleShape)
-                    .background(if (state.connected) Color(0xFF78F0B3) else Color.White.copy(.28f))
-            )
-            Spacer(Modifier.size(7.dp))
-            Column {
-                Text("AUDIO BRIDGE", color = Color.White.copy(.62f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (state.connected) state.hostName ?: "Desktop connected" else "Waiting for companion",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                .background(Color.Black.copy(.42f)).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.fillMaxWidth(.62f).padding(top = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            TransportButton(
-                label = "Wi-Fi",
-                selected = state.transport == AudioTransport.WIFI,
-                enabled = state.wifiAvailable,
-                modifier = Modifier.weight(1f)
-            ) { onTransport(AudioTransport.WIFI) }
-            TransportButton(
-                label = "Bluetooth",
-                selected = state.transport == AudioTransport.BLUETOOTH,
-                enabled = state.bluetoothAvailable,
-                modifier = Modifier.weight(1f)
-            ) { onTransport(AudioTransport.BLUETOOTH) }
-        }
-        AudioControlCard(
-            icon = Icons.Default.Speaker,
-            title = "Output",
-            detail = "Desktop audio on this phone",
-            enabled = state.outputEnabled,
-            value = state.outputVolume,
-            valueRange = 0f..1f,
-            valueLabel = "${(state.outputVolume * 100).toInt()}%",
-            onEnabled = onOutputEnabled,
-            onValue = onOutputVolume
-        )
-        AudioControlCard(
-            icon = Icons.Default.Mic,
-            title = "Microphone",
-            detail = "Phone microphone to desktop",
-            enabled = state.microphoneEnabled,
-            value = state.microphoneGain,
-            valueRange = 0f..2f,
-            valueLabel = "${state.microphoneGain.formatGain()}×",
-            onEnabled = onMicrophoneEnabled,
-            onValue = onMicrophoneGain
-        )
-        state.error?.let {
-            Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Box(
+                    Modifier.size(8.dp).clip(CircleShape)
+                        .background(if (state.connected) Color(0xFF78F0B3) else Color.White.copy(.28f))
+                )
+                Spacer(Modifier.size(7.dp))
+                Column {
+                    Text("AUDIO BRIDGE", color = Color.White.copy(.62f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (state.connected) {
+                            val connection = if (state.transport == AudioTransport.WIFI) "Lossless Wi-Fi" else "Bluetooth"
+                            "$connection · ${state.hostName ?: "Connected"}"
+                        } else "Waiting for companion",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            AudioControlCard(
+                icon = Icons.Default.Speaker,
+                title = "Output",
+                detail = "Desktop audio on this phone",
+                enabled = state.outputEnabled,
+                value = state.outputVolume,
+                valueRange = 0f..1f,
+                valueLabel = "${(state.outputVolume * 100).toInt()}%",
+                onEnabled = onOutputEnabled,
+                onValue = onOutputVolume
+            )
+            AudioControlCard(
+                icon = Icons.Default.Mic,
+                title = "Microphone",
+                detail = "Phone microphone to desktop",
+                enabled = state.microphoneEnabled,
+                value = state.microphoneGain,
+                valueRange = 0f..2f,
+                valueLabel = "${state.microphoneGain.formatGain()}×",
+                onEnabled = onMicrophoneEnabled,
+                onValue = onMicrophoneGain
+            )
+            MediaControls(onSend = onConsumerControl)
+            state.error?.let {
+                Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+            }
         }
     }
 }
 
+private object AudioMediaUsage {
+    const val PREVIOUS = 0x00B6
+    const val PLAY_PAUSE = 0x00CD
+    const val NEXT = 0x00B5
+    const val VOLUME_UP = 0x00E9
+    const val VOLUME_DOWN = 0x00EA
+}
+
 @Composable
-private fun TransportButton(
-    label: String,
-    selected: Boolean,
-    enabled: Boolean,
-    modifier: Modifier,
+private fun MediaControls(onSend: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(Color.Black.copy(.42f))
+            .border(1.dp, Color.White.copy(.13f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 7.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MediaButton(Icons.Default.VolumeDown, "Volume down") { onSend(AudioMediaUsage.VOLUME_DOWN) }
+        MediaButton(Icons.Default.SkipPrevious, "Previous") { onSend(AudioMediaUsage.PREVIOUS) }
+        MediaButton(Icons.Default.PlayArrow, "Play or pause", emphasized = true) { onSend(AudioMediaUsage.PLAY_PAUSE) }
+        MediaButton(Icons.Default.SkipNext, "Next") { onSend(AudioMediaUsage.NEXT) }
+        MediaButton(Icons.Default.VolumeUp, "Volume up") { onSend(AudioMediaUsage.VOLUME_UP) }
+    }
+}
+
+@Composable
+private fun MediaButton(
+    icon: ImageVector,
+    description: String,
+    emphasized: Boolean = false,
     onClick: () -> Unit
 ) {
-    androidx.compose.material3.TextButton(
+    IconButton(
         onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.background(
-            if (selected) Color.White else Color.Transparent,
-            RoundedCornerShape(12.dp)
-        )
+        modifier = Modifier.size(if (emphasized) 40.dp else 34.dp)
+            .clip(CircleShape)
+            .background(if (emphasized) Color.White else Color.White.copy(.07f))
     ) {
-        Text(
-            label,
-            color = when { selected -> Color.Black; enabled -> Color.White.copy(.72f); else -> Color.White.copy(.22f) },
-            fontSize = 9.5.sp,
-            fontWeight = FontWeight.Bold
+        Icon(
+            icon,
+            description,
+            tint = if (emphasized) Color.Black else Color.White.copy(.88f),
+            modifier = Modifier.size(if (emphasized) 21.dp else 17.dp)
         )
     }
 }

@@ -1,5 +1,4 @@
 import AppKit
-import CoreAudio
 import SwiftUI
 
 @main
@@ -37,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentViewController: hosting)
         window.title = "MiniMate Audio"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 390, height: 430))
+        window.setContentSize(NSSize(width: 390, height: 445))
         window.center()
         window.delegate = self
     }
@@ -88,21 +87,28 @@ struct CompanionView: View {
             GroupBox("Bluetooth · fallback") {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(controller.bluetoothDevices, id: \.addressString) { device in
-                        Button("Connect to \(device.name ?? device.addressString)") { controller.connectBluetooth(device) }
+                        Button("Connect to \(device.name ?? device.addressString ?? "Paired device")") {
+                            controller.connectBluetooth(device)
+                        }
                     }
                     if controller.bluetoothDevices.isEmpty { Text("Pair the Z Flip in System Settings first.").foregroundStyle(.secondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
             }
 
-            GroupBox("Phone microphone destination") {
-                Picker("Output device", selection: Binding(
-                    get: { controller.selectedOutput ?? 0 },
-                    set: { controller.selectOutput($0) }
-                )) {
-                    Text("Choose a virtual audio device").tag(AudioDeviceID(0))
-                    ForEach(controller.outputDevices, id: \.id) { Text($0.name).tag($0.id) }
-                }
-                Text("Choose BlackHole to expose the phone as an input in other apps.").font(.caption2).foregroundStyle(.secondary)
+            GroupBox("macOS audio devices") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("MiniMate Speaker · output", systemImage: "speaker.wave.2.fill")
+                    Label("MiniMate Microphone · input", systemImage: "mic.fill")
+                    if controller.driverInstalled {
+                        Label("Installed and available to apps", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Button("Install Audio Devices") { controller.installAudioDevices() }
+                            .buttonStyle(.borderedProminent)
+                        Text("One administrator prompt installs both CoreAudio endpoints. No screen-recording permission or routing picker is used.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
             }
 
             HStack {
@@ -114,6 +120,6 @@ struct CompanionView: View {
             }
         }
         .padding(22)
-        .frame(minWidth: 390, minHeight: 430)
+        .frame(minWidth: 390, minHeight: 445)
     }
 }

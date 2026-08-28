@@ -12,12 +12,8 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedFramework("AppKit"),
-                .linkedFramework("AVFoundation"),
-                .linkedFramework("CoreAudio"),
-                .linkedFramework("CoreMedia"),
                 .linkedFramework("IOBluetooth"),
-                .linkedFramework("Network"),
-                .linkedFramework("ScreenCaptureKit")
+                .linkedFramework("Network")
             ]
         )
     ]

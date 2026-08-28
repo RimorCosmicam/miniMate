@@ -14,6 +14,7 @@ The project is an experimental, privately distributed Android application. It is
 - Locks the activity orientation so the cover-screen coordinate system does not rotate.
 - Uses a single active theme configuration rather than theme presets.
 - Toggles AMOLED mode immediately when the clock pill is tapped.
+- Adds a third Audio mode for simultaneous desktop playback and phone-microphone return.
 
 ## Procedural Theme System
 
@@ -89,6 +90,24 @@ The main menu uses a single-pane, neutral liquid-glass layout with three primary
 - **Pairing** — discoverability, saved hosts, connection state, and reconnection controls.
 
 Trackpad-speed calibration returns to the live surface so changes can be tested immediately. Stick calibration centers the controller and hides overlapping configuration UI.
+
+## Audio bridge
+
+Audio mode is full duplex and continues through a foreground service while the phone screen is off. On a shared network it automatically prefers lossless PCM over Wi-Fi (24-bit/48 kHz stereo playback and 16-bit/48 kHz microphone return), with Bluetooth as a compressed fallback—there is no transport switch to manage on the phone. The bottom of Audio mode includes previous, play/pause, next, and host-volume controls. Android's active audio route is respected, so wired TRRS and compatible USB-C headset/IEM microphone combos work in both directions.
+
+The macOS companion is a menu-bar app that appears in the Dock only while its window is open. Its bundled CoreAudio HAL plug-in creates two real devices:
+
+- **MiniMate Speaker** is an output device. Select it in macOS or directly in an app to send that app's audio to the phone.
+- **MiniMate Microphone** is an input device. Select it directly in calling, recording, streaming, or music apps to use the phone microphone.
+
+There is no microphone-output picker and no screen-capture permission. The companion installs both endpoints from its **Install Audio Devices** button, then binds them automatically. Build it with:
+
+```bash
+cd companion/macos
+./build-app.sh
+```
+
+The Windows companion is under `companion/windows`; its current unsigned development build uses WASAPI loopback and an existing virtual cable for microphone exposure. A branded pair of Windows endpoints requires a separately signed Windows audio driver package.
 
 ## Requirements
 

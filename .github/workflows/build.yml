@@ -1,4 +1,4 @@
-name: Build Minimate APK
+name: Build MiniMate
 
 on:
   push:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  android:
     name: Build Android APK
     runs-on: ubuntu-latest
 
@@ -35,7 +35,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew test --stacktrace
+        run: ./gradlew testDebugUnitTest lintDebug --stacktrace
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
@@ -55,4 +55,52 @@ jobs:
         with:
           name: minimate-release-apk
           path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  macos:
+    name: Build macOS Companion + CoreAudio Driver
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Companion and Universal CoreAudio Driver
+        working-directory: companion/macos
+        run: |
+          chmod +x build-app.sh
+          ./build-app.sh
+
+      - name: Package Application
+        working-directory: companion/macos/dist
+        run: ditto -c -k --sequesterRsrc --keepParent "MiniMate Audio.app" MiniMate-Audio-macOS.zip
+
+      - name: Upload macOS Application
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimate-audio-macos
+          path: companion/macos/dist/MiniMate-Audio-macOS.zip
+          retention-days: 30
+
+  windows:
+    name: Build Windows Companion
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish Windows x64
+        run: dotnet publish companion/windows/MiniMateAudio.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o companion/windows/dist/win-x64
+
+      - name: Upload Windows Application
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimate-audio-windows-x64
+          path: companion/windows/dist/win-x64/
           retention-days: 30

@@ -7,14 +7,12 @@ final class BridgeController: ObservableObject {
     @Published var status = "Looking for MiniMate"
     @Published var wifiServices: [(name: String, host: String, port: Int)] = []
     @Published var bluetoothDevices: [IOBluetoothDevice] = BluetoothBridgeTransport.pairedMiniMateCandidates
-    @Published var outputDevices: [MacAudioDevice] = MacAudioDevices.outputs()
-    @Published var selectedOutput: AudioDeviceID?
+    @Published var driverInstalled = false
     @Published var connected = false
     @Published var streaming = false
 
     private let discovery = MiniMateDiscovery()
-    private let capture = DesktopAudioCapture()
-    private let microphonePlayer = PhoneMicrophonePlayer()
+    private let endpoints = CoreAudioEndpointBridge()
     private let parser = MMAudioProtocol.Parser()
     private var transport: BridgeTransport?
     private var transportKind = "Wi-Fi"
@@ -24,10 +22,10 @@ final class BridgeController: ObservableObject {
         discovery.onChange = { [weak self] services in
             DispatchQueue.main.async { self?.wifiServices = services }
         }
-        capture.onPCM24 = { [weak self] packet in self?.sendAudio(packet) }
-        capture.onError = { [weak self] error in
-            Task { @MainActor in self?.status = error.localizedDescription; self?.streaming = false }
+        endpoints.onSpeakerPCM16 = { [weak self] packet in
+            self?.sendAudio(CoreAudioEndpointBridge.pcm16StereoToPCM24(packet))
         }
+        driverInstalled = endpoints.isInstalled
         discovery.start()
     }
 
@@ -63,40 +61,42 @@ final class BridgeController: ObservableObject {
                 self?.status = error?.localizedDescription ?? "Disconnected"
                 self?.connected = false
                 self?.streaming = false
+                self?.endpoints.stop()
             }
         }
     }
 
     func startStreaming() {
         guard !streaming else { return }
-        streaming = true
-        Task {
-            do {
-                try await capture.start()
-                status = transportKind == "Wi-Fi" ? "Lossless 24-bit / 48 kHz" : "Bluetooth audio"
-            } catch {
-                status = error.localizedDescription
-                streaming = false
-            }
+        do {
+            try endpoints.start()
+            streaming = true
+            status = transportKind == "Wi-Fi" ? "Lossless 24-bit / 48 kHz" : "Bluetooth audio"
+        } catch {
+            status = error.localizedDescription
+            streaming = false
         }
     }
 
     func stopStreaming() {
         streaming = false
-        Task { await capture.stop() }
+        endpoints.stop()
     }
 
-    func selectOutput(_ id: AudioDeviceID) {
-        guard let device = outputDevices.first(where: { $0.id == id }) else { return }
-        do { try microphonePlayer.selectOutput(device); selectedOutput = id }
-        catch { status = "Microphone output: \(error.localizedDescription)" }
+    func installAudioDevices() {
+        do {
+            try CoreAudioDriverInstaller.install()
+            driverInstalled = endpoints.isInstalled
+            status = driverInstalled ? "Audio devices installed" : "Restart the companion to finish installation"
+        } catch {
+            status = error.localizedDescription
+        }
     }
 
     func disconnect() {
         stopStreaming()
         transport?.close()
         transport = nil
-        microphonePlayer.stop()
         connected = false
     }
 
@@ -126,7 +126,9 @@ final class BridgeController: ObservableObject {
         do {
             let frames = try parser.append(data)
             for frame in frames where frame.type == MMAudioProtocol.typeMicrophone {
-                microphonePlayer.play(frame: frame)
+                if let pcm = CoreAudioEndpointBridge.microphonePCM16(frame: frame) {
+                    endpoints.sendMicrophonePCM16(pcm)
+                }
             }
             if frames.contains(where: { $0.type == MMAudioProtocol.typeHello }) {
                 status = transportKind == "Wi-Fi" ? "Lossless 24-bit / 48 kHz" : "Bluetooth audio"

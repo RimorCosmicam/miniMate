@@ -105,22 +105,18 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputEnabled: Boolean,
         microphoneEnabled: Boolean,
         outputVolume: Float,
-        microphoneGain: Float,
-        transport: AudioTransport
+        microphoneGain: Float
     ) {
-        val oldTransport = _state.value.transport
         _state.update {
             it.copy(
                 outputEnabled = outputEnabled,
                 microphoneEnabled = microphoneEnabled,
                 outputVolume = outputVolume.coerceIn(0f, 1f),
                 microphoneGain = microphoneGain.coerceIn(0f, 2f),
-                transport = transport,
                 error = null
             )
         }
         audioTrack?.setVolume(outputVolume.coerceIn(0f, 1f))
-        if (oldTransport != transport) disconnectActiveLink()
         if (microphoneEnabled && activeLink != null) startMicrophone() else stopMicrophone()
     }
 
@@ -154,7 +150,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 bluetoothServer?.close()
                 bluetoothServer = null
                 val link = socket.asLink()
-                if (_state.value.transport == AudioTransport.BLUETOOTH) runLink(link) else socket.close()
+                if (activeLink?.transport == AudioTransport.WIFI) socket.close() else runLink(link)
             } catch (e: Exception) {
                 if (running && e !is EOFException && e !is SocketException) Log.w(TAG, "Bluetooth audio listener restarted", e)
             }
@@ -168,8 +164,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 registerNsd()
                 _state.update { it.copy(listening = true) }
                 val socket = wifiServer?.accept() ?: return
-                val link = socket.asLink()
-                if (_state.value.transport == AudioTransport.WIFI) runLink(link) else socket.close()
+                // Lossless Wi-Fi automatically replaces a Bluetooth fallback connection.
+                runLink(socket.asLink())
             } catch (e: Exception) {
                 if (running && e !is EOFException && e !is SocketException) {
                     Log.w(TAG, "Wi-Fi audio listener restarted", e)
@@ -185,7 +181,15 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
 
     private fun runLink(link: Link) {
         synchronized(linkLock) { activeLink?.close?.invoke(); activeLink = link }
-        _state.update { it.copy(listening = false, connected = true, hostName = link.hostName, error = null) }
+        _state.update {
+            it.copy(
+                listening = false,
+                connected = true,
+                hostName = link.hostName,
+                transport = link.transport,
+                error = null
+            )
+        }
         val codec = if (link.transport == AudioTransport.WIFI) AudioBridgeProtocol.CODEC_PCM24 else AudioBridgeProtocol.CODEC_IMA_ADPCM
         val rate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
         writeFrame(link.output, AudioBridgeProtocol.Frame(

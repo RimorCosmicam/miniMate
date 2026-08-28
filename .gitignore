@@ -13,3 +13,8 @@ local.properties
 *.aab
 app/build/
 build/
+companion/macos/.build/
+companion/macos/dist/
+companion/windows/bin/
+companion/windows/obj/
+companion/windows/dist/

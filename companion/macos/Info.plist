@@ -16,6 +16,5 @@
     <key>NSBluetoothAlwaysUsageDescription</key><string>MiniMate uses Bluetooth as a fallback audio connection to your paired phone.</string>
     <key>NSLocalNetworkUsageDescription</key><string>MiniMate discovers your phone and streams lossless audio on your local network.</string>
     <key>NSBonjourServices</key><array><string>_minimate-audio._tcp</string></array>
-    <key>NSScreenCaptureUsageDescription</key><string>MiniMate captures system audio so it can play through your phone.</string>
 </dict>
 </plist>

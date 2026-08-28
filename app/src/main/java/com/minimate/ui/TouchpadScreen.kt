@@ -102,15 +102,13 @@ fun TouchpadScreen(
         settings.audioOutputEnabled,
         settings.audioMicrophoneEnabled,
         settings.audioOutputVolume,
-        settings.audioMicrophoneGain,
-        settings.audioTransport
+        settings.audioMicrophoneGain
     ) {
         audioBridge.configure(
             settings.audioOutputEnabled,
             settings.audioMicrophoneEnabled,
             settings.audioOutputVolume,
-            settings.audioMicrophoneGain,
-            settings.audioTransport
+            settings.audioMicrophoneGain
         )
     }
 
@@ -405,8 +403,13 @@ fun TouchpadScreen(
                 onMicrophoneGain = { gain ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
                 },
-                onTransport = { transport ->
-                    touchpadEngine.updateSettings(settings.copy(audioTransport = transport))
+                onConsumerControl = { usage ->
+                    scope.launch {
+                        touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+                        hidManager.sendConsumerInput(usage)
+                        delay(28)
+                        hidManager.sendConsumerInput(0)
+                    }
                 }
             )
         }
