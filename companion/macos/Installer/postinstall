@@ -1,5 +1,5 @@
 #!/bin/zsh
-set -euo pipefail
+set -u
 
 app_path="/Applications/MiniMate Audio.app"
 driver_path="/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver"
@@ -13,8 +13,8 @@ if [[ ! -x "$driver_path/Contents/MacOS/MiniMateAudio" ]]; then
   exit 1
 fi
 
-/usr/sbin/chown -R root:wheel "$app_path" "$driver_path"
-/bin/chmod -R a+rX "$app_path" "$driver_path"
+/usr/sbin/chown -R root:wheel "$app_path" "$driver_path" || exit 1
+/bin/chmod -R a+rX "$app_path" "$driver_path" || exit 1
 /usr/bin/xattr -dr com.apple.quarantine "$app_path" "$driver_path" 2>/dev/null || true
 
 # Register the application immediately and reload CoreAudio so the virtual
@@ -25,11 +25,13 @@ fi
 
 # Open in the signed-in desktop session. This is what allows macOS itself to
 # present the Local Network and Bluetooth privacy prompts to the user.
-console_user=$(/usr/bin/stat -f '%Su' /dev/console)
+console_user=$(/usr/bin/stat -f '%Su' /dev/console 2>/dev/null || true)
 if [[ -n "$console_user" && "$console_user" != "root" && "$console_user" != "loginwindow" ]]; then
-  console_uid=$(/usr/bin/id -u "$console_user")
-  /usr/bin/sudo -u "$console_user" /bin/launchctl asuser "$console_uid" \
-    /usr/bin/open "$app_path" >/dev/null 2>&1 || true
+  console_uid=$(/usr/bin/id -u "$console_user" 2>/dev/null || true)
+  if [[ "$console_uid" == <-> ]]; then
+    /usr/bin/sudo -u "$console_user" /bin/launchctl asuser "$console_uid" \
+      /usr/bin/open "$app_path" >/dev/null 2>&1 || true
+  fi
 fi
 
 exit 0
