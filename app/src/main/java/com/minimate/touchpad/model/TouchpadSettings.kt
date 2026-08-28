@@ -364,12 +364,32 @@ enum class AudioTransport(val label: String) {
 
 enum class MicrophoneVoicePreset(val label: String) {
     CLEAN("Clean"),
+    RICH("Rich"),
     WARM("Warm"),
     DEEP("Deep"),
     BRIGHT("Bright"),
     RADIO("Radio"),
-    ROBOT("Robot")
+    ROBOT("Robot"),
+    BABY("Baby"),
+    ARENA_ANNOUNCER("Mortal Kombat")
 }
+
+enum class AudioOutputPreset(val label: String, val gains: List<Float>) {
+    FLAT("Flat", List(9) { 0f }),
+    IEM("IEM", listOf(1f, 1f, .5f, 0f, 0f, .5f, 1f, .5f, -1f)),
+    WARM("Warm", listOf(3f, 3f, 2f, 1f, .5f, 0f, -1f, -1.5f, -2f)),
+    VOCAL("Vocal", listOf(-2f, -1.5f, -1f, .5f, 2f, 3.5f, 3f, 1.5f, 0f)),
+    BASS("Bass", listOf(6f, 5f, 3f, 1f, 0f, -1f, -1f, -1.5f, -2f)),
+    BRIGHT("Bright", listOf(-1f, -1f, -.5f, 0f, .5f, 1f, 2f, 3.5f, 4f)),
+    CUSTOM("Custom", List(9) { 0f })
+}
+
+data class AudioDeviceEqProfile(
+    val deviceKey: String,
+    val deviceName: String,
+    val preset: AudioOutputPreset = AudioOutputPreset.FLAT,
+    val gains: List<Float> = AudioOutputPreset.FLAT.gains
+)
 
 val DEFAULT_KEYBOARD_SHORTCUTS = listOf(
     KeyboardShortcut("Copy", 0x08, 0x06),
@@ -439,6 +459,7 @@ data class TouchpadSettings(
     val audioOutputEnabled: Boolean = true,
     val audioMicrophoneEnabled: Boolean = true,
     val audioOutputVolume: Float = .80f,
+    val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
     val audioMicrophoneNoiseGate: Float = .015f,
     val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,

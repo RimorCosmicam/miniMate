@@ -8,10 +8,14 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.DynamicsProcessing
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -22,6 +26,8 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.minimate.touchpad.model.AudioTransport
+import com.minimate.touchpad.model.AudioOutputPreset
+import com.minimate.touchpad.model.AudioDeviceEqProfile
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +49,7 @@ import java.net.SocketException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tanh
@@ -57,6 +64,10 @@ data class AudioBridgeState(
     val outputEnabled: Boolean = true,
     val microphoneEnabled: Boolean = true,
     val outputVolume: Float = .8f,
+    val outputDeviceKey: String = "phone",
+    val outputDeviceName: String = "Phone output",
+    val outputPreset: AudioOutputPreset = AudioOutputPreset.FLAT,
+    val outputEqGains: List<Float> = AudioOutputPreset.FLAT.gains,
     val microphoneGain: Float = 1f,
     val microphoneNoiseGate: Float = .015f,
     val microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
@@ -74,6 +85,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         const val NSD_TYPE = "_minimate-audio._tcp."
         const val WIFI_SAMPLE_RATE = 48_000
         const val WIFI_FRAMES_PER_PACKET = 960
+        val OUTPUT_EQ_CUTOFFS = floatArrayOf(90f, 180f, 375f, 750f, 1_500f, 3_000f, 6_000f, 12_000f, 23_900f)
     }
 
     private data class Link(
@@ -97,10 +109,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private var wifiServer: ServerSocket? = null
     private var microphoneJob: Job? = null
     private var audioTrack: AudioTrack? = null
+    private var dynamicsProcessing: DynamicsProcessing? = null
     private var audioTrackRate = 0
     private var audioTrackEncoding = 0
+    @Volatile private var deviceEqProfiles: List<AudioDeviceEqProfile> = emptyList()
     private var nsdRegistration: NsdManager.RegistrationListener? = null
     private val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -109,19 +124,30 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = updateNetworkAvailability()
     }
 
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = updateOutputDevice()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) = updateOutputDevice()
+    }
+
     fun configure(
         outputEnabled: Boolean,
         microphoneEnabled: Boolean,
         outputVolume: Float,
+        outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
         microphoneNoiseGate: Float,
         microphonePreset: MicrophoneVoicePreset
     ) {
+        deviceEqProfiles = outputProfiles
         _state.update {
+            val profile = outputProfiles.firstOrNull { profile -> profile.deviceKey == it.outputDeviceKey }
             it.copy(
                 outputEnabled = outputEnabled,
                 microphoneEnabled = microphoneEnabled,
                 outputVolume = outputVolume.coerceIn(0f, 1f),
+                outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
+                outputEqGains = profile?.gains?.takeIf { gains -> gains.size == 9 }?.map { gain -> gain.coerceIn(-12f, 12f) }
+                    ?: AudioOutputPreset.FLAT.gains,
                 microphoneGain = microphoneGain.coerceIn(0f, 2f),
                 microphoneNoiseGate = microphoneNoiseGate.coerceIn(0f, .15f),
                 microphonePreset = microphonePreset,
@@ -129,6 +155,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             )
         }
         audioTrack?.setVolume(outputVolume.coerceIn(0f, 1f))
+        applyOutputProcessing()
         if (microphoneEnabled && activeLink != null) startMicrophone() else stopMicrophone()
     }
 
@@ -142,6 +169,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             )
         }
         updateNetworkAvailability()
+        audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        updateOutputDevice()
         scope.launch { bluetoothAcceptLoop() }
         scope.launch { wifiAcceptLoop() }
     }
@@ -233,6 +262,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 audioTrack = it
                 audioTrackRate = frame.sampleRate
                 audioTrackEncoding = encoding
+                attachOutputProcessing(it)
                 it.play()
             }
         } else audioTrack!!
@@ -260,6 +290,64 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             .setTransferMode(AudioTrack.MODE_STREAM)
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .build()
+    }
+
+    private fun attachOutputProcessing(track: AudioTrack) {
+        runCatching { dynamicsProcessing?.release() }
+        dynamicsProcessing = runCatching {
+            val config = DynamicsProcessing.Config.Builder(
+                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                2,
+                true,
+                OUTPUT_EQ_CUTOFFS.size,
+                false,
+                0,
+                false,
+                0,
+                false
+            ).setPreEqAllChannelsTo(buildOutputEq())
+                .setInputGainAllChannelsTo(-(_state.value.outputEqGains.maxOrNull() ?: 0f).coerceAtLeast(0f))
+                .build()
+            DynamicsProcessing(0, track.audioSessionId, config).apply { enabled = true }
+        }.onFailure { Log.w(TAG, "Dynamics EQ unavailable", it) }.getOrNull()
+    }
+
+    private fun applyOutputProcessing() {
+        val effect = dynamicsProcessing ?: return
+        runCatching {
+            effect.setPreEqAllChannelsTo(buildOutputEq())
+            effect.setInputGainAllChannelsTo(-(_state.value.outputEqGains.maxOrNull() ?: 0f).coerceAtLeast(0f))
+        }.onFailure { Log.w(TAG, "Unable to update output EQ", it) }
+    }
+
+    private fun buildOutputEq() = DynamicsProcessing.Eq(true, true, OUTPUT_EQ_CUTOFFS.size).apply {
+        val gains = _state.value.outputEqGains
+        val maximumCutoff = audioTrackRate.coerceAtLeast(AudioBridgeProtocol.SAMPLE_RATE) / 2f - 100f
+        OUTPUT_EQ_CUTOFFS.forEachIndexed { index, cutoff ->
+            setBand(index, DynamicsProcessing.EqBand(true, cutoff.coerceAtMost(maximumCutoff), gains.getOrElse(index) { 0f }))
+        }
+    }
+
+    private fun updateOutputDevice() {
+        val outputs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        val device = outputs.firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_HEADSET } ?: outputs.firstOrNull {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+        } ?: outputs.firstOrNull {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+        } ?: outputs.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val name = device?.productName?.toString()?.takeIf { it.isNotBlank() } ?: "Phone output"
+        val key = device?.let { "${it.type}:${it.address.ifBlank { name }}" } ?: "phone"
+        val profile = deviceEqProfiles.firstOrNull { it.deviceKey == key }
+        _state.update {
+            it.copy(
+                outputDeviceKey = key,
+                outputDeviceName = name,
+                outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
+                outputEqGains = profile?.gains ?: AudioOutputPreset.FLAT.gains
+            )
+        }
+        applyOutputProcessing()
     }
 
     private fun startMicrophone(explicitLink: Link? = null) {
@@ -333,6 +421,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private fun disconnectActiveLink() { activeLink?.let(::disconnectLink) }
 
     private fun releaseTrack() {
+        runCatching { dynamicsProcessing?.release() }
+        dynamicsProcessing = null
         audioTrack?.let { runCatching { it.stop() }; it.release() }
         audioTrack = null
         audioTrackRate = 0
@@ -378,6 +468,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     fun close() {
         running = false
         runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
+        runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
         unregisterNsd()
         runCatching { bluetoothServer?.close() }
         runCatching { wifiServer?.close() }
@@ -393,6 +484,9 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
     private var gateEnvelope = 0f
     private var detectorEnvelope = 0f
     private var robotPhase = 0.0
+    private val pitchBuffer = FloatArray(4096)
+    private var pitchWriteIndex = 0
+    private var pitchPhase = 0.0
     var level: Float = 0f
         private set
 
@@ -417,10 +511,18 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
 
             lowPass += (dry - lowPass) * .12f
             val highPass = dry - lowPass
+            val pitchFactor = when (preset) {
+                MicrophoneVoicePreset.BABY -> 1.38f
+                MicrophoneVoicePreset.ARENA_ANNOUNCER -> .72f
+                MicrophoneVoicePreset.DEEP -> .82f
+                else -> 1f
+            }
+            val shifted = pitchShift(dry, pitchFactor)
             val colored = when (preset) {
                 MicrophoneVoicePreset.CLEAN -> dry
+                MicrophoneVoicePreset.RICH -> dry * .82f + lowPass * .28f + highPass * .10f
                 MicrophoneVoicePreset.WARM -> dry * .72f + lowPass * .42f
-                MicrophoneVoicePreset.DEEP -> lowPass * 1.18f + dry * .28f
+                MicrophoneVoicePreset.DEEP -> shifted * .82f + lowPass * .38f
                 MicrophoneVoicePreset.BRIGHT -> dry + highPass * .48f
                 MicrophoneVoicePreset.RADIO -> highPass * 1.45f
                 MicrophoneVoicePreset.ROBOT -> {
@@ -428,10 +530,14 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
                     if (robotPhase > Math.PI * 2.0) robotPhase -= Math.PI * 2.0
                     dry * (0.35f + 0.65f * sin(robotPhase).toFloat())
                 }
+                MicrophoneVoicePreset.BABY -> shifted * .9f + highPass * .18f
+                MicrophoneVoicePreset.ARENA_ANNOUNCER -> shifted * .86f + lowPass * .52f
             }
             val driven = when (preset) {
                 MicrophoneVoicePreset.RADIO -> tanh(colored / 9_000f) * 18_000f
                 MicrophoneVoicePreset.ROBOT -> (colored / 900f).roundToInt() * 900f
+                MicrophoneVoicePreset.RICH -> tanh(colored / 20_000f) * 22_000f
+                MicrophoneVoicePreset.ARENA_ANNOUNCER -> tanh(colored / 12_000f) * 21_000f
                 else -> colored
             }
             output[index] = (driven * gain * gateEnvelope).roundToInt()
@@ -439,6 +545,36 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         }
         level = (sqrt(energy / count.coerceAtLeast(1)) / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
         return output
+    }
+
+    private fun pitchShift(input: Float, factor: Float): Float {
+        pitchBuffer[pitchWriteIndex] = input
+        if (factor == 1f) {
+            pitchWriteIndex = (pitchWriteIndex + 1) % pitchBuffer.size
+            return input
+        }
+        val delayRange = 2_048f
+        val minimumDelay = 192f
+        val maximumDelay = minimumDelay + delayRange
+        pitchPhase = (pitchPhase + abs(factor - 1f) / delayRange) % 1.0
+
+        fun head(phase: Double): Float {
+            val delay = if (factor > 1f) maximumDelay - phase.toFloat() * delayRange
+            else minimumDelay + phase.toFloat() * delayRange
+            var position = pitchWriteIndex - delay
+            while (position < 0f) position += pitchBuffer.size
+            val first = position.toInt() % pitchBuffer.size
+            val next = (first + 1) % pitchBuffer.size
+            val fraction = position - position.toInt()
+            return pitchBuffer[first] * (1f - fraction) + pitchBuffer[next] * fraction
+        }
+
+        val secondPhase = (pitchPhase + .5) % 1.0
+        val firstWeight = (.5 - .5 * cos(2.0 * Math.PI * pitchPhase)).toFloat()
+        val secondWeight = (.5 - .5 * cos(2.0 * Math.PI * secondPhase)).toFloat()
+        val result = head(pitchPhase) * firstWeight + head(secondPhase) * secondWeight
+        pitchWriteIndex = (pitchWriteIndex + 1) % pitchBuffer.size
+        return result
     }
 }
 

@@ -83,6 +83,16 @@ class TouchpadPreferences(context: Context) {
                 put("audioOutputEnabled", settings.audioOutputEnabled)
                 put("audioMicrophoneEnabled", settings.audioMicrophoneEnabled)
                 put("audioOutputVolume", settings.audioOutputVolume.toDouble())
+                put("audioDeviceEqProfiles", JSONArray().apply {
+                    settings.audioDeviceEqProfiles.forEach { profile ->
+                        put(JSONObject().apply {
+                            put("deviceKey", profile.deviceKey)
+                            put("deviceName", profile.deviceName)
+                            put("preset", profile.preset.name)
+                            put("gains", JSONArray(profile.gains))
+                        })
+                    }
+                })
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
                 put("audioMicrophoneNoiseGate", settings.audioMicrophoneNoiseGate.toDouble())
                 put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
@@ -244,6 +254,21 @@ class TouchpadPreferences(context: Context) {
                 audioOutputEnabled = json.optBoolean("audioOutputEnabled", true),
                 audioMicrophoneEnabled = json.optBoolean("audioMicrophoneEnabled", true),
                 audioOutputVolume = json.optDouble("audioOutputVolume", .8).toFloat().coerceIn(0f, 1f),
+                audioDeviceEqProfiles = json.optJSONArray("audioDeviceEqProfiles")?.let { profiles ->
+                    (0 until profiles.length()).mapNotNull { index ->
+                        profiles.optJSONObject(index)?.let { profile ->
+                            val gains = profile.optJSONArray("gains")?.let { values ->
+                                (0 until values.length()).map { values.optDouble(it, 0.0).toFloat().coerceIn(-12f, 12f) }
+                            }?.takeIf { it.size == 9 } ?: AudioOutputPreset.FLAT.gains
+                            AudioDeviceEqProfile(
+                                deviceKey = profile.optString("deviceKey", "default"),
+                                deviceName = profile.optString("deviceName", "Phone output"),
+                                preset = runCatching { AudioOutputPreset.valueOf(profile.optString("preset", "CUSTOM")) }.getOrDefault(AudioOutputPreset.CUSTOM),
+                                gains = gains
+                            )
+                        }
+                    }
+                } ?: emptyList(),
                 audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 2f),
                 audioMicrophoneNoiseGate = json.optDouble("audioMicrophoneNoiseGate", .015).toFloat().coerceIn(0f, .15f),
                 audioMicrophonePreset = runCatching {

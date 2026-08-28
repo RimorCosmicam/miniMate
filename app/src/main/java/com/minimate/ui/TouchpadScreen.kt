@@ -39,6 +39,8 @@ import com.minimate.bluetooth.ConnectionStatus
 import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.BallAction
+import com.minimate.touchpad.model.AudioDeviceEqProfile
+import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
@@ -101,6 +103,7 @@ fun TouchpadScreen(
         settings.audioOutputEnabled,
         settings.audioMicrophoneEnabled,
         settings.audioOutputVolume,
+        settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
         settings.audioMicrophoneNoiseGate,
         settings.audioMicrophonePreset
@@ -109,6 +112,7 @@ fun TouchpadScreen(
             settings.audioOutputEnabled,
             settings.audioMicrophoneEnabled,
             settings.audioOutputVolume,
+            settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
             settings.audioMicrophoneNoiseGate,
             settings.audioMicrophonePreset
@@ -401,6 +405,37 @@ fun TouchpadScreen(
                 },
                 onOutputVolume = { volume ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputVolume = volume))
+                },
+                onOutputPreset = { preset ->
+                    val profile = AudioDeviceEqProfile(
+                        deviceKey = audioState.outputDeviceKey,
+                        deviceName = audioState.outputDeviceName,
+                        preset = preset,
+                        gains = preset.gains
+                    )
+                    touchpadEngine.updateSettings(
+                        settings.copy(audioDeviceEqProfiles = settings.audioDeviceEqProfiles.filterNot {
+                            it.deviceKey == profile.deviceKey
+                        } + profile)
+                    )
+                },
+                onOutputEqBand = { band, gain ->
+                    val gains = (settings.audioDeviceEqProfiles.firstOrNull {
+                        it.deviceKey == audioState.outputDeviceKey
+                    }?.gains ?: audioState.outputEqGains).toMutableList()
+                    while (gains.size < 9) gains += 0f
+                    gains[band.coerceIn(0, 8)] = gain
+                    val profile = AudioDeviceEqProfile(
+                        deviceKey = audioState.outputDeviceKey,
+                        deviceName = audioState.outputDeviceName,
+                        preset = AudioOutputPreset.CUSTOM,
+                        gains = gains.take(9)
+                    )
+                    touchpadEngine.updateSettings(
+                        settings.copy(audioDeviceEqProfiles = settings.audioDeviceEqProfiles.filterNot {
+                            it.deviceKey == profile.deviceKey
+                        } + profile)
+                    )
                 },
                 onMicrophoneGain = { gain ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
