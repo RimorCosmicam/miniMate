@@ -71,15 +71,17 @@ jobs:
           chmod +x build-app.sh
           ./build-app.sh
 
-      - name: Package Application
-        working-directory: companion/macos/dist
-        run: ditto -c -k --sequesterRsrc --keepParent "MiniMate Audio.app" MiniMate-Audio-macOS.zip
+      - name: Build System Installer
+        working-directory: companion/macos
+        run: |
+          chmod +x build-installer.sh Installer/postinstall
+          ./build-installer.sh
 
-      - name: Upload macOS Application
+      - name: Upload macOS Installer
         uses: actions/upload-artifact@v4
         with:
           name: minimate-audio-macos
-          path: companion/macos/dist/MiniMate-Audio-macOS.zip
+          path: companion/macos/dist/MiniMate-Audio-macOS.pkg
           retention-days: 30
 
   windows:

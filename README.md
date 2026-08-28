@@ -100,11 +100,14 @@ The macOS companion is a menu-bar app that appears in the Dock only while its wi
 - **MiniMate Speaker** is an output device. Select it in macOS or directly in an app to send that app's audio to the phone.
 - **MiniMate Microphone** is an input device. Select it directly in calling, recording, streaming, or music apps to use the phone microphone.
 
-There is no microphone-output picker and no screen-capture permission. The companion installs both endpoints from its **Install Audio Devices** button, then binds them automatically. Build it with:
+There is no microphone-output picker and no screen-capture permission. The GitHub Actions macOS artifact is a system installer package: it places the companion in `/Applications`, installs both CoreAudio endpoints system-wide, applies the required ownership and permissions, reloads CoreAudio, and opens the installed app so macOS can request Local Network and Bluetooth access. Those privacy prompts must be approved by the signed-in user; they cannot be silently pre-granted outside managed-device deployment.
+
+The companion can also repair its audio endpoints from its **Install Audio Devices** button. Build the app and installer with:
 
 ```bash
 cd companion/macos
 ./build-app.sh
+./build-installer.sh
 ```
 
 The Windows companion is under `companion/windows`; its current unsigned development build uses WASAPI loopback and an existing virtual cable for microphone exposure. A branded pair of Windows endpoints requires a separately signed Windows audio driver package.

@@ -1,0 +1,25 @@
+#!/bin/zsh
+set -u
+
+app_path="/Applications/MiniMate Audio.app"
+driver_path="/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver"
+
+/usr/sbin/chown -R root:wheel "$app_path" "$driver_path"
+/bin/chmod -R a+rX "$app_path" "$driver_path"
+
+# Register the application immediately and reload CoreAudio so the virtual
+# speaker and microphone become visible without a reboot.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f "$app_path" >/dev/null 2>&1 || true
+/usr/bin/killall coreaudiod >/dev/null 2>&1 || true
+
+# Open in the signed-in desktop session. This is what allows macOS itself to
+# present the Local Network and Bluetooth privacy prompts to the user.
+console_user=$(/usr/bin/stat -f '%Su' /dev/console)
+if [[ -n "$console_user" && "$console_user" != "root" && "$console_user" != "loginwindow" ]]; then
+  console_uid=$(/usr/bin/id -u "$console_user")
+  /usr/bin/sudo -u "$console_user" /bin/launchctl asuser "$console_uid" \
+    /usr/bin/open "$app_path" >/dev/null 2>&1 || true
+fi
+
+exit 0
