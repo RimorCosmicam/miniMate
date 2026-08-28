@@ -80,7 +80,7 @@ fun SettingsSheet(
                 // Samsung reports the Flip cover cameras as a 220 px bottom-right cutout,
                 // but ModalBottomSheet consumes that inset before Compose can pad for it.
                 // Reserve the physical camera band explicitly on this cover-screen UI.
-                .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 92.dp)
+                .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 112.dp)
                 .shadow(28.dp, RoundedCornerShape(30.dp), ambientColor = Color.Black, spotColor = Color.Black)
                 .clip(RoundedCornerShape(30.dp))
                 .background(Brush.linearGradient(listOf(Color(0xF217181A), Color(0xEE101113), Color(0xF208090A))))
