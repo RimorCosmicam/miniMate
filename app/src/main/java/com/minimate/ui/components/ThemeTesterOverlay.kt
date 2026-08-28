@@ -54,7 +54,7 @@ import com.minimate.touchpad.model.validColorway
 
 private enum class StudioPicker(val label: String) {
     THEME("Theme"), SUBTHEME("Subtheme"), RECOLOR("Color"),
-    MOTION("Motion"), FILTER("Filter"), STICK("Stick")
+    MOTION("Motion"), FILTER("Filter"), TOUCH("Touch"), STICK("Stick")
 }
 
 /** Unified top-left Theme Studio controls over a full-screen live canvas. */
@@ -121,6 +121,14 @@ fun ThemeTesterOverlay(
                         StudioChip(motion.label, settings.backgroundAnimation == motion) { onSettingsChange(settings.copy(backgroundAnimation = motion)) }
                     }
                     StudioPicker.FILTER -> Unit
+                    StudioPicker.TOUCH -> {
+                        StudioChip("Distortion on", settings.fingerEffectsEnabled) {
+                            onSettingsChange(settings.copy(fingerEffectsEnabled = true))
+                        }
+                        StudioChip("Distortion off", !settings.fingerEffectsEnabled) {
+                            onSettingsChange(settings.copy(fingerEffectsEnabled = false))
+                        }
+                    }
                     StudioPicker.STICK -> StickTheme.values().forEach { theme ->
                         StudioChip(theme.label, settings.stickTheme == theme) { onSettingsChange(settings.copy(stickTheme = theme)) }
                     }
