@@ -362,6 +362,15 @@ enum class AudioTransport(val label: String) {
     BLUETOOTH("Bluetooth")
 }
 
+enum class MicrophoneVoicePreset(val label: String) {
+    CLEAN("Clean"),
+    WARM("Warm"),
+    DEEP("Deep"),
+    BRIGHT("Bright"),
+    RADIO("Radio"),
+    ROBOT("Robot")
+}
+
 val DEFAULT_KEYBOARD_SHORTCUTS = listOf(
     KeyboardShortcut("Copy", 0x08, 0x06),
     KeyboardShortcut("Paste", 0x08, 0x19),
@@ -431,6 +440,8 @@ data class TouchpadSettings(
     val audioMicrophoneEnabled: Boolean = true,
     val audioOutputVolume: Float = .80f,
     val audioMicrophoneGain: Float = 1f,
+    val audioMicrophoneNoiseGate: Float = .015f,
+    val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioTransport: AudioTransport = AudioTransport.WIFI,
     
     // Screen Editor: Freeform Positions & Sizes

@@ -84,6 +84,8 @@ class TouchpadPreferences(context: Context) {
                 put("audioMicrophoneEnabled", settings.audioMicrophoneEnabled)
                 put("audioOutputVolume", settings.audioOutputVolume.toDouble())
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
+                put("audioMicrophoneNoiseGate", settings.audioMicrophoneNoiseGate.toDouble())
+                put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
                 put("audioTransport", settings.audioTransport.name)
 
                 // Screen Editor layout
@@ -243,6 +245,10 @@ class TouchpadPreferences(context: Context) {
                 audioMicrophoneEnabled = json.optBoolean("audioMicrophoneEnabled", true),
                 audioOutputVolume = json.optDouble("audioOutputVolume", .8).toFloat().coerceIn(0f, 1f),
                 audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 2f),
+                audioMicrophoneNoiseGate = json.optDouble("audioMicrophoneNoiseGate", .015).toFloat().coerceIn(0f, .15f),
+                audioMicrophonePreset = runCatching {
+                    MicrophoneVoicePreset.valueOf(json.optString("audioMicrophonePreset", "CLEAN"))
+                }.getOrDefault(MicrophoneVoicePreset.CLEAN),
                 audioTransport = runCatching {
                     AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))
                 }.getOrDefault(AudioTransport.WIFI),

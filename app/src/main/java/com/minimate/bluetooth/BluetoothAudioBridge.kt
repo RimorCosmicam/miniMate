@@ -22,6 +22,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.minimate.touchpad.model.AudioTransport
+import com.minimate.touchpad.model.MicrophoneVoicePreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +42,10 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
+import kotlin.math.abs
+import kotlin.math.sin
+import kotlin.math.sqrt
+import kotlin.math.tanh
 
 data class AudioBridgeState(
     val listening: Boolean = false,
@@ -53,6 +58,9 @@ data class AudioBridgeState(
     val microphoneEnabled: Boolean = true,
     val outputVolume: Float = .8f,
     val microphoneGain: Float = 1f,
+    val microphoneNoiseGate: Float = .015f,
+    val microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
+    val microphoneLevel: Float = 0f,
     val error: String? = null,
     val receivedPackets: Long = 0,
     val sentPackets: Long = 0
@@ -105,7 +113,9 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputEnabled: Boolean,
         microphoneEnabled: Boolean,
         outputVolume: Float,
-        microphoneGain: Float
+        microphoneGain: Float,
+        microphoneNoiseGate: Float,
+        microphonePreset: MicrophoneVoicePreset
     ) {
         _state.update {
             it.copy(
@@ -113,6 +123,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 microphoneEnabled = microphoneEnabled,
                 outputVolume = outputVolume.coerceIn(0f, 1f),
                 microphoneGain = microphoneGain.coerceIn(0f, 2f),
+                microphoneNoiseGate = microphoneNoiseGate.coerceIn(0f, .15f),
+                microphonePreset = microphonePreset,
                 error = null
             )
         }
@@ -266,22 +278,27 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
             val samples = ShortArray(frames)
+            val processor = MicrophoneProcessor(sampleRate)
             try {
                 recorder.startRecording()
                 while (running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
                     if (count <= 0) continue
-                    val gain = _state.value.microphoneGain
-                    val adjusted = ShortArray(count) { index ->
-                        (samples[index] * gain).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-                    }
+                    val current = _state.value
+                    val adjusted = processor.process(
+                        samples = samples,
+                        count = count,
+                        gain = current.microphoneGain,
+                        gateThreshold = current.microphoneNoiseGate,
+                        preset = current.microphonePreset
+                    )
                     val codec = if (link.transport == AudioTransport.WIFI) AudioBridgeProtocol.CODEC_PCM16 else AudioBridgeProtocol.CODEC_IMA_ADPCM
                     val payload = if (codec == AudioBridgeProtocol.CODEC_PCM16) adjusted.toByteArrayLittleEndian() else ImaAdpcm.encode(adjusted, 1)
                     writeFrame(link.output, AudioBridgeProtocol.Frame(
                         AudioBridgeProtocol.TYPE_MICROPHONE, codec, 1, sampleRate,
                         sequence.getAndIncrement(), payload
                     ))
-                    _state.update { it.copy(sentPackets = it.sentPackets + 1) }
+                    _state.update { it.copy(sentPackets = it.sentPackets + 1, microphoneLevel = processor.level) }
                 }
             } catch (e: Exception) {
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
@@ -296,7 +313,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         synchronized(writeLock) { AudioBridgeProtocol.write(output, frame) }
     }
 
-    private fun stopMicrophone() { microphoneJob?.cancel(); microphoneJob = null }
+    private fun stopMicrophone() {
+        microphoneJob?.cancel()
+        microphoneJob = null
+        _state.update { it.copy(microphoneLevel = 0f) }
+    }
 
     private fun disconnectLink(link: Link) {
         synchronized(linkLock) {
@@ -363,6 +384,61 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         disconnectActiveLink()
         releaseTrack()
         scope.cancel()
+    }
+}
+
+/** Lightweight, stateful microphone color that is safe to run in the capture loop. */
+private class MicrophoneProcessor(private val sampleRate: Int) {
+    private var lowPass = 0f
+    private var gateEnvelope = 0f
+    private var detectorEnvelope = 0f
+    private var robotPhase = 0.0
+    var level: Float = 0f
+        private set
+
+    fun process(
+        samples: ShortArray,
+        count: Int,
+        gain: Float,
+        gateThreshold: Float,
+        preset: MicrophoneVoicePreset
+    ): ShortArray {
+        val output = ShortArray(count)
+        var energy = 0.0
+        val threshold = gateThreshold * Short.MAX_VALUE
+        for (index in 0 until count) {
+            val dry = samples[index].toFloat()
+            energy += dry * dry
+
+            detectorEnvelope = maxOf(abs(dry), detectorEnvelope * .9992f)
+            val targetGate = if (detectorEnvelope >= threshold) 1f else 0f
+            val gateSpeed = if (targetGate > gateEnvelope) .08f else .001f
+            gateEnvelope += (targetGate - gateEnvelope) * gateSpeed
+
+            lowPass += (dry - lowPass) * .12f
+            val highPass = dry - lowPass
+            val colored = when (preset) {
+                MicrophoneVoicePreset.CLEAN -> dry
+                MicrophoneVoicePreset.WARM -> dry * .72f + lowPass * .42f
+                MicrophoneVoicePreset.DEEP -> lowPass * 1.18f + dry * .28f
+                MicrophoneVoicePreset.BRIGHT -> dry + highPass * .48f
+                MicrophoneVoicePreset.RADIO -> highPass * 1.45f
+                MicrophoneVoicePreset.ROBOT -> {
+                    robotPhase += 2.0 * Math.PI * 46.0 / sampleRate
+                    if (robotPhase > Math.PI * 2.0) robotPhase -= Math.PI * 2.0
+                    dry * (0.35f + 0.65f * sin(robotPhase).toFloat())
+                }
+            }
+            val driven = when (preset) {
+                MicrophoneVoicePreset.RADIO -> tanh(colored / 9_000f) * 18_000f
+                MicrophoneVoicePreset.ROBOT -> (colored / 900f).roundToInt() * 900f
+                else -> colored
+            }
+            output[index] = (driven * gain * gateEnvelope).roundToInt()
+                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        level = (sqrt(energy / count.coerceAtLeast(1)) / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
+        return output
     }
 }
 

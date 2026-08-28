@@ -93,9 +93,6 @@ class MainActivity : ComponentActivity() {
                     bluetoothState = bluetoothState,
                     batteryPercentage = batteryPercentage,
                     onRequestPermissions = { checkAndRequestPermissions() },
-                    onDimModeChanged = { isDim ->
-                        setDimMode(isDim)
-                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -178,13 +175,6 @@ class MainActivity : ComponentActivity() {
         bluetoothServicesStarted = true
         hidManager.start()
         ContextCompat.startForegroundService(this, Intent(this, AudioBridgeService::class.java))
-    }
-
-    private fun setDimMode(isDim: Boolean) {
-        val layoutParams = window.attributes
-        // AMOLED mode saves power with true black pixels, not by making its controls unreadable.
-        layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-        window.attributes = layoutParams
     }
 
     override fun onStart() {

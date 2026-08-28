@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
 
 /**
  * Interactive Clock & Battery HUD Widget.
- * - Tap: Toggle Bluetooth keyboard
+ * - Tap: Advance through Trackpad, Keyboard, Playback, and Microphone
  * - Double tap: Toggle AMOLED mode
  * - Hold: Open Settings Control Center
  */
@@ -73,6 +73,7 @@ fun ClockBatteryOverlay(
     showBattery: Boolean,
     batteryPercentage: Int,
     bluetoothState: BluetoothUiState,
+    amoledMode: Boolean = false,
     onTap: () -> Unit = {},
     onDoubleTap: () -> Unit = {},
     onLongPress: () -> Unit = {},
@@ -125,7 +126,7 @@ fun ClockBatteryOverlay(
             .offset { IntOffset(posX.roundToInt(), posY.roundToInt()) }
             .onSizeChanged { measuredSize = it }
             .scale(clockScale * pressScale)
-            .shadow(12.dp, RoundedCornerShape(18.dp), spotColor = AccentCyan.copy(alpha = 0.35f))
+            .shadow(12.dp, RoundedCornerShape(18.dp), spotColor = if (amoledMode) Color.Transparent else AccentCyan.copy(alpha = 0.35f))
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -145,7 +146,7 @@ fun ClockBatteryOverlay(
                     modifier = Modifier
                         .clip(RoundedCornerShape(18.dp))
                         .background(
-                            Brush.linearGradient(
+                            if (amoledMode) Brush.linearGradient(listOf(Color.Black, Color.Black)) else Brush.linearGradient(
                                 colors = listOf(
                                     Color(0xEA161828),
                                     Color(0xF010111D)
@@ -154,7 +155,7 @@ fun ClockBatteryOverlay(
                         )
                         .border(
                             1.2.dp,
-                            if (isPressed) AccentPink else Color(0x35FFFFFF),
+                            if (amoledMode) Color.White.copy(if (isPressed) .9f else .42f) else if (isPressed) AccentPink else Color(0x35FFFFFF),
                             RoundedCornerShape(18.dp)
                         )
                         .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -172,7 +173,7 @@ fun ClockBatteryOverlay(
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = currentAmPm,
-                            color = AccentPink,
+                            color = if (amoledMode) Color.White else AccentPink,
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -184,7 +185,7 @@ fun ClockBatteryOverlay(
                             Icon(
                                 imageVector = if (batteryPercentage > 90) Icons.Default.BatteryChargingFull else Icons.Default.BatteryFull,
                                 contentDescription = null,
-                                tint = if (batteryPercentage < 20) Color(0xFFEF4444) else AccentEmerald,
+                                tint = if (amoledMode) Color.White else if (batteryPercentage < 20) Color(0xFFEF4444) else AccentEmerald,
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
@@ -203,7 +204,7 @@ fun ClockBatteryOverlay(
                             modifier = Modifier
                                 .size(6.dp)
                                 .clip(CircleShape)
-                                .background(AccentCyan)
+                            .background(if (amoledMode) Color.White else AccentCyan)
                         )
                     }
                 }

@@ -43,6 +43,7 @@ import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
 import com.minimate.ui.components.AudioModeOverlay
+import com.minimate.ui.components.AudioModePage
 import com.minimate.ui.components.BluetoothPairingDialog
 import com.minimate.ui.components.BluetoothKeyboardOverlay
 import com.minimate.ui.components.ClockBatteryOverlay
@@ -70,7 +71,6 @@ fun TouchpadScreen(
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
     onRequestPermissions: () -> Unit,
-    onDimModeChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val settings by touchpadEngine.settings.collectAsState()
@@ -83,6 +83,7 @@ fun TouchpadScreen(
     var showThemeTester by remember { mutableStateOf(false) }
     var showKeyboard by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
+    var audioModePage by remember { mutableStateOf(AudioModePage.PLAYBACK) }
     var showKeyboardThemeEditor by remember { mutableStateOf(false) }
     var showEdgeThemeEditor by remember { mutableStateOf(false) }
     var liveCalibrationMode by remember { mutableStateOf<LiveCalibrationMode?>(null) }
@@ -102,13 +103,17 @@ fun TouchpadScreen(
         settings.audioOutputEnabled,
         settings.audioMicrophoneEnabled,
         settings.audioOutputVolume,
-        settings.audioMicrophoneGain
+        settings.audioMicrophoneGain,
+        settings.audioMicrophoneNoiseGate,
+        settings.audioMicrophonePreset
     ) {
         audioBridge.configure(
             settings.audioOutputEnabled,
             settings.audioMicrophoneEnabled,
             settings.audioOutputVolume,
-            settings.audioMicrophoneGain
+            settings.audioMicrophoneGain,
+            settings.audioMicrophoneNoiseGate,
+            settings.audioMicrophonePreset
         )
     }
 
@@ -180,7 +185,6 @@ fun TouchpadScreen(
             }
             BallAction.AMOLED_DIM -> {
                 isDimMode = !isDimMode
-                onDimModeChanged(isDimMode)
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
                 showToast(if (isDimMode) "Amoled Mode Active" else "Amoled Mode Disabled", if (isDimMode) Icons.Default.Brightness2 else Icons.Default.DarkMode)
             }
@@ -391,6 +395,7 @@ fun TouchpadScreen(
         if (showAudio) {
             AudioModeOverlay(
                 state = audioState,
+                page = audioModePage,
                 onOutputEnabled = { enabled ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputEnabled = enabled))
                 },
@@ -403,58 +408,18 @@ fun TouchpadScreen(
                 onMicrophoneGain = { gain ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
                 },
+                onMicrophoneNoiseGate = { threshold ->
+                    touchpadEngine.updateSettings(settings.copy(audioMicrophoneNoiseGate = threshold))
+                },
+                onMicrophonePreset = { preset ->
+                    touchpadEngine.updateSettings(settings.copy(audioMicrophonePreset = preset))
+                },
                 onConsumerControl = { usage ->
                     scope.launch {
                         touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
                         hidManager.sendConsumerInput(usage)
                         delay(28)
                         hidManager.sendConsumerInput(0)
-                    }
-                }
-            )
-        }
-
-        // Layer 5: Interactive HUD (tap = keyboard, double tap = AMOLED, hold = settings).
-        // Force the minimal pill while dimmed so AMOLED mode always has a visible escape hatch,
-        // even when the user's normal clock style is Hidden.
-        if (!showThemeTester) {
-            ClockBatteryOverlay(
-                clockStyle = if (isDimMode || showKeyboard || showAudio) com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL else settings.clockStyle,
-                // Bottom-left stays clear of the Z Flip cover cameras and remains reachable one-handed.
-                positionXFraction = settings.clockPositionX,
-                positionYFraction = settings.clockPositionY,
-                clockScale = settings.clockScale,
-                screenWidthPx = screenWidthPx,
-                screenHeightPx = screenHeightPx,
-                show24Hour = settings.show24HourFormat,
-                showSeconds = settings.showSeconds,
-                showBattery = settings.showBatteryPercentage,
-                batteryPercentage = batteryPercentage,
-                bluetoothState = bluetoothState,
-                onTap = {
-                    touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                    if (showAudio) {
-                        showAudio = false
-                    } else if (showKeyboard) {
-                        hidManager.sendKeyboardInput()
-                        showKeyboard = false
-                        showKeyboardThemeEditor = false
-                        keyboardThemeEditorOriginal = null
-                        showAudio = true
-                    } else {
-                        showEdgeThemeEditor = false
-                        edgeThemeEditorOriginal = null
-                        showKeyboard = true
-                    }
-                },
-                onDoubleTap = {
-                    executeStickAction(BallAction.AMOLED_DIM)
-                },
-                onLongPress = {
-                    if (!showKeyboard) {
-                        touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                        hidManager.refreshPairedDevices()
-                        showSettingsSheet = true
                     }
                 }
             )
@@ -636,6 +601,57 @@ fun TouchpadScreen(
                 onDismiss = { showPairingDialog = false }
             )
         }
+
+        // One pill, one gesture contract in every primary mode and editor:
+        // tap advances Trackpad -> Keyboard -> Playback -> Microphone -> Trackpad,
+        // double-tap toggles true-black AMOLED rendering, and hold opens Settings.
+        ClockBatteryOverlay(
+            clockStyle = if (isDimMode || showKeyboard || showAudio || showThemeTester) {
+                com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL
+            } else settings.clockStyle,
+            positionXFraction = settings.clockPositionX,
+            positionYFraction = settings.clockPositionY,
+            clockScale = settings.clockScale,
+            screenWidthPx = screenWidthPx,
+            screenHeightPx = screenHeightPx,
+            show24Hour = settings.show24HourFormat,
+            showSeconds = settings.showSeconds,
+            showBattery = settings.showBatteryPercentage,
+            batteryPercentage = batteryPercentage,
+            bluetoothState = bluetoothState,
+            amoledMode = isDimMode,
+            onTap = {
+                touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                when {
+                    showAudio && audioModePage == AudioModePage.PLAYBACK -> {
+                        audioModePage = AudioModePage.MICROPHONE
+                    }
+                    showAudio -> {
+                        showAudio = false
+                        audioModePage = AudioModePage.PLAYBACK
+                    }
+                    showKeyboard -> {
+                        hidManager.sendKeyboardInput()
+                        showKeyboard = false
+                        showKeyboardThemeEditor = false
+                        keyboardThemeEditorOriginal = null
+                        audioModePage = AudioModePage.PLAYBACK
+                        showAudio = true
+                    }
+                    else -> {
+                        showEdgeThemeEditor = false
+                        edgeThemeEditorOriginal = null
+                        showKeyboard = true
+                    }
+                }
+            },
+            onDoubleTap = { executeStickAction(BallAction.AMOLED_DIM) },
+            onLongPress = {
+                touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                hidManager.refreshPairedDevices()
+                showSettingsSheet = true
+            }
+        )
 
         // Layer 10: Minimal HUD Toast Feedback
         HudToast(
