@@ -18,3 +18,4 @@ companion/macos/dist/
 companion/windows/bin/
 companion/windows/obj/
 companion/windows/dist/
+compile_commands.json
