@@ -7,6 +7,7 @@ object HidReport {
 
     // Boot-compatible mouse payload: buttons, X, Y, vertical wheel, horizontal pan.
     const val REPORT_MOUSE_SIZE = 5
+    const val REPORT_KEYBOARD_SIZE = 8
     const val REPORT_CONSUMER_SIZE = 2
     const val REPORT_BATTERY_SIZE = 1
 
@@ -50,6 +51,24 @@ object HidReport {
         val buffer = ByteArray(REPORT_MOUSE_SIZE)
         return packMouseReport(buffer, buttons, dx, dy, wheel, pan)
     }
+
+    /** Standard keyboard report: modifiers, reserved byte, then up to six usages. */
+    fun packKeyboardReport(
+        buffer: ByteArray,
+        modifiers: Byte,
+        keyCodes: ByteArray = byteArrayOf()
+    ): ByteArray {
+        require(buffer.size >= REPORT_KEYBOARD_SIZE) { "Keyboard report buffer must be at least $REPORT_KEYBOARD_SIZE bytes" }
+        buffer.fill(0)
+        buffer[0] = modifiers
+        keyCodes.take(6).forEachIndexed { index, keyCode -> buffer[index + 2] = keyCode }
+        return buffer
+    }
+
+    fun createKeyboardReport(
+        modifiers: Byte = 0,
+        vararg keyCodes: Byte
+    ): ByteArray = packKeyboardReport(ByteArray(REPORT_KEYBOARD_SIZE), modifiers, keyCodes)
 
     /**
      * Constructs a Consumer Control report (e.g. Media/Brightness).

@@ -47,8 +47,9 @@ class BluetoothHidManager(private val context: Context) {
     private val _uiState = MutableStateFlow(BluetoothUiState())
     val uiState: StateFlow<BluetoothUiState> = _uiState.asStateFlow()
 
-    // Reusable 7-byte buffer for zero-GC mouse streaming
+    // Reusable report buffers for zero-GC high-frequency input.
     private val mouseBuffer = ByteArray(HidReport.REPORT_MOUSE_SIZE)
+    private val keyboardBuffer = ByteArray(HidReport.REPORT_KEYBOARD_SIZE)
     private var lastReportTimeNs = 0L
 
     private val hidCallback = object : BluetoothHidDevice.Callback() {
@@ -97,6 +98,10 @@ class BluetoothHidManager(private val context: Context) {
             if (id == HidDescriptor.REPORT_ID_MOUSE) {
                 val report = HidReport.createMouseReport(HidDescriptor.BUTTON_NONE, 0, 0)
                 hidDevice?.replyReport(device, type, id, report)
+            } else if (id == HidDescriptor.REPORT_ID_KEYBOARD) {
+                hidDevice?.replyReport(device, type, id, HidReport.createKeyboardReport())
+            } else if (id == HidDescriptor.REPORT_ID_CONSUMER) {
+                hidDevice?.replyReport(device, type, id, HidReport.createConsumerReport(0))
             } else {
                 hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ)
             }
@@ -297,6 +302,37 @@ class BluetoothHidManager(private val context: Context) {
             }
         }
         return success && remainingDx == 0 && remainingDy == 0 && remainingWheel == 0 && remainingPan == 0
+    }
+
+    /** Sends one standard keyboard report. Use an empty key list to release all keys. */
+    @Synchronized
+    fun sendKeyboardInput(modifiers: Byte = 0, vararg keyCodes: Byte): Boolean {
+        val device = currentHostDevice ?: return false
+        val hid = hidDevice ?: return false
+        HidReport.packKeyboardReport(keyboardBuffer, modifiers, keyCodes)
+        return try {
+            hid.sendReport(device, HidDescriptor.REPORT_ID_KEYBOARD.toInt(), keyboardBuffer)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending keyboard report", e)
+            false
+        }
+    }
+
+    /** Sends one native Consumer Control usage. Pass zero to release the control. */
+    @Synchronized
+    fun sendConsumerInput(usageCode: Int): Boolean {
+        val device = currentHostDevice ?: return false
+        val hid = hidDevice ?: return false
+        return try {
+            hid.sendReport(
+                device,
+                HidDescriptor.REPORT_ID_CONSUMER.toInt(),
+                HidReport.createConsumerReport(usageCode)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending consumer control report", e)
+            false
+        }
     }
 
     /**

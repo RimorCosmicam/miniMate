@@ -3,6 +3,7 @@ package com.minimate
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.pm.ActivityInfo
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -20,6 +21,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.minimate.bluetooth.BatteryReporter
+import com.minimate.bluetooth.BluetoothAudioBridge
+import com.minimate.bluetooth.AudioBridgeService
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.HapticIntensity
@@ -30,6 +33,7 @@ import kotlin.math.abs
 class MainActivity : ComponentActivity() {
 
     private lateinit var hidManager: BluetoothHidManager
+    private lateinit var audioBridge: BluetoothAudioBridge
     private lateinit var batteryReporter: BatteryReporter
     private lateinit var touchpadEngine: TouchpadEngine
 
@@ -38,19 +42,15 @@ class MainActivity : ComponentActivity() {
     private var isVolDownPressed = false
     private var lastVolUpTime = 0L
     private var lastVolDownTime = 0L
+    private var bluetoothServicesStarted = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            hidManager.start()
-        }
-    }
+    ) { startBluetoothServicesIfAllowed() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_NOSENSOR
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
 
         // Keep screen alive while touchpad is active
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -71,11 +71,11 @@ class MainActivity : ComponentActivity() {
         // Immersive edge-to-edge fullscreen
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        insetsController.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
 
         hidManager = BluetoothHidManager(this)
+        audioBridge = (application as MinimateApp).audioBridge
         batteryReporter = BatteryReporter(this)
         touchpadEngine = TouchpadEngine(this, hidManager)
 
@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                 TouchpadScreen(
                     touchpadEngine = touchpadEngine,
                     hidManager = hidManager,
+                    audioBridge = audioBridge,
                     bluetoothState = bluetoothState,
                     batteryPercentage = batteryPercentage,
                     onRequestPermissions = { checkAndRequestPermissions() },
@@ -151,7 +152,8 @@ class MainActivity : ComponentActivity() {
             val permissions = arrayOf(
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
-                Manifest.permission.BLUETOOTH_SCAN
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.RECORD_AUDIO
             )
             val needed = permissions.filter {
                 ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -159,23 +161,43 @@ class MainActivity : ComponentActivity() {
             if (needed.isNotEmpty()) {
                 permissionLauncher.launch(needed.toTypedArray())
             } else {
-                hidManager.start()
+                startBluetoothServicesIfAllowed()
             }
         } else {
-            hidManager.start()
+            val microphoneGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (!microphoneGranted) permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            startBluetoothServicesIfAllowed()
         }
+    }
+
+    private fun startBluetoothServicesIfAllowed() {
+        if (bluetoothServicesStarted) return
+        val connectAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        if (!connectAllowed) return
+        bluetoothServicesStarted = true
+        hidManager.start()
+        ContextCompat.startForegroundService(this, Intent(this, AudioBridgeService::class.java))
     }
 
     private fun setDimMode(isDim: Boolean) {
         val layoutParams = window.attributes
-        layoutParams.screenBrightness = if (isDim) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        // AMOLED mode saves power with true black pixels, not by making its controls unreadable.
+        layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         window.attributes = layoutParams
     }
 
     override fun onStart() {
         super.onStart()
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_NOSENSOR
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
         batteryReporter.start()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Samsung may recreate or move the Activity when the FlexWindow state changes.
+        // Reassert the strongest sensor-independent lock on every foreground transition.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
     }
 
     override fun onStop() {

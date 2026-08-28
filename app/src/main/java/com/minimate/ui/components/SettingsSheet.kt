@@ -53,6 +53,8 @@ fun SettingsSheet(
     batteryPercentage: Int,
     onSettingsChange: (TouchpadSettings) -> Unit,
     onOpenThemeTester: () -> Unit,
+    onOpenKeyboardThemeEditor: () -> Unit,
+    onOpenEdgeThemeEditor: () -> Unit,
     onOpenScreenEditor: () -> Unit,
     onOpenTrackpadTester: () -> Unit,
     onOpenStickTester: () -> Unit,
@@ -94,7 +96,13 @@ fun SettingsSheet(
             }
             Spacer(Modifier.height(10.dp))
             when (pane) {
-                MenuPane.THEMES -> ThemesPane(settings, onSettingsChange, onOpenThemeTester)
+                MenuPane.THEMES -> ThemesPane(
+                    settings,
+                    onSettingsChange,
+                    { onDismiss(); onOpenThemeTester() },
+                    { onDismiss(); onOpenKeyboardThemeEditor() },
+                    { onDismiss(); onOpenEdgeThemeEditor() }
+                )
                 MenuPane.MOUSE -> MousePane(
                     settings = settings,
                     onSettingsChange = onSettingsChange,
@@ -147,7 +155,13 @@ private fun LiquidTab(destination: MenuPane, selected: Boolean, modifier: Modifi
 }
 
 @Composable
-private fun ThemesPane(settings: TouchpadSettings, onSettingsChange: (TouchpadSettings) -> Unit, onOpenStudio: () -> Unit) {
+private fun ThemesPane(
+    settings: TouchpadSettings,
+    onSettingsChange: (TouchpadSettings) -> Unit,
+    onOpenStudio: () -> Unit,
+    onOpenKeyboardStudio: () -> Unit,
+    onOpenEdgeStudio: () -> Unit
+) {
     val subtheme = subthemesFor(settings.abstractShaderTheme).getOrNull(settings.abstractSubthemeIndex)
     val activeColorway = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor)
     val authoredColorway = sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, activeColorway)
@@ -166,11 +180,25 @@ private fun ThemesPane(settings: TouchpadSettings, onSettingsChange: (TouchpadSe
                     Column(Modifier.weight(1f)) {
                         Text(settings.abstractShaderTheme.label, color = GlassText, fontSize = 14.sp, fontWeight = FontWeight.Black)
                         Text(subtheme?.label ?: "Shader ${settings.abstractSubthemeIndex + 1}", color = GlassMuted, fontSize = 10.sp)
-                        Text("${authoredColorway.label} · ${settings.themeFilter.label}", color = GlassAccentMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${authoredColorway.label} · ${if (settings.themeFilters.isEmpty()) "Clean" else settings.themeFilters.joinToString(" + ") { it.label }}", color = GlassAccentMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Spacer(Modifier.height(12.dp))
                 LiquidButton("Open Theme Studio", Icons.Default.OpenInFull, GlassAccent, onOpenStudio)
+            }
+        }
+        item {
+            GlassCard(accent = GlassAccentMuted) {
+                SectionLabel("Keyboard", "Preview keys, glide trail, fonts, weights, and opacity")
+                Spacer(Modifier.height(10.dp))
+                LiquidButton("Open Keyboard Studio", Icons.Default.Keyboard, GlassAccent, onOpenKeyboardStudio)
+            }
+        }
+        item {
+            GlassCard(accent = GlassAccentMuted) {
+                SectionLabel("Buttons", "Preview the scroll rail and right-click corner as a pair")
+                Spacer(Modifier.height(10.dp))
+                LiquidButton("Open Buttons Studio", Icons.Default.TouchApp, GlassAccent, onOpenEdgeStudio)
             }
         }
         item {
@@ -182,7 +210,7 @@ private fun ThemesPane(settings: TouchpadSettings, onSettingsChange: (TouchpadSe
         }
         item {
             Text(
-                "Themes, subthemes, colors, motion, filters, touch distortion, and stick styling live in Theme Studio.",
+                "Each studio opens on the main screen so its changes can be judged against the active scene.",
                 color = GlassMuted, fontSize = 9.5.sp, lineHeight = 13.sp, modifier = Modifier.padding(horizontal = 6.dp)
             )
         }
@@ -226,6 +254,33 @@ private fun MousePane(
                 ChoiceRow("Haptics", HapticIntensity.values().map { it.name.lowercase().replaceFirstChar(Char::uppercase) }, settings.hapticIntensity.ordinal) { index ->
                     onSettingsChange(settings.copy(hapticIntensity = HapticIntensity.values()[index]))
                 }
+            }
+        }
+        item {
+            GlassCard(accent = GlassAccentMuted) {
+                SectionLabel("Single-hand edges", "Subtle controls that mirror for either hand")
+                GlassSwitch("Edge scroll rail", "Drag the slim full-height edge to scroll", settings.edgeScrollEnabled) {
+                    onSettingsChange(settings.copy(edgeScrollEnabled = it))
+                }
+                GlassSwitch("Corner right click", "Tap the opposite top corner for a context click", settings.edgeRightClickEnabled) {
+                    onSettingsChange(settings.copy(edgeRightClickEnabled = it))
+                }
+                ChoiceRow(
+                    "Scroll rail side",
+                    EdgeControlSide.values().map { it.label },
+                    settings.edgeControlSide.ordinal
+                ) { index ->
+                    onSettingsChange(settings.copy(edgeControlSide = EdgeControlSide.values()[index]))
+                }
+                Text(
+                    if (settings.edgeControlSide == EdgeControlSide.LEFT)
+                        "Left rail · right-click target in the top-right corner"
+                    else
+                        "Right rail · right-click target in the top-left corner",
+                    color = GlassMuted,
+                    fontSize = 9.sp,
+                    lineHeight = 12.sp
+                )
             }
         }
         item {

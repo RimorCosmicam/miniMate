@@ -61,7 +61,7 @@ fun ScreenEditorOverlay(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedElement by remember { mutableStateOf<String>("ball") } // "ball" or "clock"
+    var selectedElement by remember { mutableStateOf("clock") } // Pill placement is the debug editor's primary job.
 
     Box(
         modifier = modifier
@@ -177,9 +177,9 @@ fun ScreenEditorOverlay(
                                             ballPositionX = 0.12f,
                                             ballPositionY = 0.86f,
                                             ballSizeDp = 48f,
-                                            clockPositionX = 0.50f,
-                                            clockPositionY = 0.08f,
-                                            clockScale = 1.0f
+                                            clockPositionX = 0.248f,
+                                            clockPositionY = 0.882f,
+                                            clockScale = 1.18f
                                         )
                                     )
                                 }

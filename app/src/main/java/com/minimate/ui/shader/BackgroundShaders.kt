@@ -565,7 +565,7 @@ fun BackgroundShaderCanvas(
     customImageUri: String? = null,
     dimRatio: Float = 0f,
     animationSpeed: Float = 1f,
-    themeFilter: ThemeFilter = ThemeFilter.NONE,
+    themeFilters: List<ThemeFilter> = emptyList(),
     shaderTheme: AbstractShaderTheme = AbstractShaderTheme.PRISMATIC,
     shaderSubthemeIndex: Int = 1,
     shaderRecolor: ShaderRecolor = ShaderRecolor.AUTHORED,
@@ -574,23 +574,25 @@ fun BackgroundShaderCanvas(
 ) {
     if (theme != BackgroundTheme.CUSTOM_IMAGE) {
         Box(modifier.fillMaxSize()) {
-            AbstractShaderRenderer(
-                theme = shaderTheme,
-                subthemeIndex = shaderSubthemeIndex,
-                recolor = shaderRecolor,
-                customColors = customShaderColors,
-                touchPoints = touchPoints,
-                animationSpeed = animationSpeed,
-                filter = themeFilter,
-                modifier = Modifier.fillMaxSize()
-            )
+            ThemeFilterStack(themeFilters, Modifier.fillMaxSize()) {
+                AbstractShaderRenderer(
+                    theme = shaderTheme,
+                    subthemeIndex = shaderSubthemeIndex,
+                    recolor = shaderRecolor,
+                    customColors = customShaderColors,
+                    touchPoints = touchPoints,
+                    animationSpeed = animationSpeed,
+                    filter = ThemeFilter.NONE,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             if (dimRatio > 0f) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dimRatio.coerceIn(0f, 1f))))
             }
         }
         return
     }
-    ThemeFilterSurface(themeFilter, modifier.fillMaxSize()) {
+    ThemeFilterStack(themeFilters, modifier.fillMaxSize()) {
         BackgroundCanvasCore(
             theme = theme,
             variantIndex = variantIndex,

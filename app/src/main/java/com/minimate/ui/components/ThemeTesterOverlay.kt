@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,11 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.BackgroundAnimation
@@ -60,7 +57,7 @@ private enum class StudioPicker(val label: String) {
     MOTION("Motion"), FILTER("Filter"), STICK("Stick")
 }
 
-/** Camera-safe Theme Studio: compact bottom-left glass controls over a full-screen live canvas. */
+/** Unified top-left Theme Studio controls over a full-screen live canvas. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ThemeTesterOverlay(
@@ -80,49 +77,32 @@ fun ThemeTesterOverlay(
     Box(modifier.fillMaxSize().navigationBarsPadding()) {
         Box(Modifier.fillMaxSize().pointerInteropFilter { onPreviewTouchEvent(it) })
 
-        Column(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth(.68f)
-                .displayCutoutPadding()
-                .padding(start = 10.dp, bottom = 10.dp)
-                .shadow(22.dp, RoundedCornerShape(22.dp), spotColor = Color.Black)
-                .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xE91D1E20), Color(0xF2141517))
-                    )
-                )
-                .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(22.dp))
-                .padding(9.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+        StudioPanel(
+            title = "Theme Studio",
+            subtitle = "${settings.abstractShaderTheme.label} · ${subtheme.label}",
+            onCancel = onCancel,
+            onDone = onKeep,
+            modifier = Modifier.align(Alignment.TopStart)
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).padding(horizontal = 3.dp)) {
-                    Text(settings.abstractShaderTheme.label.uppercase(), color = Color.White.copy(.58f), fontSize = 7.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text(subtheme.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor).label, color = Color.White.copy(.62f), fontSize = 8.sp, maxLines = 1)
-                }
-                EdgeAction(Icons.Default.Close, "", Color.Transparent, onCancel)
-                Spacer(Modifier.width(4.dp))
-                EdgeAction(Icons.Default.Check, "", Color.White.copy(.12f), onKeep)
-            }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                StudioPicker.values().forEach { value -> DirectChip(value.label, picker == value) { picker = value } }
+                StudioPicker.values().forEach { value -> StudioChip(value.label, picker == value) { picker = value } }
             }
-            Box(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(Color(0x4D000000)).padding(vertical = 5.dp)
-            ) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                when (picker) {
+            if (picker == StudioPicker.FILTER) {
+                FilterPreviewList(settings, onSettingsChange)
+            } else {
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                        .background(Color(0x4D000000)).padding(vertical = 5.dp)
+                ) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    when (picker) {
                     StudioPicker.THEME -> AbstractShaderTheme.values().forEach { theme ->
-                        DirectChip(theme.label, settings.abstractShaderTheme == theme) {
+                        StudioChip(theme.label, settings.abstractShaderTheme == theme) {
                             onSettingsChange(settings.copy(abstractShaderTheme = theme, abstractSubthemeIndex = 0, shaderRecolor = colorwaysFor(theme, 0).first(), customImageUri = null))
                         }
                     }
                     StudioPicker.SUBTHEME -> subthemesFor(settings.abstractShaderTheme).forEach { option ->
-                        DirectChip(option.label, settings.abstractSubthemeIndex == option.index) {
+                        StudioChip(option.label, settings.abstractSubthemeIndex == option.index) {
                             onSettingsChange(
                                 settings.copy(
                                     abstractSubthemeIndex = option.index,
@@ -133,25 +113,50 @@ fun ThemeTesterOverlay(
                         }
                     }
                     StudioPicker.RECOLOR -> colorwaysFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex).forEach { recolor ->
-                        DirectChip(sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, recolor).label, settings.shaderRecolor == recolor) {
+                        StudioChip(sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, recolor).label, settings.shaderRecolor == recolor) {
                             onSettingsChange(settings.copy(shaderRecolor = recolor, customImageUri = null))
                         }
                     }
                     StudioPicker.MOTION -> BackgroundAnimation.values().forEach { motion ->
-                        DirectChip(motion.label, settings.backgroundAnimation == motion) { onSettingsChange(settings.copy(backgroundAnimation = motion)) }
+                        StudioChip(motion.label, settings.backgroundAnimation == motion) { onSettingsChange(settings.copy(backgroundAnimation = motion)) }
                     }
-                    StudioPicker.FILTER -> ThemeFilter.values().forEach { filter ->
-                        DirectChip(filter.label, settings.themeFilter == filter) { onSettingsChange(settings.copy(themeFilter = filter)) }
-                    }
+                    StudioPicker.FILTER -> Unit
                     StudioPicker.STICK -> StickTheme.values().forEach { theme ->
-                        DirectChip(theme.label, settings.stickTheme == theme) { onSettingsChange(settings.copy(stickTheme = theme)) }
+                        StudioChip(theme.label, settings.stickTheme == theme) { onSettingsChange(settings.copy(stickTheme = theme)) }
+                    }
                     }
                 }
-            }
+                }
             }
             if (picker == StudioPicker.RECOLOR && settings.shaderRecolor == com.minimate.touchpad.model.ShaderRecolor.CUSTOM) {
                 CustomPaletteEditor(settings.customShaderColors, customRole, { customRole = it }) { colors ->
                     onSettingsChange(settings.copy(customShaderColors = colors))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterPreviewList(settings: TouchpadSettings, onSettingsChange: (TouchpadSettings) -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+            .background(Color(0x4D000000)).padding(vertical = 5.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            ThemeFilter.entries.forEach { filter ->
+            val selected = filter == ThemeFilter.NONE && settings.themeFilters.isEmpty() || filter in settings.themeFilters
+                StudioChip(filter.label, selected) {
+                    onSettingsChange(
+                        settings.copy(
+                            themeFilters = if (filter == ThemeFilter.NONE) emptyList()
+                            else if (filter in settings.themeFilters) settings.themeFilters - filter
+                            else settings.themeFilters + filter
+                        )
+                    )
                 }
             }
         }

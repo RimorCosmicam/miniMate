@@ -39,7 +39,7 @@ class TouchpadPreferences(context: Context) {
                 put("backgroundTheme", settings.backgroundTheme.name)
                 put("themeVariantIndex", settings.themeVariantIndex)
                 put("backgroundAnimation", settings.backgroundAnimation.name)
-                put("themeFilter", settings.themeFilter.name)
+                put("themeFilters", JSONArray(settings.themeFilters.map { it.name }))
                 put("abstractShaderTheme", settings.abstractShaderTheme.name)
                 put("abstractSubthemeIndex", settings.abstractSubthemeIndex)
                 put("shaderRecolor", settings.shaderRecolor.name)
@@ -58,6 +58,33 @@ class TouchpadPreferences(context: Context) {
                 put("stickHoldAction", settings.stickHoldAction.name)
                 put("stickScrollSensitivity", settings.stickScrollSensitivity.toDouble())
                 put("stickDeadzone", settings.stickDeadzone.toDouble())
+                put("edgeScrollEnabled", settings.edgeScrollEnabled)
+                put("edgeRightClickEnabled", settings.edgeRightClickEnabled)
+                put("edgeControlSide", settings.edgeControlSide.name)
+                put("edgeRailMaterial", settings.edgeRailMaterial.name)
+                put("edgeRailScale", settings.edgeRailScale.toDouble())
+                put("edgeCornerMaterial", settings.edgeCornerMaterial.name)
+                put("edgeCornerScale", settings.edgeCornerScale.toDouble())
+                put("keyboardShortcuts", JSONArray().apply {
+                    settings.keyboardShortcuts.forEach { shortcut ->
+                        put(JSONObject().apply {
+                            put("label", shortcut.label)
+                            put("modifiers", shortcut.modifiers)
+                            put("usage", shortcut.usage)
+                        })
+                    }
+                })
+                put("keyboardTheme", settings.keyboardTheme.name)
+                put("keyboardLanguage", settings.keyboardLanguage.name)
+                put("keyboardTrail", settings.keyboardTrail.name)
+                put("keyboardFont", settings.keyboardFont.name)
+                put("keyboardFontWeight", settings.keyboardFontWeight.name)
+                put("keyboardOpaque", settings.keyboardOpaque)
+                put("audioOutputEnabled", settings.audioOutputEnabled)
+                put("audioMicrophoneEnabled", settings.audioMicrophoneEnabled)
+                put("audioOutputVolume", settings.audioOutputVolume.toDouble())
+                put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
+                put("audioTransport", settings.audioTransport.name)
 
                 // Screen Editor layout
                 put("ballPositionX", settings.ballPositionX.toDouble())
@@ -114,11 +141,16 @@ class TouchpadPreferences(context: Context) {
                 } catch (_: Exception) {
                     BackgroundAnimation.FLOW
                 },
-                themeFilter = try {
-                    ThemeFilter.valueOf(json.optString("themeFilter", "NONE"))
-                } catch (_: Exception) {
-                    ThemeFilter.NONE
-                },
+                themeFilters = json.optJSONArray("themeFilters")?.let { values ->
+                    buildList {
+                        for (index in 0 until values.length()) {
+                            runCatching { ThemeFilter.valueOf(values.getString(index)) }.getOrNull()
+                                ?.takeIf { it != ThemeFilter.NONE && it !in this }
+                                ?.let(::add)
+                        }
+                    }
+                } ?: runCatching { ThemeFilter.valueOf(json.optString("themeFilter", "NONE")) }
+                    .getOrNull()?.takeIf { it != ThemeFilter.NONE }?.let(::listOf).orEmpty(),
                 abstractShaderTheme = runCatching {
                     AbstractShaderTheme.valueOf(json.optString("abstractShaderTheme", "ARCADE"))
                 }.getOrDefault(AbstractShaderTheme.ARCADE),
@@ -159,12 +191,72 @@ class TouchpadPreferences(context: Context) {
                 },
                 stickScrollSensitivity = json.optDouble("stickScrollSensitivity", 1.0).toFloat(),
                 stickDeadzone = json.optDouble("stickDeadzone", 0.10).toFloat(),
+                edgeScrollEnabled = json.optBoolean("edgeScrollEnabled", true),
+                edgeRightClickEnabled = json.optBoolean("edgeRightClickEnabled", true),
+                edgeControlSide = runCatching {
+                    EdgeControlSide.valueOf(json.optString("edgeControlSide", "LEFT"))
+                }.getOrDefault(EdgeControlSide.LEFT),
+                edgeRailMaterial = runCatching {
+                    EdgeControlMaterial.valueOf(json.optString("edgeRailMaterial", "CLEAR_GLASS"))
+                }.getOrDefault(EdgeControlMaterial.CLEAR_GLASS),
+                edgeRailScale = json.optDouble(
+                    "edgeRailScale",
+                    runCatching { EdgeControlSize.valueOf(json.optString("edgeRailSize", "STANDARD")).scale.toDouble() }.getOrDefault(1.0)
+                ).toFloat().coerceIn(.65f, 1.8f),
+                edgeCornerMaterial = runCatching {
+                    EdgeControlMaterial.valueOf(json.optString("edgeCornerMaterial", "CLEAR_GLASS"))
+                }.getOrDefault(EdgeControlMaterial.CLEAR_GLASS),
+                edgeCornerScale = json.optDouble(
+                    "edgeCornerScale",
+                    runCatching { EdgeControlSize.valueOf(json.optString("edgeCornerSize", "STANDARD")).scale.toDouble() }.getOrDefault(1.0)
+                ).toFloat().coerceIn(.65f, 1.8f),
+                keyboardShortcuts = json.optJSONArray("keyboardShortcuts")?.let { values ->
+                    buildList {
+                        for (index in 0 until values.length().coerceAtMost(8)) {
+                            val item = values.optJSONObject(index) ?: continue
+                            val label = item.optString("label").trim().take(24)
+                            val modifiers = item.optInt("modifiers", -1)
+                            val usage = item.optInt("usage", -1)
+                            if (label.isNotEmpty() && modifiers in 0..0x0F && usage in 1..0xFF) {
+                                add(KeyboardShortcut(label, modifiers, usage))
+                            }
+                        }
+                    }
+                } ?: DEFAULT_KEYBOARD_SHORTCUTS,
+                keyboardTheme = runCatching {
+                    KeyboardTheme.valueOf(json.optString("keyboardTheme", "GLASS"))
+                }.getOrDefault(KeyboardTheme.GLASS),
+                keyboardLanguage = runCatching {
+                    KeyboardLanguage.valueOf(json.optString("keyboardLanguage", "ENGLISH"))
+                }.getOrDefault(KeyboardLanguage.ENGLISH),
+                keyboardTrail = runCatching {
+                    KeyboardTrail.valueOf(json.optString("keyboardTrail", "AURORA"))
+                }.getOrDefault(KeyboardTrail.AURORA),
+                keyboardFont = runCatching {
+                    KeyboardFont.valueOf(json.optString("keyboardFont", "SYSTEM"))
+                }.getOrDefault(KeyboardFont.SYSTEM),
+                keyboardFontWeight = runCatching {
+                    KeyboardFontWeight.valueOf(json.optString("keyboardFontWeight", "REGULAR"))
+                }.getOrDefault(KeyboardFontWeight.REGULAR),
+                keyboardOpaque = json.optBoolean("keyboardOpaque", false),
+                audioOutputEnabled = json.optBoolean("audioOutputEnabled", true),
+                audioMicrophoneEnabled = json.optBoolean("audioMicrophoneEnabled", true),
+                audioOutputVolume = json.optDouble("audioOutputVolume", .8).toFloat().coerceIn(0f, 1f),
+                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 2f),
+                audioTransport = runCatching {
+                    AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))
+                }.getOrDefault(AudioTransport.WIFI),
                 ballPositionX = json.optDouble("ballPositionX", 0.15).toFloat(),
                 ballPositionY = json.optDouble("ballPositionY", 0.82).toFloat(),
                 ballSizeDp = json.optDouble("ballSizeDp", 64.0).toFloat(),
-                clockPositionX = json.optDouble("clockPositionX", 0.50).toFloat(),
-                clockPositionY = json.optDouble("clockPositionY", 0.09).toFloat(),
-                clockScale = json.optDouble("clockScale", 1.0).toFloat(),
+                // Migrate the old centered-top default to the camera-safe lower-left layout.
+                clockPositionX = json.optDouble("clockPositionX", 0.248).toFloat().let {
+                    if (it == 0.50f && json.optDouble("clockPositionY", 0.882).toFloat() == 0.09f) 0.248f else it
+                },
+                clockPositionY = json.optDouble("clockPositionY", 0.882).toFloat().let {
+                    if (it == 0.09f && json.optDouble("clockPositionX", 0.248).toFloat() == 0.50f) 0.882f else it
+                },
+                clockScale = json.optDouble("clockScale", 1.18).toFloat().let { if (it == 1.0f) 1.18f else it },
                 clockStyle = try {
                     ClockStyle.valueOf(json.optString("clockStyle", "MINIMAL_PILL"))
                 } catch (_: Exception) {

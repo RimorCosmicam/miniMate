@@ -1,0 +1,351 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+    "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio_MiniMateAudio.bundle/Mini.png" : {
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Resources/Mini.png"
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio_MiniMateAudio.bundle/Mini.png"
+        }
+      ]
+    }
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.MiniMateAudio-arm64-apple-macosx28.0-debug.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/sources",
+      "importPath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/App.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/AudioPipeline.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/BridgeController.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Connection.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Protocol.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/DerivedSources/resource_bundle_accessor.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<MiniMateAudio-arm64-apple-macosx28.0-debug.module-resources>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "MiniMateAudio",
+      "moduleOutputPath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/Modules/MiniMateAudio.swiftmodule",
+      "objects" : [
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/App.swift.o",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/AudioPipeline.swift.o",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/BridgeController.swift.o",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/Connection.swift.o",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/Protocol.swift.o",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/resource_bundle_accessor.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j8",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+        "-module-cache-path",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "MiniMateAudio_main",
+        "-swift-version",
+        "5",
+        "-I",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-L",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-plugin-path",
+        "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "macos"
+      ],
+      "outputFileMapPath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/App.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/AudioPipeline.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/BridgeController.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/Connection.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/Protocol.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/resource_bundle_accessor.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/Modules/MiniMateAudio.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Apple/Projects/MiniMate/companion/macos/Sources/App.swift",
+        "/Users/Apple/Projects/MiniMate/companion/macos/Sources/AudioPipeline.swift",
+        "/Users/Apple/Projects/MiniMate/companion/macos/Sources/BridgeController.swift",
+        "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Connection.swift",
+        "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Protocol.swift",
+        "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/DerivedSources/resource_bundle_accessor.swift"
+      ],
+      "tempsPath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "MiniMateAudio" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "MiniMateAudio",
+      "-package-name",
+      "macos",
+      "-c",
+      "/Users/Apple/Projects/MiniMate/companion/macos/Sources/App.swift",
+      "/Users/Apple/Projects/MiniMate/companion/macos/Sources/AudioPipeline.swift",
+      "/Users/Apple/Projects/MiniMate/companion/macos/Sources/BridgeController.swift",
+      "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Connection.swift",
+      "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Protocol.swift",
+      "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/DerivedSources/resource_bundle_accessor.swift",
+      "-I",
+      "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j8",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+      "-module-cache-path",
+      "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "MiniMateAudio_main",
+      "-swift-version",
+      "5",
+      "-I",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-L",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-plugin-path",
+      "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "macos",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "MiniMateAudio" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio-entitlement.plist"
+    },
+    "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/App.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/AudioPipeline.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/BridgeController.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Connection.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/Sources/Protocol.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/DerivedSources/resource_bundle_accessor.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/sources"
+    },
+    "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/App.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/AudioPipeline.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/BridgeController.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/Connection.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/Protocol.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.build/resource_bundle_accessor.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/MiniMateAudio.product/Objects.LinkFileList"
+    },
+    "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/Apple/Projects/MiniMate/companion/macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+    }
+  }
+}

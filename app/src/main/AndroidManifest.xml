@@ -16,6 +16,14 @@
     <!-- Haptic feedback & Wakelock -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Hardware requirements -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
@@ -31,6 +39,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
+        android:resizeableActivity="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Minimate"
         android:hasFragileUserData="false"
@@ -46,6 +55,13 @@
         <meta-data
             android:name="com.samsung.android.foldable.cover_screen"
             android:value="true" />
+        <meta-data
+            android:name="com.samsung.android.multiwindow.enable"
+            android:value="false" />
+        <!-- Avoid Android's foldable size-compat mode and its on-screen restart/resize button. -->
+        <meta-data
+            android:name="android.supports_size_changes"
+            android:value="true" />
 
         <!-- The Flex Window may otherwise apply an OEM landscape-orientation
              compatibility override even when this Activity requests nosensor. -->
@@ -57,6 +73,14 @@
             android:name="android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED"
             android:value="false"
             tools:targetApi="34" />
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES"
+            android:value="false"
+            tools:targetApi="34" />
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE"
+            android:value="false"
+            tools:targetApi="34" />
 
         <activity
             android:name=".MainActivity"
@@ -65,13 +89,21 @@
             android:launchMode="singleTask"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:screenOrientation="nosensor"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="false"
+            android:screenOrientation="locked"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".bluetooth.AudioBridgeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|connectedDevice"
+            android:stopWithTask="false" />
     </application>
 
 </manifest>

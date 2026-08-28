@@ -258,6 +258,25 @@ enum class AnalogStickMode(val label: String, val description: String) {
     VIRTUAL_DPAD("Directional D-Pad", "Push up/down/left/right to trigger page scroll & navigation")
 }
 
+enum class EdgeControlSide(val label: String) {
+    LEFT("Left"),
+    RIGHT("Right")
+}
+
+enum class EdgeControlMaterial(val label: String) {
+    CLEAR_GLASS("Clear Glass"),
+    FROSTED_GLASS("Adaptive Glass"),
+    SMOKED_GLASS("Deep Glass"),
+    PRISM_GLASS("Prismatic Glass"),
+    CRYSTAL("Thick Lens")
+}
+
+enum class EdgeControlSize(val label: String, val scale: Float) {
+    COMPACT("Compact", .82f),
+    STANDARD("Standard", 1f),
+    LARGE("Large", 1.20f)
+}
+
 enum class StickTheme(val label: String, val description: String) {
     PRECISION_DISC("Optical Glass", "Clear precision glass with a quiet cyan edge"),
     ALUMINUM_DIAL("Brushed Titanium", "Cool architectural metal and restrained highlights"),
@@ -293,6 +312,65 @@ enum class ClockStyle(val label: String) {
     OFF("Hidden")
 }
 
+data class KeyboardShortcut(
+    val label: String,
+    val modifiers: Int,
+    val usage: Int
+)
+
+enum class KeyboardTheme(val label: String) {
+    GLASS("Glass"),
+    FROST("Frost"),
+    PRISM("Prism"),
+    TITANIUM("Titanium"),
+    NOIR("Noir"),
+    PORCELAIN("Porcelain"),
+    TERMINAL("Terminal"),
+    SUNSET("Sunset"),
+    CYBER("Cyber"),
+    PAPER("Paper")
+}
+
+enum class KeyboardTrail(val label: String) {
+    AURORA("Aurora"),
+    COMET("Comet"),
+    RIBBON("Ribbon"),
+    CONSTELLATION("Stars"),
+    INK("Ink")
+}
+
+enum class KeyboardFont(val label: String) {
+    SYSTEM("System"),
+    MONO("Mono"),
+    PIXEL("Pixel"),
+    SERIF("Serif")
+}
+
+enum class KeyboardFontWeight(val label: String) {
+    LIGHT("Light"),
+    REGULAR("Regular"),
+    BOLD("Bold")
+}
+
+enum class KeyboardLanguage(val label: String, val shortLabel: String) {
+    ENGLISH("English", "EN"),
+    PORTUGUESE_BR("Português (Brasil)", "PT")
+}
+
+enum class AudioTransport(val label: String) {
+    WIFI("Wi-Fi"),
+    BLUETOOTH("Bluetooth")
+}
+
+val DEFAULT_KEYBOARD_SHORTCUTS = listOf(
+    KeyboardShortcut("Copy", 0x08, 0x06),
+    KeyboardShortcut("Paste", 0x08, 0x19),
+    KeyboardShortcut("Undo", 0x08, 0x1D),
+    KeyboardShortcut("Spotlight", 0x08, 0x2C),
+    KeyboardShortcut("App Switch", 0x08, 0x2B),
+    KeyboardShortcut("Screenshot", 0x0A, 0x20)
+)
+
 data class TouchpadSettings(
     val trackingSpeed: Float = 1.0f,
     val acceleration: Float = 1.15f,
@@ -312,7 +390,7 @@ data class TouchpadSettings(
     val backgroundTheme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,
     val themeVariantIndex: Int = 0,
     val backgroundAnimation: BackgroundAnimation = BackgroundAnimation.FLOW,
-    val themeFilter: ThemeFilter = ThemeFilter.NONE,
+    val themeFilters: List<ThemeFilter> = emptyList(),
     val abstractShaderTheme: AbstractShaderTheme = AbstractShaderTheme.OCEANIC,
     val abstractSubthemeIndex: Int = 0,
     val shaderRecolor: ShaderRecolor = ShaderRecolor.AUTHORED,
@@ -329,15 +407,40 @@ data class TouchpadSettings(
     val stickHoldAction: BallAction = BallAction.AMOLED_DIM,
     val stickScrollSensitivity: Float = 0.40f, // Calibrated comfortable sensitivity
     val stickDeadzone: Float = 0.12f,
+
+    // Mirrored single-hand edge controls. The right-click corner is always opposite the rail.
+    val edgeScrollEnabled: Boolean = true,
+    val edgeRightClickEnabled: Boolean = true,
+    val edgeControlSide: EdgeControlSide = EdgeControlSide.LEFT,
+    val edgeRailMaterial: EdgeControlMaterial = EdgeControlMaterial.CLEAR_GLASS,
+    val edgeRailScale: Float = 1f,
+    val edgeCornerMaterial: EdgeControlMaterial = EdgeControlMaterial.CLEAR_GLASS,
+    val edgeCornerScale: Float = 1f,
+
+    // User-editable Mac chords exposed by the keyboard's Shortcuts panel.
+    val keyboardShortcuts: List<KeyboardShortcut> = DEFAULT_KEYBOARD_SHORTCUTS,
+    val keyboardTheme: KeyboardTheme = KeyboardTheme.GLASS,
+    val keyboardLanguage: KeyboardLanguage = KeyboardLanguage.ENGLISH,
+    val keyboardTrail: KeyboardTrail = KeyboardTrail.AURORA,
+    val keyboardFont: KeyboardFont = KeyboardFont.SYSTEM,
+    val keyboardFontWeight: KeyboardFontWeight = KeyboardFontWeight.REGULAR,
+    val keyboardOpaque: Boolean = false,
+
+    // Bidirectional MiniMate Audio companion link.
+    val audioOutputEnabled: Boolean = true,
+    val audioMicrophoneEnabled: Boolean = true,
+    val audioOutputVolume: Float = .80f,
+    val audioMicrophoneGain: Float = 1f,
+    val audioTransport: AudioTransport = AudioTransport.WIFI,
     
     // Screen Editor: Freeform Positions & Sizes
     val ballPositionX: Float = 0.15f,
     val ballPositionY: Float = 0.82f,
     val ballSizeDp: Float = 56f,
     
-    val clockPositionX: Float = 0.50f,
-    val clockPositionY: Float = 0.09f,
-    val clockScale: Float = 1.0f,
+    val clockPositionX: Float = 0.248f,
+    val clockPositionY: Float = 0.882f,
+    val clockScale: Float = 1.18f,
     
     val isLocked: Boolean = false,
     val isEditorMode: Boolean = false,

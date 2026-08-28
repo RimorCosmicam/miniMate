@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -31,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.minimate.bluetooth.BluetoothAudioBridge
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.bluetooth.BluetoothUiState
 import com.minimate.bluetooth.ConnectionStatus
@@ -40,8 +42,13 @@ import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
+import com.minimate.ui.components.AudioModeOverlay
 import com.minimate.ui.components.BluetoothPairingDialog
+import com.minimate.ui.components.BluetoothKeyboardOverlay
 import com.minimate.ui.components.ClockBatteryOverlay
+import com.minimate.ui.components.EdgeControlsOverlay
+import com.minimate.ui.components.EdgeControlsEditorOverlay
+import com.minimate.ui.components.EdgeRefractionSurface
 import com.minimate.ui.components.HudToast
 import com.minimate.ui.components.LiquidGlassAnalogStick
 import com.minimate.ui.components.LiveCalibrationMode
@@ -59,6 +66,7 @@ import kotlinx.coroutines.launch
 fun TouchpadScreen(
     touchpadEngine: TouchpadEngine,
     hidManager: BluetoothHidManager,
+    audioBridge: BluetoothAudioBridge,
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
     onRequestPermissions: () -> Unit,
@@ -66,14 +74,21 @@ fun TouchpadScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by touchpadEngine.settings.collectAsState()
+    val audioState by audioBridge.state.collectAsState()
     val shaderTouchPoints by touchpadEngine.shaderTouchPoints.collectAsState()
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
     var showScreenEditor by remember { mutableStateOf(false) }
     var showThemeTester by remember { mutableStateOf(false) }
+    var showKeyboard by remember { mutableStateOf(false) }
+    var showAudio by remember { mutableStateOf(false) }
+    var showKeyboardThemeEditor by remember { mutableStateOf(false) }
+    var showEdgeThemeEditor by remember { mutableStateOf(false) }
     var liveCalibrationMode by remember { mutableStateOf<LiveCalibrationMode?>(null) }
     var themeTesterOriginal by remember { mutableStateOf<TouchpadSettings?>(null) }
+    var keyboardThemeEditorOriginal by remember { mutableStateOf<TouchpadSettings?>(null) }
+    var edgeThemeEditorOriginal by remember { mutableStateOf<TouchpadSettings?>(null) }
     var hudMessage by remember { mutableStateOf<String?>(null) }
     var hudIcon by remember { mutableStateOf<ImageVector?>(null) }
     
@@ -82,6 +97,22 @@ fun TouchpadScreen(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    LaunchedEffect(
+        settings.audioOutputEnabled,
+        settings.audioMicrophoneEnabled,
+        settings.audioOutputVolume,
+        settings.audioMicrophoneGain,
+        settings.audioTransport
+    ) {
+        audioBridge.configure(
+            settings.audioOutputEnabled,
+            settings.audioMicrophoneEnabled,
+            settings.audioOutputVolume,
+            settings.audioMicrophoneGain,
+            settings.audioTransport
+        )
+    }
 
     val dimRatio by animateFloatAsState(
         targetValue = if (isDimMode) 1f else 0f,
@@ -184,27 +215,38 @@ fun TouchpadScreen(
             }
     ) {
         // Layer 1: Interactive GPU Background Shader with 10 Inspired Themes
-        BackgroundShaderCanvas(
-            theme = settings.backgroundTheme,
-            variantIndex = settings.themeVariantIndex,
-            touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
-            customImageUri = settings.customImageUri,
-            dimRatio = dimRatio,
-            animationSpeed = settings.backgroundAnimation.speed,
-            themeFilter = settings.themeFilter,
-            shaderTheme = settings.abstractShaderTheme,
-            shaderSubthemeIndex = settings.abstractSubthemeIndex,
-            shaderRecolor = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor),
-            customShaderColors = settings.customShaderColors,
+        EdgeRefractionSurface(
+            railEnabled = !showKeyboard && !showAudio && (settings.edgeScrollEnabled || showEdgeThemeEditor),
+            cornerEnabled = !showKeyboard && !showAudio && (settings.edgeRightClickEnabled || showEdgeThemeEditor),
+            railSide = settings.edgeControlSide,
+            railScale = settings.edgeRailScale,
+            cornerScale = settings.edgeCornerScale,
+            railMaterial = settings.edgeRailMaterial,
+            cornerMaterial = settings.edgeCornerMaterial,
             modifier = Modifier.fillMaxSize()
-        )
+        ) {
+            BackgroundShaderCanvas(
+                theme = settings.backgroundTheme,
+                variantIndex = settings.themeVariantIndex,
+                touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
+                customImageUri = settings.customImageUri,
+                dimRatio = dimRatio,
+                animationSpeed = settings.backgroundAnimation.speed,
+                themeFilters = settings.themeFilters,
+                shaderTheme = settings.abstractShaderTheme,
+                shaderSubthemeIndex = settings.abstractSubthemeIndex,
+                shaderRecolor = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor),
+                customShaderColors = settings.customShaderColors,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Layer 2: Fullscreen Trackpad Touch Surface
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInteropFilter { motionEvent ->
-                    if (!showScreenEditor) {
+                    if (!showScreenEditor && !showKeyboard && !showAudio) {
                         touchpadEngine.onTouchEvent(motionEvent)
                     } else {
                         false
@@ -218,19 +260,165 @@ fun TouchpadScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = dimRatio * 0.98f))
+                    .background(Color.Black.copy(alpha = dimRatio))
             )
         }
 
-        // Layer 5: Interactive Clock & Battery HUD Widget (Tap = AMOLED, Hold = Settings).
+        // Mirrored single-hand edge controls sit above the touchpad but below the HUD/stick.
+        // Their narrow hit regions consume edge gestures so cursor motion never leaks through.
+        if (!isDimMode && !showKeyboard && !showAudio && !showSettingsSheet && !showPairingDialog && !showScreenEditor &&
+            !showThemeTester && liveCalibrationMode == null
+        ) {
+            EdgeControlsOverlay(
+                railEnabled = settings.edgeScrollEnabled || showEdgeThemeEditor,
+                rightClickEnabled = settings.edgeRightClickEnabled || showEdgeThemeEditor,
+                railSide = settings.edgeControlSide,
+                railScale = settings.edgeRailScale,
+                cornerScale = settings.edgeCornerScale,
+                scrollSpeed = settings.scrollSpeed,
+                naturalScrolling = settings.naturalScrolling,
+                onScroll = { wheel ->
+                    if (!showEdgeThemeEditor) {
+                        hidManager.sendMouseInput(
+                            buttons = HidDescriptor.BUTTON_NONE,
+                            dx = 0,
+                            dy = 0,
+                            wheel = wheel,
+                            pan = 0
+                        )
+                    }
+                },
+                onRightClick = { if (!showEdgeThemeEditor) executeStickAction(BallAction.RIGHT_CLICK) },
+                onRailTouchDown = {
+                    touchpadEngine.hapticEngine.playTouchDown(settings.hapticIntensity)
+                }
+            )
+        }
+
+        if (showKeyboard) {
+            BluetoothKeyboardOverlay(
+                connected = bluetoothState.status == ConnectionStatus.CONNECTED,
+                amoledMode = isDimMode,
+                shortcuts = settings.keyboardShortcuts,
+                theme = settings.keyboardTheme,
+                onThemeChange = { theme ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardTheme = theme))
+                },
+                language = settings.keyboardLanguage,
+                onLanguageChange = { language ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardLanguage = language))
+                },
+                trail = settings.keyboardTrail,
+                onTrailChange = { trail ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardTrail = trail))
+                },
+                font = settings.keyboardFont,
+                onFontChange = { font ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardFont = font))
+                },
+                fontWeight = settings.keyboardFontWeight,
+                onFontWeightChange = { weight ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardFontWeight = weight))
+                },
+                opaque = settings.keyboardOpaque,
+                onOpaqueChange = { opaque ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardOpaque = opaque))
+                },
+                editorMode = showKeyboardThemeEditor,
+                onEditorCancel = {
+                    keyboardThemeEditorOriginal?.let(touchpadEngine::updateSettings)
+                    keyboardThemeEditorOriginal = null
+                    showKeyboardThemeEditor = false
+                },
+                onEditorDone = {
+                    keyboardThemeEditorOriginal = null
+                    showKeyboardThemeEditor = false
+                },
+                onShortcutsChange = { shortcuts ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardShortcuts = shortcuts))
+                },
+                onKeyStroke = { modifiers, usage ->
+                    scope.launch {
+                        hidManager.sendKeyboardInput(modifiers, usage)
+                        delay(18)
+                        hidManager.sendKeyboardInput()
+                    }
+                },
+                onConsumerControl = { usage ->
+                    scope.launch {
+                        hidManager.sendConsumerInput(usage)
+                        delay(28)
+                        hidManager.sendConsumerInput(0)
+                    }
+                },
+                onText = { text ->
+                    scope.launch {
+                        text.forEach { character ->
+                            val shift = if (character.isUpperCase()) 0x02 else 0x00
+                            val strokes: List<Pair<Byte, Byte>> = when (val lower = character.lowercaseChar()) {
+                                in 'a'..'z' -> listOf(shift.toByte() to (0x04 + (lower - 'a')).toByte())
+                                ' ' -> listOf(0x00.toByte() to 0x2C.toByte())
+                                'á', 'é', 'í', 'ó', 'ú' -> listOf(
+                                    0x04.toByte() to 0x08.toByte(),
+                                    shift.toByte() to mapOf('á' to 0x04, 'é' to 0x08, 'í' to 0x0C, 'ó' to 0x12, 'ú' to 0x18).getValue(lower).toByte()
+                                )
+                                'à' -> listOf(0x04.toByte() to 0x35.toByte(), shift.toByte() to 0x04.toByte())
+                                'â', 'ê', 'ô' -> {
+                                    val base = mapOf('â' to 0x04, 'ê' to 0x08, 'ô' to 0x12).getValue(lower)
+                                    listOf(0x04.toByte() to 0x0C.toByte(), shift.toByte() to base.toByte())
+                                }
+                                'ã', 'õ' -> {
+                                    val base = if (lower == 'ã') 0x04 else 0x12
+                                    listOf(0x04.toByte() to 0x11.toByte(), shift.toByte() to base.toByte())
+                                }
+                                'ü' -> listOf(0x04.toByte() to 0x18.toByte(), shift.toByte() to 0x18.toByte())
+                                'ç' -> listOf((0x04 or shift).toByte() to 0x06.toByte())
+                                else -> emptyList()
+                            }
+                            strokes.forEach { (modifiers, usage) ->
+                                hidManager.sendKeyboardInput(modifiers, usage)
+                                delay(12)
+                                hidManager.sendKeyboardInput()
+                                delay(8)
+                            }
+                        }
+                    }
+                },
+                onHaptic = {
+                    touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+                }
+            )
+        }
+
+        if (showAudio) {
+            AudioModeOverlay(
+                state = audioState,
+                onOutputEnabled = { enabled ->
+                    touchpadEngine.updateSettings(settings.copy(audioOutputEnabled = enabled))
+                },
+                onMicrophoneEnabled = { enabled ->
+                    touchpadEngine.updateSettings(settings.copy(audioMicrophoneEnabled = enabled))
+                },
+                onOutputVolume = { volume ->
+                    touchpadEngine.updateSettings(settings.copy(audioOutputVolume = volume))
+                },
+                onMicrophoneGain = { gain ->
+                    touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
+                },
+                onTransport = { transport ->
+                    touchpadEngine.updateSettings(settings.copy(audioTransport = transport))
+                }
+            )
+        }
+
+        // Layer 5: Interactive HUD (tap = keyboard, double tap = AMOLED, hold = settings).
         // Force the minimal pill while dimmed so AMOLED mode always has a visible escape hatch,
         // even when the user's normal clock style is Hidden.
         if (!showThemeTester) {
             ClockBatteryOverlay(
-                clockStyle = if (isDimMode) com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL else settings.clockStyle,
-                // The main HUD is anchored to the physical cover-screen center. Its measured width is
-                // used by ClockBatteryOverlay, so battery/AM-PM content cannot shift it off-center.
-                positionXFraction = 0.5f,
+                clockStyle = if (isDimMode || showKeyboard || showAudio) com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL else settings.clockStyle,
+                // Bottom-left stays clear of the Z Flip cover cameras and remains reachable one-handed.
+                positionXFraction = settings.clockPositionX,
                 positionYFraction = settings.clockPositionY,
                 clockScale = settings.clockScale,
                 screenWidthPx = screenWidthPx,
@@ -241,18 +429,36 @@ fun TouchpadScreen(
                 batteryPercentage = batteryPercentage,
                 bluetoothState = bluetoothState,
                 onTap = {
+                    touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                    if (showAudio) {
+                        showAudio = false
+                    } else if (showKeyboard) {
+                        hidManager.sendKeyboardInput()
+                        showKeyboard = false
+                        showKeyboardThemeEditor = false
+                        keyboardThemeEditorOriginal = null
+                        showAudio = true
+                    } else {
+                        showEdgeThemeEditor = false
+                        edgeThemeEditorOriginal = null
+                        showKeyboard = true
+                    }
+                },
+                onDoubleTap = {
                     executeStickAction(BallAction.AMOLED_DIM)
                 },
                 onLongPress = {
-                    touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
-                    hidManager.refreshPairedDevices()
-                    showSettingsSheet = true
+                    if (!showKeyboard) {
+                        touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                        hidManager.refreshPairedDevices()
+                        showSettingsSheet = true
+                    }
                 }
             )
         }
 
         // Layer 6: Pure Liquid Glass 2D Analog Stick (Single-Hand Scroll / Click Mastery)
-        if (!isDimMode && !showThemeTester && !showScreenEditor && !settings.isLocked && settings.stickEnabled) {
+        if (!isDimMode && !showKeyboard && !showAudio && !showThemeTester && !showScreenEditor && !showEdgeThemeEditor && !settings.isLocked && settings.stickEnabled) {
             val centeringStick = liveCalibrationMode == LiveCalibrationMode.STICK
             LiquidGlassAnalogStick(
                 stickSizeDp = settings.ballSizeDp,
@@ -330,6 +536,20 @@ fun TouchpadScreen(
                     showSettingsSheet = false
                     showThemeTester = true
                 },
+                onOpenKeyboardThemeEditor = {
+                    keyboardThemeEditorOriginal = settings
+                    showEdgeThemeEditor = false
+                    showAudio = false
+                    showKeyboard = true
+                    showKeyboardThemeEditor = true
+                },
+                onOpenEdgeThemeEditor = {
+                    edgeThemeEditorOriginal = settings
+                    showAudio = false
+                    showKeyboard = false
+                    showKeyboardThemeEditor = false
+                    showEdgeThemeEditor = true
+                },
                 onOpenScreenEditor = {
                     showScreenEditor = true
                 },
@@ -356,6 +576,22 @@ fun TouchpadScreen(
                     hidManager.refreshPairedDevices()
                 },
                 onDismiss = { showSettingsSheet = false }
+            )
+        }
+
+        if (showEdgeThemeEditor) {
+            EdgeControlsEditorOverlay(
+                settings = settings,
+                onSettingsChange = touchpadEngine::updateSettings,
+                onCancel = {
+                    edgeThemeEditorOriginal?.let(touchpadEngine::updateSettings)
+                    edgeThemeEditorOriginal = null
+                    showEdgeThemeEditor = false
+                },
+                onDone = {
+                    edgeThemeEditorOriginal = null
+                    showEdgeThemeEditor = false
+                }
             )
         }
 

@@ -105,6 +105,30 @@ internal fun ThemeFilterSurface(
     }
 }
 
+/** Applies each selected filter as a real render pass, preserving the user's stack order. */
+@Composable
+internal fun ThemeFilterStack(
+    filters: List<ThemeFilter>,
+    modifier: Modifier,
+    content: @Composable () -> Unit
+) {
+    val active = filters.filter { it != ThemeFilter.NONE }.distinct()
+    Box(modifier = modifier) {
+        StackedFilterLayers(active, active.lastIndex, content)
+    }
+}
+
+@Composable
+private fun StackedFilterLayers(filters: List<ThemeFilter>, index: Int, content: @Composable () -> Unit) {
+    if (index < 0) {
+        content()
+    } else {
+        ThemeFilterSurface(filters[index], Modifier.fillMaxSize()) {
+            StackedFilterLayers(filters, index - 1, content)
+        }
+    }
+}
+
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, content: @Composable () -> Unit) {

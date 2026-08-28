@@ -56,7 +56,8 @@ import kotlin.math.roundToInt
 
 /**
  * Interactive Clock & Battery HUD Widget.
- * - Tap: Toggle AMOLED mode immediately
+ * - Tap: Toggle Bluetooth keyboard
+ * - Double tap: Toggle AMOLED mode
  * - Hold: Open Settings Control Center
  */
 @Composable
@@ -73,6 +74,7 @@ fun ClockBatteryOverlay(
     batteryPercentage: Int,
     bluetoothState: BluetoothUiState,
     onTap: () -> Unit = {},
+    onDoubleTap: () -> Unit = {},
     onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -132,6 +134,7 @@ fun ClockBatteryOverlay(
                         isPressed = false
                     },
                     onTap = { onTap() },
+                    onDoubleTap = { onDoubleTap() },
                     onLongPress = { onLongPress() }
                 )
             }

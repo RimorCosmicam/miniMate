@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "dgSpecHash": "xUXEpgvyyKk=",
+  "success": true,
+  "projectFilePath": "/Users/Apple/Projects/MiniMate/companion/windows/MiniMateAudio.csproj",
+  "expectedPackageFiles": [
+    "/Users/Apple/.nuget/packages/naudio/2.3.0/naudio.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/naudio.asio/2.3.0/naudio.asio.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/naudio.core/2.3.0/naudio.core.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/naudio.midi/2.3.0/naudio.midi.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/naudio.wasapi/2.3.0/naudio.wasapi.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/naudio.winforms/2.3.0/naudio.winforms.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/naudio.winmm/2.3.0/naudio.winmm.2.3.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/system.reactive/5.0.0/system.reactive.5.0.0.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/zeroconf/3.7.16/zeroconf.3.7.16.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/microsoft.windowsdesktop.app.ref/8.0.10/microsoft.windowsdesktop.app.ref.8.0.10.nupkg.sha512",
+    "/Users/Apple/.nuget/packages/microsoft.windows.sdk.net.ref/10.0.19041.44/microsoft.windows.sdk.net.ref.10.0.19041.44.nupkg.sha512"
+  ],
+  "logs": []
+}
