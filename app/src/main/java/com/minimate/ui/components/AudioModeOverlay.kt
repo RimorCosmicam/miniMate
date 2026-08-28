@@ -20,14 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -45,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,14 +65,13 @@ fun AudioModeOverlay(
     onMicrophoneGain: (Float) -> Unit,
     onMicrophoneNoiseGate: (Float) -> Unit,
     onMicrophonePreset: (MicrophoneVoicePreset) -> Unit,
-    onConsumerControl: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    Box(modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxWidth(.76f).padding(top = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.align(Alignment.TopStart).fillMaxWidth(.66f).padding(start = 16.dp, top = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             AudioTopBar(state, selectedTab) { selectedTab = it }
@@ -103,7 +95,6 @@ fun AudioModeOverlay(
                     onPreset = onMicrophonePreset
                 )
             }
-            MediaControls(onSend = onConsumerControl)
             state.error?.let {
                 Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
             }
@@ -118,21 +109,15 @@ private fun AudioTopBar(
     onSelected: (AudioEditorTab) -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(if (state.connected) Color(0xFF78F0B3) else Color.White.copy(.28f)))
+            Spacer(Modifier.size(4.dp))
             Text(
-                if (state.connected) {
-                    val link = if (state.transport == AudioTransport.WIFI) "LOSSLESS WI-FI" else "BLUETOOTH"
-                    "$link · ${state.hostName ?: "CONNECTED"}"
-                } else "WAITING FOR COMPANION",
-                color = Color.White.copy(.62f), fontSize = 8.sp, fontWeight = FontWeight.Bold
+                if (!state.connected) "OFFLINE" else if (state.transport == AudioTransport.WIFI) "WI-FI" else "BT",
+                color = Color.White.copy(.68f), fontSize = 7.5.sp, fontWeight = FontWeight.Bold
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(if (state.connected) Color(0xFF78F0B3) else Color.White.copy(.28f)))
-                Spacer(Modifier.size(5.dp))
-                Text(state.outputDeviceName, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-            }
         }
-        Spacer(Modifier.size(10.dp))
+        Spacer(Modifier.size(7.dp))
         Row(
             Modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(.55f))
                 .border(1.dp, Color.White.copy(.14f), RoundedCornerShape(16.dp)).padding(3.dp)
@@ -142,7 +127,7 @@ private fun AudioTopBar(
                 Box(
                     Modifier.clip(RoundedCornerShape(12.dp))
                         .background(if (active) Color.White else Color.Transparent)
-                        .clickable { onSelected(tab) }.padding(horizontal = 13.dp, vertical = 8.dp)
+                        .clickable { onSelected(tab) }.padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(tab.label, color = if (active) Color.Black else Color.White.copy(.62f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
@@ -164,8 +149,8 @@ private fun OutputControls(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
             .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
             .border(1.dp, Color.White.copy(if (state.outputEnabled) .22f else .10f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .padding(horizontal = 11.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(.11f)), contentAlignment = Alignment.Center) {
@@ -204,7 +189,7 @@ private fun OutputControls(
 @Composable
 private fun EqualizerGraph(gains: List<Float>, enabled: Boolean, onBand: (Int, Float) -> Unit) {
     Canvas(
-        Modifier.fillMaxWidth().height(104.dp).clip(RoundedCornerShape(14.dp))
+        Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(14.dp))
             .background(Color.Black.copy(.34f))
             .pointerInput(enabled, gains) {
                 fun update(x: Float, y: Float) {
@@ -283,17 +268,17 @@ private fun MicrophoneControls(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
             .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
             .border(1.dp, Color.White.copy(if (state.microphoneEnabled) .22f else .10f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp)
+            .padding(horizontal = 11.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(.11f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Box(Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(.11f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
-            Spacer(Modifier.size(10.dp))
+            Spacer(Modifier.size(7.dp))
             Column(Modifier.weight(1f)) {
-                Text("Microphone", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text("Live processing to the desktop", color = Color.White.copy(.48f), fontSize = 8.5.sp)
+                Text("Microphone", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("Live processing", color = Color.White.copy(.48f), fontSize = 7.5.sp)
             }
             Switch(
                 checked = state.microphoneEnabled,
@@ -309,7 +294,7 @@ private fun MicrophoneControls(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("VOICE ISOLATION", color = Color.White.copy(.7f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                Text("Mic array focus · noise + echo removal", color = Color.White.copy(.4f), fontSize = 7.5.sp)
+                Text("Mic array · noise + echo removal", color = Color.White.copy(.4f), fontSize = 7.sp)
             }
             Switch(
                 checked = state.voiceIsolation,
@@ -324,16 +309,18 @@ private fun MicrophoneControls(
             color = Color.White,
             trackColor = Color.White.copy(.10f)
         )
-        LabeledAudioSlider(
-            label = "GAIN", value = state.microphoneGain, range = 0f..2f,
-            valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
-            onValue = onGain
-        )
-        LabeledAudioSlider(
-            label = "CUTOFF", value = state.microphoneNoiseGate, range = 0f..0.15f,
-            valueLabel = "${(state.microphoneNoiseGate * 100).toInt()}%", enabled = state.microphoneEnabled,
-            onValue = onNoiseGate
-        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactAudioSlider(
+                label = "GAIN", value = state.microphoneGain, range = 0f..2f,
+                valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
+                onValue = onGain, modifier = Modifier.weight(1f)
+            )
+            CompactAudioSlider(
+                label = "CUTOFF", value = state.microphoneNoiseGate, range = 0f..0.15f,
+                valueLabel = "${(state.microphoneNoiseGate * 100).toInt()}%", enabled = state.microphoneEnabled,
+                onValue = onNoiseGate, modifier = Modifier.weight(1f)
+            )
+        }
         Text("VOICE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -362,6 +349,32 @@ private fun MicrophoneControls(
 }
 
 @Composable
+private fun CompactAudioSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    valueLabel: String,
+    enabled: Boolean,
+    onValue: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = Color.White.copy(if (enabled) .56f else .22f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Text(valueLabel, color = Color.White.copy(if (enabled) .72f else .25f), fontSize = 7.sp)
+        }
+        Slider(
+            value = value, onValueChange = onValue, valueRange = range, enabled = enabled,
+            modifier = Modifier.fillMaxWidth().height(30.dp),
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White, activeTrackColor = Color.White,
+                inactiveTrackColor = Color.White.copy(.14f)
+            )
+        )
+    }
+}
+
+@Composable
 private fun LabeledAudioSlider(
     label: String,
     value: Float,
@@ -381,115 +394,6 @@ private fun LabeledAudioSlider(
             )
         )
         Text(valueLabel, color = Color.White.copy(if (enabled) .72f else .25f), fontSize = 9.sp, modifier = Modifier.weight(.25f))
-    }
-}
-
-private object AudioMediaUsage {
-    const val PREVIOUS = 0x00B6
-    const val PLAY_PAUSE = 0x00CD
-    const val NEXT = 0x00B5
-    const val VOLUME_UP = 0x00E9
-    const val VOLUME_DOWN = 0x00EA
-}
-
-@Composable
-private fun MediaControls(onSend: (Int) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(Color.Black.copy(.42f))
-            .border(1.dp, Color.White.copy(.13f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 7.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MediaButton(Icons.Default.VolumeDown, "Volume down") { onSend(AudioMediaUsage.VOLUME_DOWN) }
-        MediaButton(Icons.Default.SkipPrevious, "Previous") { onSend(AudioMediaUsage.PREVIOUS) }
-        MediaButton(Icons.Default.PlayArrow, "Play or pause", emphasized = true) { onSend(AudioMediaUsage.PLAY_PAUSE) }
-        MediaButton(Icons.Default.SkipNext, "Next") { onSend(AudioMediaUsage.NEXT) }
-        MediaButton(Icons.Default.VolumeUp, "Volume up") { onSend(AudioMediaUsage.VOLUME_UP) }
-    }
-}
-
-@Composable
-private fun MediaButton(
-    icon: ImageVector,
-    description: String,
-    emphasized: Boolean = false,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(if (emphasized) 40.dp else 34.dp)
-            .clip(CircleShape)
-            .background(if (emphasized) Color.White else Color.White.copy(.07f))
-    ) {
-        Icon(
-            icon,
-            description,
-            tint = if (emphasized) Color.Black else Color.White.copy(.88f),
-            modifier = Modifier.size(if (emphasized) 21.dp else 17.dp)
-        )
-    }
-}
-
-@Composable
-private fun AudioControlCard(
-    icon: ImageVector,
-    title: String,
-    detail: String,
-    enabled: Boolean,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    valueLabel: String,
-    onEnabled: (Boolean) -> Unit,
-    onValue: (Float) -> Unit
-) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-            .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(if (enabled) .22f else .10f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(36.dp).clip(CircleShape)
-                    .background(Color.White.copy(if (enabled) .13f else .055f)),
-                contentAlignment = Alignment.Center
-            ) { Icon(icon, null, tint = Color.White.copy(if (enabled) .95f else .35f), modifier = Modifier.size(18.dp)) }
-            Spacer(Modifier.size(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text(detail, color = Color.White.copy(.48f), fontSize = 8.5.sp)
-            }
-            Switch(
-                checked = enabled,
-                onCheckedChange = onEnabled,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
-                    checkedTrackColor = Color.White,
-                    uncheckedThumbColor = Color.White.copy(.55f),
-                    uncheckedTrackColor = Color.White.copy(.08f),
-                    uncheckedBorderColor = Color.White.copy(.12f)
-                )
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Slider(
-                value = value,
-                onValueChange = onValue,
-                valueRange = valueRange,
-                enabled = enabled,
-                modifier = Modifier.weight(1f),
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color.White,
-                    inactiveTrackColor = Color.White.copy(.14f),
-                    disabledThumbColor = Color.White.copy(.25f),
-                    disabledActiveTrackColor = Color.White.copy(.12f)
-                )
-            )
-            Text(valueLabel, color = Color.White.copy(if (enabled) .72f else .25f), fontSize = 9.sp, modifier = Modifier.padding(start = 8.dp))
-        }
     }
 }
 

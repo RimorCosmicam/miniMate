@@ -461,14 +461,6 @@ fun TouchpadScreen(
                 },
                 onMicrophonePreset = { preset ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophonePreset = preset))
-                },
-                onConsumerControl = { usage ->
-                    scope.launch {
-                        touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
-                        hidManager.sendConsumerInput(usage)
-                        delay(28)
-                        hidManager.sendConsumerInput(0)
-                    }
                 }
             )
         }
