@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
 
 /**
  * Interactive Clock & Battery HUD Widget.
- * - Tap: Advance through Trackpad, Keyboard, Playback, and Microphone
+ * - Tap: Advance through Trackpad, Keyboard, and Audio
  * - Double tap: Toggle AMOLED mode
  * - Hold: Open Settings Control Center
  */

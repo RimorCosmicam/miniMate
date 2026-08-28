@@ -43,7 +43,6 @@ import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
 import com.minimate.ui.components.AudioModeOverlay
-import com.minimate.ui.components.AudioModePage
 import com.minimate.ui.components.BluetoothPairingDialog
 import com.minimate.ui.components.BluetoothKeyboardOverlay
 import com.minimate.ui.components.ClockBatteryOverlay
@@ -83,7 +82,6 @@ fun TouchpadScreen(
     var showThemeTester by remember { mutableStateOf(false) }
     var showKeyboard by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
-    var audioModePage by remember { mutableStateOf(AudioModePage.PLAYBACK) }
     var showKeyboardThemeEditor by remember { mutableStateOf(false) }
     var showEdgeThemeEditor by remember { mutableStateOf(false) }
     var liveCalibrationMode by remember { mutableStateOf<LiveCalibrationMode?>(null) }
@@ -395,7 +393,6 @@ fun TouchpadScreen(
         if (showAudio) {
             AudioModeOverlay(
                 state = audioState,
-                page = audioModePage,
                 onOutputEnabled = { enabled ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputEnabled = enabled))
                 },
@@ -603,7 +600,7 @@ fun TouchpadScreen(
         }
 
         // One pill, one gesture contract in every primary mode and editor:
-        // tap advances Trackpad -> Keyboard -> Playback -> Microphone -> Trackpad,
+        // tap advances Trackpad -> Keyboard -> Audio -> Trackpad,
         // double-tap toggles true-black AMOLED rendering, and hold opens Settings.
         ClockBatteryOverlay(
             clockStyle = if (isDimMode || showKeyboard || showAudio || showThemeTester) {
@@ -623,19 +620,14 @@ fun TouchpadScreen(
             onTap = {
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
                 when {
-                    showAudio && audioModePage == AudioModePage.PLAYBACK -> {
-                        audioModePage = AudioModePage.MICROPHONE
-                    }
                     showAudio -> {
                         showAudio = false
-                        audioModePage = AudioModePage.PLAYBACK
                     }
                     showKeyboard -> {
                         hidManager.sendKeyboardInput()
                         showKeyboard = false
                         showKeyboardThemeEditor = false
                         keyboardThemeEditorOriginal = null
-                        audioModePage = AudioModePage.PLAYBACK
                         showAudio = true
                     }
                     else -> {

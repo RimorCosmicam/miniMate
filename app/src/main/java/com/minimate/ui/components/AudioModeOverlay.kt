@@ -47,12 +47,9 @@ import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 
-enum class AudioModePage { PLAYBACK, MICROPHONE }
-
 @Composable
 fun AudioModeOverlay(
     state: AudioBridgeState,
-    page: AudioModePage,
     onOutputEnabled: (Boolean) -> Unit,
     onMicrophoneEnabled: (Boolean) -> Unit,
     onOutputVolume: (Float) -> Unit,
@@ -87,32 +84,25 @@ fun AudioModeOverlay(
                     )
                 }
             }
-            Text(
-                if (page == AudioModePage.PLAYBACK) "PLAYBACK" else "MICROPHONE",
-                color = Color.White.copy(.48f), fontSize = 9.sp, fontWeight = FontWeight.Bold
+            AudioControlCard(
+                icon = Icons.Default.Speaker,
+                title = "Output",
+                detail = "Desktop audio on this phone",
+                enabled = state.outputEnabled,
+                value = state.outputVolume,
+                valueRange = 0f..1f,
+                valueLabel = "${(state.outputVolume * 100).toInt()}%",
+                onEnabled = onOutputEnabled,
+                onValue = onOutputVolume
             )
-            if (page == AudioModePage.PLAYBACK) {
-                AudioControlCard(
-                    icon = Icons.Default.Speaker,
-                    title = "Output",
-                    detail = "Desktop audio on this phone",
-                    enabled = state.outputEnabled,
-                    value = state.outputVolume,
-                    valueRange = 0f..1f,
-                    valueLabel = "${(state.outputVolume * 100).toInt()}%",
-                    onEnabled = onOutputEnabled,
-                    onValue = onOutputVolume
-                )
-                MediaControls(onSend = onConsumerControl)
-            } else {
-                MicrophoneControls(
-                    state = state,
-                    onEnabled = onMicrophoneEnabled,
-                    onGain = onMicrophoneGain,
-                    onNoiseGate = onMicrophoneNoiseGate,
-                    onPreset = onMicrophonePreset
-                )
-            }
+            MicrophoneControls(
+                state = state,
+                onEnabled = onMicrophoneEnabled,
+                onGain = onMicrophoneGain,
+                onNoiseGate = onMicrophoneNoiseGate,
+                onPreset = onMicrophonePreset
+            )
+            MediaControls(onSend = onConsumerControl)
             state.error?.let {
                 Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
             }
