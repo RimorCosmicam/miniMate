@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,50 +69,43 @@ fun AudioModeOverlay(
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
     Box(modifier.fillMaxSize()) {
-        Box(
+        AudioTopBar(
+            state = state,
+            selected = selectedTab,
+            onSelected = { selectedTab = it },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(start = 18.dp, end = 20.dp, top = 20.dp)
+        )
+        Column(
             Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth(.72f)
-                .fillMaxHeight()
-                .padding(start = 20.dp, end = 8.dp, top = 26.dp, bottom = 48.dp)
+                .align(Alignment.Center)
+                .fillMaxWidth(.70f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AudioTopBar(
-                state = state,
-                selected = selectedTab,
-                onSelected = { selectedTab = it },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-            Column(
-                Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth()
-                    .padding(top = 52.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (selectedTab == AudioEditorTab.OUTPUT) {
-                    OutputControls(
-                        state = state,
-                        onEnabled = onOutputEnabled,
-                        onRoute = onOutputRoute,
-                        onVolume = onOutputVolume,
-                        onPreset = onOutputPreset,
-                        onBand = onOutputEqBand
-                    )
-                } else {
-                    MicrophoneControls(
-                        state = state,
-                        onEnabled = onMicrophoneEnabled,
-                        onRoute = onInputRoute,
-                        onVoiceIsolation = onVoiceIsolation,
-                        onGain = onMicrophoneGain,
-                        onNoiseGate = onMicrophoneNoiseGate,
-                        onPreset = onMicrophonePreset
-                    )
-                }
-                state.error?.let {
-                    Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
-                }
+            if (selectedTab == AudioEditorTab.OUTPUT) {
+                OutputControls(
+                    state = state,
+                    onEnabled = onOutputEnabled,
+                    onRoute = onOutputRoute,
+                    onVolume = onOutputVolume,
+                    onPreset = onOutputPreset,
+                    onBand = onOutputEqBand
+                )
+            } else {
+                MicrophoneControls(
+                    state = state,
+                    onEnabled = onMicrophoneEnabled,
+                    onRoute = onInputRoute,
+                    onVoiceIsolation = onVoiceIsolation,
+                    onGain = onMicrophoneGain,
+                    onNoiseGate = onMicrophoneNoiseGate,
+                    onPreset = onMicrophonePreset
+                )
+            }
+            state.error?.let {
+                Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
             }
         }
     }
