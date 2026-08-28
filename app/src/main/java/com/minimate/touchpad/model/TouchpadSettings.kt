@@ -362,6 +362,11 @@ enum class AudioTransport(val label: String) {
     BLUETOOTH("Bluetooth")
 }
 
+enum class AudioDeviceRoute(val label: String) {
+    BUILT_IN("Phone"),
+    CONNECTED("Connected")
+}
+
 enum class MicrophoneVoicePreset(val label: String) {
     CLEAN("Clean"),
     RICH("Rich"),
@@ -459,8 +464,11 @@ data class TouchpadSettings(
     val audioOutputEnabled: Boolean = true,
     val audioMicrophoneEnabled: Boolean = true,
     val audioOutputVolume: Float = .80f,
+    val audioOutputRoute: AudioDeviceRoute = AudioDeviceRoute.CONNECTED,
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
+    val audioInputRoute: AudioDeviceRoute = AudioDeviceRoute.BUILT_IN,
+    val audioVoiceIsolation: Boolean = true,
     val audioMicrophoneNoiseGate: Float = .015f,
     val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioTransport: AudioTransport = AudioTransport.WIFI,

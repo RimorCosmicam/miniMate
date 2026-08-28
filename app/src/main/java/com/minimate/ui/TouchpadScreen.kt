@@ -40,6 +40,7 @@ import com.minimate.bluetooth.HidDescriptor
 import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.AudioDeviceEqProfile
+import com.minimate.touchpad.model.AudioDeviceRoute
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.TouchpadSettings
@@ -103,8 +104,11 @@ fun TouchpadScreen(
         settings.audioOutputEnabled,
         settings.audioMicrophoneEnabled,
         settings.audioOutputVolume,
+        settings.audioOutputRoute,
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
+        settings.audioInputRoute,
+        settings.audioVoiceIsolation,
         settings.audioMicrophoneNoiseGate,
         settings.audioMicrophonePreset
     ) {
@@ -112,8 +116,11 @@ fun TouchpadScreen(
             settings.audioOutputEnabled,
             settings.audioMicrophoneEnabled,
             settings.audioOutputVolume,
+            settings.audioOutputRoute,
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
+            settings.audioInputRoute,
+            settings.audioVoiceIsolation,
             settings.audioMicrophoneNoiseGate,
             settings.audioMicrophonePreset
         )
@@ -400,8 +407,17 @@ fun TouchpadScreen(
                 onOutputEnabled = { enabled ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputEnabled = enabled))
                 },
+                onOutputRoute = { route ->
+                    touchpadEngine.updateSettings(settings.copy(audioOutputRoute = route))
+                },
                 onMicrophoneEnabled = { enabled ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneEnabled = enabled))
+                },
+                onInputRoute = { route ->
+                    touchpadEngine.updateSettings(settings.copy(audioInputRoute = route))
+                },
+                onVoiceIsolation = { enabled ->
+                    touchpadEngine.updateSettings(settings.copy(audioVoiceIsolation = enabled))
                 },
                 onOutputVolume = { volume ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputVolume = volume))

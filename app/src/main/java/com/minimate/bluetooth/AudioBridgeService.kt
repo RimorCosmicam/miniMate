@@ -64,8 +64,11 @@ class AudioBridgeService : Service() {
                 settings.audioOutputEnabled,
                 settings.audioMicrophoneEnabled,
                 settings.audioOutputVolume,
+                settings.audioOutputRoute,
                 settings.audioDeviceEqProfiles,
                 settings.audioMicrophoneGain,
+                settings.audioInputRoute,
+                settings.audioVoiceIsolation,
                 settings.audioMicrophoneNoiseGate,
                 settings.audioMicrophonePreset
             )

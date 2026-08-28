@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.touchpad.model.AudioTransport
+import com.minimate.touchpad.model.AudioDeviceRoute
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 
@@ -61,7 +62,10 @@ private enum class AudioEditorTab(val label: String) { OUTPUT("Output"), INPUT("
 fun AudioModeOverlay(
     state: AudioBridgeState,
     onOutputEnabled: (Boolean) -> Unit,
+    onOutputRoute: (AudioDeviceRoute) -> Unit,
     onMicrophoneEnabled: (Boolean) -> Unit,
+    onInputRoute: (AudioDeviceRoute) -> Unit,
+    onVoiceIsolation: (Boolean) -> Unit,
     onOutputVolume: (Float) -> Unit,
     onOutputPreset: (AudioOutputPreset) -> Unit,
     onOutputEqBand: (Int, Float) -> Unit,
@@ -83,6 +87,7 @@ fun AudioModeOverlay(
                 OutputControls(
                     state = state,
                     onEnabled = onOutputEnabled,
+                    onRoute = onOutputRoute,
                     onVolume = onOutputVolume,
                     onPreset = onOutputPreset,
                     onBand = onOutputEqBand
@@ -91,6 +96,8 @@ fun AudioModeOverlay(
                 MicrophoneControls(
                     state = state,
                     onEnabled = onMicrophoneEnabled,
+                    onRoute = onInputRoute,
+                    onVoiceIsolation = onVoiceIsolation,
                     onGain = onMicrophoneGain,
                     onNoiseGate = onMicrophoneNoiseGate,
                     onPreset = onMicrophonePreset
@@ -148,6 +155,7 @@ private fun AudioTopBar(
 private fun OutputControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
+    onRoute: (AudioDeviceRoute) -> Unit,
     onVolume: (Float) -> Unit,
     onPreset: (AudioOutputPreset) -> Unit,
     onBand: (Int, Float) -> Unit
@@ -170,6 +178,11 @@ private fun OutputControls(
             }
             Switch(checked = state.outputEnabled, onCheckedChange = onEnabled, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White))
         }
+        RouteSelector(
+            selected = state.outputRoute,
+            connectedName = state.connectedOutputName,
+            onSelected = onRoute
+        )
         LabeledAudioSlider(
             label = "VOLUME", value = state.outputVolume, range = 0f..1f,
             valueLabel = "${(state.outputVolume * 100).toInt()}%", enabled = state.outputEnabled, onValue = onVolume
@@ -237,9 +250,31 @@ private fun CompactChoice(label: String, selected: Boolean, enabled: Boolean = t
 }
 
 @Composable
+private fun RouteSelector(
+    selected: AudioDeviceRoute,
+    connectedName: String?,
+    onSelected: (AudioDeviceRoute) -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.weight(1f)) {
+            CompactChoice("Phone", selected == AudioDeviceRoute.BUILT_IN) { onSelected(AudioDeviceRoute.BUILT_IN) }
+        }
+        Box(Modifier.weight(1f)) {
+            CompactChoice(
+                connectedName?.take(18) ?: "No connected device",
+                selected == AudioDeviceRoute.CONNECTED,
+                connectedName != null
+            ) { onSelected(AudioDeviceRoute.CONNECTED) }
+        }
+    }
+}
+
+@Composable
 private fun MicrophoneControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
+    onRoute: (AudioDeviceRoute) -> Unit,
+    onVoiceIsolation: (Boolean) -> Unit,
     onGain: (Float) -> Unit,
     onNoiseGate: (Float) -> Unit,
     onPreset: (MicrophoneVoicePreset) -> Unit
@@ -263,6 +298,23 @@ private fun MicrophoneControls(
             Switch(
                 checked = state.microphoneEnabled,
                 onCheckedChange = onEnabled,
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
+            )
+        }
+        RouteSelector(
+            selected = state.inputRoute,
+            connectedName = state.connectedInputName,
+            onSelected = onRoute
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("VOICE ISOLATION", color = Color.White.copy(.7f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("Mic array focus · noise + echo removal", color = Color.White.copy(.4f), fontSize = 7.5.sp)
+            }
+            Switch(
+                checked = state.voiceIsolation,
+                onCheckedChange = onVoiceIsolation,
+                enabled = state.microphoneEnabled,
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
             )
         }

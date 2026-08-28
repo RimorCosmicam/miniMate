@@ -15,7 +15,10 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.MicrophoneDirection
+import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.NoiseSuppressor
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -28,12 +31,14 @@ import androidx.core.content.ContextCompat
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.AudioDeviceEqProfile
+import com.minimate.touchpad.model.AudioDeviceRoute
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,11 +69,16 @@ data class AudioBridgeState(
     val outputEnabled: Boolean = true,
     val microphoneEnabled: Boolean = true,
     val outputVolume: Float = .8f,
+    val outputRoute: AudioDeviceRoute = AudioDeviceRoute.CONNECTED,
+    val connectedOutputName: String? = null,
     val outputDeviceKey: String = "phone",
     val outputDeviceName: String = "Phone output",
     val outputPreset: AudioOutputPreset = AudioOutputPreset.FLAT,
     val outputEqGains: List<Float> = AudioOutputPreset.FLAT.gains,
     val microphoneGain: Float = 1f,
+    val inputRoute: AudioDeviceRoute = AudioDeviceRoute.BUILT_IN,
+    val connectedInputName: String? = null,
+    val voiceIsolation: Boolean = true,
     val microphoneNoiseGate: Float = .015f,
     val microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val microphoneLevel: Float = 0f,
@@ -125,19 +135,24 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     }
 
     private val audioDeviceCallback = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = updateOutputDevice()
-        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) = updateOutputDevice()
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = updateAudioDevices()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) = updateAudioDevices()
     }
 
     fun configure(
         outputEnabled: Boolean,
         microphoneEnabled: Boolean,
         outputVolume: Float,
+        outputRoute: AudioDeviceRoute,
         outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
+        inputRoute: AudioDeviceRoute,
+        voiceIsolation: Boolean,
         microphoneNoiseGate: Float,
         microphonePreset: MicrophoneVoicePreset
     ) {
+        val oldState = _state.value
+        val restartMicrophone = oldState.inputRoute != inputRoute || oldState.voiceIsolation != voiceIsolation
         deviceEqProfiles = outputProfiles
         _state.update {
             val profile = outputProfiles.firstOrNull { profile -> profile.deviceKey == it.outputDeviceKey }
@@ -145,18 +160,26 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 outputEnabled = outputEnabled,
                 microphoneEnabled = microphoneEnabled,
                 outputVolume = outputVolume.coerceIn(0f, 1f),
+                outputRoute = outputRoute,
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
                 outputEqGains = profile?.gains?.takeIf { gains -> gains.size == 9 }?.map { gain -> gain.coerceIn(-12f, 12f) }
                     ?: AudioOutputPreset.FLAT.gains,
                 microphoneGain = microphoneGain.coerceIn(0f, 2f),
+                inputRoute = inputRoute,
+                voiceIsolation = voiceIsolation,
                 microphoneNoiseGate = microphoneNoiseGate.coerceIn(0f, .15f),
                 microphonePreset = microphonePreset,
                 error = null
             )
         }
+        updateAudioDevices()
         audioTrack?.setVolume(outputVolume.coerceIn(0f, 1f))
+        audioTrack?.setPreferredDevice(preferredOutputDevice())
         applyOutputProcessing()
-        if (microphoneEnabled && activeLink != null) startMicrophone() else stopMicrophone()
+        if (restartMicrophone && microphoneJob?.isActive == true) {
+            stopMicrophone()
+            if (microphoneEnabled && activeLink != null) scope.launch { delay(80); startMicrophone() }
+        } else if (microphoneEnabled && activeLink != null) startMicrophone() else stopMicrophone()
     }
 
     fun start() {
@@ -170,7 +193,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         }
         updateNetworkAvailability()
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
-        updateOutputDevice()
+        updateAudioDevices()
         scope.launch { bluetoothAcceptLoop() }
         scope.launch { wifiAcceptLoop() }
     }
@@ -262,6 +285,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 audioTrack = it
                 audioTrackRate = frame.sampleRate
                 audioTrackEncoding = encoding
+                it.setPreferredDevice(preferredOutputDevice())
                 attachOutputProcessing(it)
                 it.play()
             }
@@ -328,14 +352,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         }
     }
 
-    private fun updateOutputDevice() {
+    private fun updateAudioDevices() {
         val outputs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-        val device = outputs.firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_HEADSET } ?: outputs.firstOrNull {
-            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
-        } ?: outputs.firstOrNull {
-            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
-        } ?: outputs.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val inputs = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        val builtInOutput = outputs.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val connectedOutput = outputs.firstOrNull(::isConnectedOutput)
+        val connectedInput = inputs.firstOrNull(::isConnectedInput)
+        val device = if (_state.value.outputRoute == AudioDeviceRoute.BUILT_IN) builtInOutput else connectedOutput ?: builtInOutput
         val name = device?.productName?.toString()?.takeIf { it.isNotBlank() } ?: "Phone output"
         val key = device?.let { "${it.type}:${it.address.ifBlank { name }}" } ?: "phone"
         val profile = deviceEqProfiles.firstOrNull { it.deviceKey == key }
@@ -343,11 +366,40 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             it.copy(
                 outputDeviceKey = key,
                 outputDeviceName = name,
+                connectedOutputName = connectedOutput?.productName?.toString(),
+                connectedInputName = connectedInput?.productName?.toString(),
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
                 outputEqGains = profile?.gains ?: AudioOutputPreset.FLAT.gains
             )
         }
         applyOutputProcessing()
+    }
+
+    private fun preferredOutputDevice(): AudioDeviceInfo? {
+        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        return if (_state.value.outputRoute == AudioDeviceRoute.BUILT_IN) {
+            devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        } else devices.firstOrNull(::isConnectedOutput)
+    }
+
+    private fun preferredInputDevice(): AudioDeviceInfo? {
+        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        return if (_state.value.inputRoute == AudioDeviceRoute.BUILT_IN) {
+            devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
+        } else devices.firstOrNull(::isConnectedInput)
+    }
+
+    private fun isConnectedOutput(device: AudioDeviceInfo): Boolean = when (device.type) {
+        AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE,
+        AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> true
+        else -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+    }
+
+    private fun isConnectedInput(device: AudioDeviceInfo): Boolean = when (device.type) {
+        AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE,
+        AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> true
+        else -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET
     }
 
     private fun startMicrophone(explicitLink: Link? = null) {
@@ -358,13 +410,32 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             return
         }
         microphoneJob = scope.launch {
+            val initialState = _state.value
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION, sampleRate, AudioFormat.CHANNEL_IN_MONO,
+                if (initialState.inputRoute == AudioDeviceRoute.BUILT_IN && initialState.voiceIsolation) {
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION
+                } else MediaRecorder.AudioSource.MIC,
+                sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
+            recorder.setPreferredDevice(preferredInputDevice())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                recorder.setPreferredMicrophoneDirection(
+                    if (initialState.inputRoute == AudioDeviceRoute.BUILT_IN) {
+                        MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER
+                    } else MicrophoneDirection.MIC_DIRECTION_EXTERNAL
+                )
+                recorder.setPreferredMicrophoneFieldDimension(if (initialState.voiceIsolation) .75f else 0f)
+            }
+            val noiseSuppressor = if (initialState.voiceIsolation && NoiseSuppressor.isAvailable()) {
+                runCatching { NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true } }.getOrNull()
+            } else null
+            val echoCanceler = if (initialState.voiceIsolation && initialState.inputRoute == AudioDeviceRoute.BUILT_IN && AcousticEchoCanceler.isAvailable()) {
+                runCatching { AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true } }.getOrNull()
+            } else null
             val samples = ShortArray(frames)
             val processor = MicrophoneProcessor(sampleRate)
             try {
@@ -392,6 +463,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
             } finally {
                 runCatching { recorder.stop() }
+                noiseSuppressor?.release()
+                echoCanceler?.release()
                 recorder.release()
             }
         }
