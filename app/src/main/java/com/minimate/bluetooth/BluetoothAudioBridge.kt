@@ -51,7 +51,9 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 import kotlin.math.abs
 import kotlin.math.cos
@@ -79,6 +81,7 @@ data class AudioBridgeState(
     val inputRoute: AudioDeviceRoute = AudioDeviceRoute.BUILT_IN,
     val connectedInputName: String? = null,
     val voiceIsolation: Boolean = true,
+    val ambientReferenceActive: Boolean = false,
     val microphoneNoiseGate: Float = .015f,
     val microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val microphoneLevel: Float = 0f,
@@ -385,9 +388,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private fun preferredInputDevice(): AudioDeviceInfo? {
         val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
         return if (_state.value.inputRoute == AudioDeviceRoute.BUILT_IN) {
-            devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
+            preferredBuiltInInputDevice(devices)
         } else devices.firstOrNull(::isConnectedInput)
     }
+
+    private fun preferredBuiltInInputDevice(
+        devices: Array<AudioDeviceInfo> = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+    ): AudioDeviceInfo? = devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
 
     private fun isConnectedOutput(device: AudioDeviceInfo): Boolean = when (device.type) {
         AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE,
@@ -438,8 +445,17 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             } else null
             val samples = ShortArray(frames)
             val processor = MicrophoneProcessor(sampleRate)
+            var ambientReference: AmbientReferenceCapture? = null
             try {
                 recorder.startRecording()
+                if (initialState.voiceIsolation && initialState.inputRoute == AudioDeviceRoute.CONNECTED) {
+                    ambientReference = AmbientReferenceCapture.create(
+                        sampleRate = sampleRate,
+                        frames = frames,
+                        device = preferredBuiltInInputDevice()
+                    )?.takeIf { it.start() }
+                    _state.update { it.copy(ambientReferenceActive = ambientReference != null) }
+                }
                 while (running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
                     if (count <= 0) continue
@@ -449,7 +465,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         count = count,
                         gain = current.microphoneGain,
                         gateThreshold = current.microphoneNoiseGate,
-                        preset = current.microphonePreset
+                        preset = current.microphonePreset,
+                        ambientNoiseLevel = ambientReference?.noiseFloor ?: 0f
                     )
                     val codec = if (link.transport == AudioTransport.WIFI) AudioBridgeProtocol.CODEC_PCM16 else AudioBridgeProtocol.CODEC_IMA_ADPCM
                     val payload = if (codec == AudioBridgeProtocol.CODEC_PCM16) adjusted.toByteArrayLittleEndian() else ImaAdpcm.encode(adjusted, 1)
@@ -462,10 +479,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             } catch (e: Exception) {
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
             } finally {
+                ambientReference?.close()
                 runCatching { recorder.stop() }
                 noiseSuppressor?.release()
                 echoCanceler?.release()
                 recorder.release()
+                _state.update { it.copy(ambientReferenceActive = false) }
             }
         }
     }
@@ -477,7 +496,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private fun stopMicrophone() {
         microphoneJob?.cancel()
         microphoneJob = null
-        _state.update { it.copy(microphoneLevel = 0f) }
+        _state.update { it.copy(microphoneLevel = 0f, ambientReferenceActive = false) }
     }
 
     private fun disconnectLink(link: Link) {
@@ -551,6 +570,82 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     }
 }
 
+/**
+ * Captures the phone mic array as an environment-only reference while an external mic is primary.
+ * If Android does not allow concurrent capture, creation/start fails silently and the normal
+ * platform noise suppressor remains active on the external microphone.
+ */
+private class AmbientReferenceCapture private constructor(
+    private val recorder: AudioRecord,
+    private val frames: Int
+) {
+    private val running = AtomicBoolean(false)
+    private var worker: Thread? = null
+    @Volatile var noiseFloor: Float = 0f
+        private set
+
+    fun start(): Boolean = runCatching {
+        recorder.startRecording()
+        check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+        running.set(true)
+        worker = thread(name = "MiniMate-phone-mic-reference", isDaemon = true) {
+            val buffer = ShortArray(frames)
+            while (running.get()) {
+                val count = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
+                if (count <= 0) continue
+                var energy = 0.0
+                for (index in 0 until count) {
+                    val sample = buffer[index].toDouble()
+                    energy += sample * sample
+                }
+                val measured = (sqrt(energy / count) / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
+                // Follow quieter ambience quickly, but require sustained sound before raising the
+                // reference floor so speech leaking into the phone array is not treated as noise.
+                val smoothing = if (measured < noiseFloor) .18f else .025f
+                noiseFloor += (measured - noiseFloor) * smoothing
+            }
+        }
+        true
+    }.getOrElse {
+        close()
+        false
+    }
+
+    fun close() {
+        running.set(false)
+        runCatching { recorder.stop() }
+        runCatching { worker?.join(120) }
+        worker = null
+        recorder.release()
+        noiseFloor = 0f
+    }
+
+    companion object {
+        fun create(sampleRate: Int, frames: Int, device: AudioDeviceInfo?): AmbientReferenceCapture? = runCatching {
+            val min = AudioRecord.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            check(min > 0 && device != null)
+            val recorder = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                maxOf(min, frames * 2 * 4)
+            )
+            check(recorder.state == AudioRecord.STATE_INITIALIZED)
+            check(recorder.setPreferredDevice(device))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_UNSPECIFIED)
+                recorder.setPreferredMicrophoneFieldDimension(0f)
+            }
+            AmbientReferenceCapture(recorder, frames)
+        }.getOrNull()
+    }
+}
+
 /** Lightweight, stateful microphone color that is safe to run in the capture loop. */
 private class MicrophoneProcessor(private val sampleRate: Int) {
     private var lowPass = 0f
@@ -568,11 +663,13 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         count: Int,
         gain: Float,
         gateThreshold: Float,
-        preset: MicrophoneVoicePreset
+        preset: MicrophoneVoicePreset,
+        ambientNoiseLevel: Float = 0f
     ): ShortArray {
         val output = ShortArray(count)
         var energy = 0.0
-        val threshold = gateThreshold * Short.MAX_VALUE
+        val adaptiveGate = maxOf(gateThreshold, ambientNoiseLevel * .62f)
+        val threshold = adaptiveGate * Short.MAX_VALUE
         for (index in 0 until count) {
             val dry = samples[index].toFloat()
             energy += dry * dry

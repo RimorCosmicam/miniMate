@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -69,34 +70,50 @@ fun AudioModeOverlay(
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
     Box(modifier.fillMaxSize()) {
-        Column(
-            Modifier.align(Alignment.TopStart).fillMaxWidth(.66f).padding(start = 16.dp, top = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth(.72f)
+                .fillMaxHeight()
+                .padding(start = 20.dp, end = 8.dp, top = 26.dp, bottom = 48.dp)
         ) {
-            AudioTopBar(state, selectedTab) { selectedTab = it }
-            if (selectedTab == AudioEditorTab.OUTPUT) {
-                OutputControls(
-                    state = state,
-                    onEnabled = onOutputEnabled,
-                    onRoute = onOutputRoute,
-                    onVolume = onOutputVolume,
-                    onPreset = onOutputPreset,
-                    onBand = onOutputEqBand
-                )
-            } else {
-                MicrophoneControls(
-                    state = state,
-                    onEnabled = onMicrophoneEnabled,
-                    onRoute = onInputRoute,
-                    onVoiceIsolation = onVoiceIsolation,
-                    onGain = onMicrophoneGain,
-                    onNoiseGate = onMicrophoneNoiseGate,
-                    onPreset = onMicrophonePreset
-                )
-            }
-            state.error?.let {
-                Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+            AudioTopBar(
+                state = state,
+                selected = selectedTab,
+                onSelected = { selectedTab = it },
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+            Column(
+                Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .padding(top = 52.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (selectedTab == AudioEditorTab.OUTPUT) {
+                    OutputControls(
+                        state = state,
+                        onEnabled = onOutputEnabled,
+                        onRoute = onOutputRoute,
+                        onVolume = onOutputVolume,
+                        onPreset = onOutputPreset,
+                        onBand = onOutputEqBand
+                    )
+                } else {
+                    MicrophoneControls(
+                        state = state,
+                        onEnabled = onMicrophoneEnabled,
+                        onRoute = onInputRoute,
+                        onVoiceIsolation = onVoiceIsolation,
+                        onGain = onMicrophoneGain,
+                        onNoiseGate = onMicrophoneNoiseGate,
+                        onPreset = onMicrophonePreset
+                    )
+                }
+                state.error?.let {
+                    Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+                }
             }
         }
     }
@@ -106,30 +123,34 @@ fun AudioModeOverlay(
 private fun AudioTopBar(
     state: AudioBridgeState,
     selected: AudioEditorTab,
-    onSelected: (AudioEditorTab) -> Unit
+    onSelected: (AudioEditorTab) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(if (state.connected) Color(0xFF78F0B3) else Color.White.copy(.28f)))
-            Spacer(Modifier.size(4.dp))
+            Box(Modifier.size(7.dp).clip(CircleShape).background(if (state.connected) Color(0xFF78F0B3) else Color.White.copy(.28f)))
+            Spacer(Modifier.size(5.dp))
             Text(
                 if (!state.connected) "OFFLINE" else if (state.transport == AudioTransport.WIFI) "WI-FI" else "BT",
-                color = Color.White.copy(.68f), fontSize = 7.5.sp, fontWeight = FontWeight.Bold
+                color = Color.White.copy(.72f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold
             )
         }
-        Spacer(Modifier.size(7.dp))
         Row(
-            Modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(.55f))
-                .border(1.dp, Color.White.copy(.14f), RoundedCornerShape(16.dp)).padding(3.dp)
+            Modifier.clip(RoundedCornerShape(19.dp)).background(Color.Black.copy(.58f))
+                .border(1.dp, Color.White.copy(.16f), RoundedCornerShape(19.dp)).padding(4.dp)
         ) {
             AudioEditorTab.values().forEach { tab ->
                 val active = tab == selected
                 Box(
-                    Modifier.clip(RoundedCornerShape(12.dp))
+                    Modifier.clip(RoundedCornerShape(15.dp))
                         .background(if (active) Color.White else Color.Transparent)
-                        .clickable { onSelected(tab) }.padding(horizontal = 10.dp, vertical = 6.dp)
+                        .clickable { onSelected(tab) }.padding(horizontal = 14.dp, vertical = 9.dp)
                 ) {
-                    Text(tab.label, color = if (active) Color.Black else Color.White.copy(.62f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(tab.label, color = if (active) Color.Black else Color.White.copy(.68f), fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -294,7 +315,15 @@ private fun MicrophoneControls(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("VOICE ISOLATION", color = Color.White.copy(.7f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                Text("Mic array · noise + echo removal", color = Color.White.copy(.4f), fontSize = 7.sp)
+                Text(
+                    when {
+                        state.ambientReferenceActive -> "Phone array reference active"
+                        state.inputRoute == AudioDeviceRoute.CONNECTED -> "Uses phone array when available"
+                        else -> "Mic array · noise + echo removal"
+                    },
+                    color = Color.White.copy(.4f),
+                    fontSize = 7.sp
+                )
             }
             Switch(
                 checked = state.voiceIsolation,
