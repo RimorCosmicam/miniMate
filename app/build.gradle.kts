@@ -21,18 +21,32 @@ android {
         }
     }
 
+    val stableKeystorePath = System.getenv("MINIMATE_KEYSTORE_PATH")
+    signingConfigs {
+        if (!stableKeystorePath.isNullOrBlank()) {
+            create("stableCloud") {
+                storeFile = file(stableKeystorePath)
+                storePassword = System.getenv("MINIMATE_KEYSTORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("MINIMATE_KEYSTORE_ALIAS") ?: "androiddebugkey"
+                keyPassword = System.getenv("MINIMATE_KEY_PASSWORD") ?: "android"
+            }
+        }
+    }
+
     buildTypes {
+        val stableCloudSigning = signingConfigs.findByName("stableCloud")
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = stableCloudSigning ?: signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            if (stableCloudSigning != null) signingConfig = stableCloudSigning
         }
     }
 

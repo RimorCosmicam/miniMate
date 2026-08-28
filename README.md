@@ -134,7 +134,7 @@ Artifacts are written to:
 - `app/build/outputs/apk/debug/app-debug.apk`
 - `app/build/outputs/apk/release/app-release.apk`
 
-The current release build uses the debug signing configuration. Replace it with a private release keystore before distributing the APK outside development devices.
+GitHub Actions uses a repository-secret keystore so debug and release artifacts retain a stable update signature across runs and can replace earlier development installs without clearing app data. Replace this development key with a dedicated private release key before distributing the APK outside private devices.
 
 ## Continuous integration
 
