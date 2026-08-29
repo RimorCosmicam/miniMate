@@ -342,6 +342,12 @@ private fun MicrophoneControls(
                 onValue = onNoiseGate, modifier = Modifier.weight(1f)
             )
         }
+        Text("MIC MODES", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(MicrophoneVoicePreset.SURFACE_MIC, MicrophoneVoicePreset.SUPER_AUDITION).forEach { preset ->
+                CompactChoice(preset.label, preset == state.microphonePreset, state.microphoneEnabled) { onPreset(preset) }
+            }
+        }
         Text("VOICE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

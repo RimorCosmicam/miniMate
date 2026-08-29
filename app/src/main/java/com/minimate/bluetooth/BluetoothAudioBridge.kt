@@ -697,6 +697,9 @@ private class AmbientReferenceCapture private constructor(
 /** Lightweight, stateful microphone color that is safe to run in the capture loop. */
 private class MicrophoneProcessor(private val sampleRate: Int) {
     private var lowPass = 0f
+    private var subBass = 0f
+    private var previousDry = 0f
+    private var auditionEnvelope = 0f
     private var gateEnvelope = 0f
     private var detectorEnvelope = 0f
     private var robotPhase = 0.0
@@ -716,7 +719,17 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
     ): ShortArray {
         val output = ShortArray(count)
         var energy = 0.0
-        val adaptiveGate = maxOf(gateThreshold, ambientNoiseLevel * .62f)
+        val gateScale = when (preset) {
+            MicrophoneVoicePreset.SUPER_AUDITION -> .12f
+            MicrophoneVoicePreset.SURFACE_MIC -> .42f
+            else -> 1f
+        }
+        val ambientScale = when (preset) {
+            MicrophoneVoicePreset.SUPER_AUDITION -> .10f
+            MicrophoneVoicePreset.SURFACE_MIC -> .34f
+            else -> .62f
+        }
+        val adaptiveGate = maxOf(gateThreshold * gateScale, ambientNoiseLevel * ambientScale)
         val threshold = adaptiveGate * Short.MAX_VALUE
         for (index in 0 until count) {
             val dry = samples[index].toFloat()
@@ -728,6 +741,7 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
             gateEnvelope += (targetGate - gateEnvelope) * gateSpeed
 
             lowPass += (dry - lowPass) * .12f
+            subBass += (dry - subBass) * .018f
             val highPass = dry - lowPass
             val pitchFactor = when (preset) {
                 MicrophoneVoicePreset.BABY -> 1.38f
@@ -738,6 +752,20 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
             val shifted = pitchShift(dry, pitchFactor)
             val colored = when (preset) {
                 MicrophoneVoicePreset.CLEAN -> dry
+                MicrophoneVoicePreset.SURFACE_MIC -> {
+                    // Contact-style voicing: discard slow room/handling rumble,
+                    // emphasize the resonant body band, and preserve impact edges.
+                    val bodyBand = lowPass - subBass
+                    val transient = dry - previousDry
+                    bodyBand * 1.85f + transient * .42f
+                }
+                MicrophoneVoicePreset.SUPER_AUDITION -> {
+                    // Lift genuinely quiet detail without allowing loud events to
+                    // explode. The high shelf restores articulation after compression.
+                    auditionEnvelope = maxOf(abs(dry), auditionEnvelope * .9985f)
+                    val detailGain = (13_000f / auditionEnvelope.coerceAtLeast(900f)).coerceIn(1f, 5.2f)
+                    dry * detailGain + highPass * .58f
+                }
                 MicrophoneVoicePreset.RICH -> dry * .82f + lowPass * .28f + highPass * .10f
                 MicrophoneVoicePreset.WARM -> dry * .72f + lowPass * .42f
                 MicrophoneVoicePreset.DEEP -> shifted * .82f + lowPass * .38f
@@ -752,12 +780,15 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
                 MicrophoneVoicePreset.ARENA_ANNOUNCER -> shifted * .86f + lowPass * .52f
             }
             val driven = when (preset) {
+                MicrophoneVoicePreset.SURFACE_MIC -> tanh(colored / 14_000f) * 22_000f
+                MicrophoneVoicePreset.SUPER_AUDITION -> tanh(colored / 16_000f) * 24_000f
                 MicrophoneVoicePreset.RADIO -> tanh(colored / 9_000f) * 18_000f
                 MicrophoneVoicePreset.ROBOT -> (colored / 900f).roundToInt() * 900f
                 MicrophoneVoicePreset.RICH -> tanh(colored / 20_000f) * 22_000f
                 MicrophoneVoicePreset.ARENA_ANNOUNCER -> tanh(colored / 12_000f) * 21_000f
                 else -> colored
             }
+            previousDry = dry
             output[index] = (driven * gain * gateEnvelope).roundToInt()
                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }

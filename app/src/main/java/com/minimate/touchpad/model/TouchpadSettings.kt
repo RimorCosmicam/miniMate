@@ -374,6 +374,8 @@ enum class AudioDeviceRoute(val label: String) {
 
 enum class MicrophoneVoicePreset(val label: String) {
     CLEAN("Clean"),
+    SURFACE_MIC("Surface Mic"),
+    SUPER_AUDITION("Super Audition"),
     RICH("Rich"),
     WARM("Warm"),
     DEEP("Deep"),
