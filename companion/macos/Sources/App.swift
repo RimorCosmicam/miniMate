@@ -102,10 +102,14 @@ struct CompanionView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("MiniMate Speaker · output", systemImage: "speaker.wave.2.fill")
                     Label("MiniMate Microphone · input", systemImage: "mic.fill")
-                    Label("MiniMate Camera · camera", systemImage: "video.fill")
+                    Label(controller.cameraDeviceName, systemImage: "video.fill")
                     if controller.driverInstalled && controller.cameraInstalled {
                         Label("Installed and available to apps", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
+                        if controller.cameraDeviceName.hasPrefix("OBS") {
+                            Text("Select OBS Virtual Camera in Photo Booth. MiniMate feeds it directly; OBS does not need to be open.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
                     } else {
                         Button("Install Audio + Camera Devices") { controller.installAudioDevices() }
                             .buttonStyle(.borderedProminent)

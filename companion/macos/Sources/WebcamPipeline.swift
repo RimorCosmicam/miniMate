@@ -1,6 +1,7 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
+import ModernCameraBridge
 
 /// Processes the phone camera independently of the companion window and
 /// atomically publishes one latest frame for the CoreMediaIO camera plug-in.
@@ -42,6 +43,13 @@ final class WebcamPipeline: @unchecked Sendable {
                   let data = context.jpegRepresentation(of: image, colorSpace: color, options: [:])
             else { return }
             try? data.write(to: Self.frameURL, options: .atomic)
+            // Modern macOS blocks legacy DAL cameras by default. If another signed
+            // camera extension exposes a producer sink (OBS 30+), publish the same
+            // processed frame to it so Photo Booth and hardened apps can use MiniMate.
+            data.withUnsafeBytes { bytes in
+                guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return }
+                _ = MMModernCameraSendJPEG(base, data.count)
+            }
         }
     }
 

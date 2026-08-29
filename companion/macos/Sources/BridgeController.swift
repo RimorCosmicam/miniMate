@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import IOBluetooth
+import ModernCameraBridge
 
 @MainActor
 final class BridgeController: ObservableObject {
@@ -9,6 +10,7 @@ final class BridgeController: ObservableObject {
     @Published var bluetoothDevices: [IOBluetoothDevice] = BluetoothBridgeTransport.pairedMiniMateCandidates
     @Published var driverInstalled = false
     @Published var cameraInstalled = false
+    @Published var cameraDeviceName = "MiniMate Camera"
     @Published var connected = false
     @Published var streaming = false
 
@@ -28,7 +30,7 @@ final class BridgeController: ObservableObject {
             self?.sendAudio(CoreAudioEndpointBridge.pcm16StereoToPCM24(packet))
         }
         driverInstalled = endpoints.isInstalled
-        cameraInstalled = FileManager.default.fileExists(atPath: CoreAudioDriverInstaller.installedCameraURL.path)
+        refreshCameraAvailability()
         discovery.start()
     }
 
@@ -90,10 +92,23 @@ final class BridgeController: ObservableObject {
         do {
             try CoreAudioDriverInstaller.install()
             driverInstalled = endpoints.isInstalled
-            cameraInstalled = FileManager.default.fileExists(atPath: CoreAudioDriverInstaller.installedCameraURL.path)
+            refreshCameraAvailability()
             status = driverInstalled && cameraInstalled ? "Audio and camera devices installed" : "Restart the companion to finish installation"
         } catch {
             status = error.localizedDescription
+        }
+    }
+
+    private func refreshCameraAvailability() {
+        if MMModernCameraAvailable() {
+            cameraInstalled = true
+            cameraDeviceName = "OBS Virtual Camera · MiniMate bridge"
+        } else if #available(macOS 14.1, *) {
+            cameraInstalled = false
+            cameraDeviceName = "MiniMate Camera · extension unavailable"
+        } else {
+            cameraInstalled = FileManager.default.fileExists(atPath: CoreAudioDriverInstaller.installedCameraURL.path)
+            cameraDeviceName = "MiniMate Camera"
         }
     }
 
