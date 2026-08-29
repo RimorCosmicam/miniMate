@@ -192,7 +192,11 @@ class WebcamCapture(
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     val range = info[CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE]
-                    if (range != null) set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom.coerceIn(range.lower, range.upper))
+                    // Samsung's logical camera silently suppresses its LED while the
+                    // ultrawide physical sensor is active. Torch mode therefore pins
+                    // the logical device to the flash-equipped wide sensor.
+                    val requestedZoom = if (flashEnabled) maxOf(1f, zoom) else zoom
+                    if (range != null) set(CaptureRequest.CONTROL_ZOOM_RATIO, requestedZoom.coerceIn(range.lower, range.upper))
                     else cropForZoom(info, zoom)?.let { set(CaptureRequest.SCALER_CROP_REGION, it) }
                 } else cropForZoom(info, zoom)?.let { set(CaptureRequest.SCALER_CROP_REGION, it) }
 
