@@ -104,7 +104,7 @@ There is no microphone-output picker and no screen-capture permission. The GitHu
 
 ## Webcam bridge
 
-The fourth pill mode turns the phone cameras into **MiniMate Camera**, a real selectable macOS camera device. The phone intentionally shows configuration rather than a redundant preview. It provides rear/front lens selection, 720p or 1080p output, 15/24/30 fps modes, mirror, zoom, exposure, filter strength, and a stackable filter list shared with Theme Studio.
+The fourth pill mode turns the two outside cameras into **MiniMate Camera**, a real selectable macOS camera device. The phone intentionally shows configuration rather than a redundant preview. Its continuous optical zoom crosses smoothly between the 0.5× ultrawide and 1× wide physical cameras through Samsung's logical rear-camera pipeline. It also provides direct lens anchors, 720p or 1080p output, 15/24/30 fps modes, mirror, exposure, adjustable torch intensity on supported Android versions, filter strength, and a stackable filter list shared with Theme Studio.
 
 Camera imagery uses Wi-Fi while the Bluetooth connection remains available for HID and compressed audio fallback. The Mac companion applies the stacked filters with Core Image and publishes the latest frame through its bundled CoreMediaIO DAL plug-in. The system installer places that plug-in in `/Library/CoreMediaIO/Plug-Ins/DAL`; camera applications should be reopened after installation. This private-distribution DAL route is intentional because MiniMate is not a Mac App Store product.
 

@@ -34,29 +34,31 @@ import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.WebcamCaptureState
 import com.minimate.touchpad.model.ThemeFilter
-import com.minimate.touchpad.model.WebcamLens
 import com.minimate.touchpad.model.WebcamResolution
+import kotlin.math.min
 
 @Composable
 fun WebcamModeOverlay(
     linkState: AudioBridgeState,
     captureState: WebcamCaptureState,
     enabled: Boolean,
-    lens: WebcamLens,
     resolution: WebcamResolution,
     fps: Int,
     mirror: Boolean,
     zoom: Float,
     exposure: Float,
+    flashEnabled: Boolean,
+    flashIntensity: Float,
     intensity: Float,
     filters: List<ThemeFilter>,
     onEnabled: (Boolean) -> Unit,
-    onLens: (WebcamLens) -> Unit,
     onResolution: (WebcamResolution) -> Unit,
     onFps: (Int) -> Unit,
     onMirror: (Boolean) -> Unit,
     onZoom: (Float) -> Unit,
     onExposure: (Float) -> Unit,
+    onFlashEnabled: (Boolean) -> Unit,
+    onFlashIntensity: (Float) -> Unit,
     onIntensity: (Float) -> Unit,
     onToggleFilter: (ThemeFilter) -> Unit,
     modifier: Modifier = Modifier
@@ -100,20 +102,47 @@ fun WebcamModeOverlay(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Choice(lens.label, lens == WebcamLens.REAR, Modifier.weight(1f)) {
-                    onLens(if (lens == WebcamLens.REAR) WebcamLens.FRONT else WebcamLens.REAR)
-                }
+                Choice("0.5× Ultra", zoom < .8f, Modifier.weight(1f)) { onZoom(.5f) }
+                Choice("1× Wide", zoom in .8f..1.2f, Modifier.weight(1f)) { onZoom(1f) }
                 Choice(resolution.label, resolution == WebcamResolution.FULL_HD, Modifier.weight(1f)) {
                     onResolution(if (resolution == WebcamResolution.FULL_HD) WebcamResolution.HD else WebcamResolution.FULL_HD)
                 }
                 Choice("$fps fps", fps == 30, Modifier.weight(1f)) {
                     onFps(when (fps) { 15 -> 24; 24 -> 30; else -> 15 })
                 }
-                Choice(if (mirror) "Mirrored" else "Natural", mirror, Modifier.weight(1f)) { onMirror(!mirror) }
             }
 
-            LabeledSlider("ZOOM", "%.1f×".format(zoom), zoom, 1f..8f, onZoom)
+            LabeledSlider("ZOOM", "%.1f×".format(zoom), zoom, .5f..min(captureState.maximumZoom, 3f).coerceAtLeast(1f), onZoom)
             LabeledSlider("EXPOSURE", "%+.1f".format(exposure), exposure, -1f..1f, onExposure)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Choice(if (mirror) "Mirrored" else "Natural", mirror, Modifier.width(82.dp)) { onMirror(!mirror) }
+                Text("FLASH", color = Color.White.copy(.48f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Switch(
+                    checked = flashEnabled && captureState.flashAvailable,
+                    onCheckedChange = { if (captureState.flashAvailable) onFlashEnabled(it) },
+                    enabled = captureState.flashAvailable,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.Black,
+                        checkedTrackColor = Color.White,
+                        uncheckedThumbColor = Color.White.copy(.72f),
+                        uncheckedTrackColor = Color.White.copy(.12f)
+                    )
+                )
+                if (flashEnabled && captureState.flashAvailable && captureState.flashMaximumLevel > 1) {
+                    Slider(
+                        value = flashIntensity,
+                        onValueChange = onFlashIntensity,
+                        modifier = Modifier.weight(1f).height(24.dp),
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(.12f))
+                    )
+                    Text("${(flashIntensity * 100).toInt()}%", color = Color.White.copy(.72f), fontSize = 8.5.sp, modifier = Modifier.width(32.dp))
+                } else {
+                    Text(
+                        if (captureState.flashAvailable) "Torch" else "Unavailable",
+                        color = Color.White.copy(.42f), fontSize = 8.sp, modifier = Modifier.weight(1f)
+                    )
+                }
+            }
             LabeledSlider("FILTER MIX", "${(intensity * 100).toInt()}%", intensity, 0f..1f, onIntensity)
 
             Text("STACKED FILTERS", color = Color.White.copy(.42f), fontSize = 8.sp, fontWeight = FontWeight.Bold)

@@ -133,21 +133,29 @@ fun TouchpadScreen(
 
     LaunchedEffect(
         settings.webcamEnabled,
-        settings.webcamLens,
         settings.webcamResolution,
-        settings.webcamFps,
-        settings.webcamZoom,
-        settings.webcamExposure
+        settings.webcamFps
     ) {
         if (settings.webcamEnabled) {
             webcamCapture.start(
-                settings.webcamLens,
                 settings.webcamResolution,
-                settings.webcamFps,
-                settings.webcamZoom,
-                settings.webcamExposure
+                settings.webcamFps
             )
         } else webcamCapture.stop()
+    }
+
+    LaunchedEffect(
+        settings.webcamZoom,
+        settings.webcamExposure,
+        settings.webcamFlashEnabled,
+        settings.webcamFlashIntensity
+    ) {
+        webcamCapture.updateControls(
+            settings.webcamZoom,
+            settings.webcamExposure,
+            settings.webcamFlashEnabled,
+            settings.webcamFlashIntensity
+        )
     }
 
     LaunchedEffect(
@@ -509,21 +517,23 @@ fun TouchpadScreen(
                 linkState = audioState,
                 captureState = webcamState,
                 enabled = settings.webcamEnabled,
-                lens = settings.webcamLens,
                 resolution = settings.webcamResolution,
                 fps = settings.webcamFps,
                 mirror = settings.webcamMirror,
                 zoom = settings.webcamZoom,
                 exposure = settings.webcamExposure,
+                flashEnabled = settings.webcamFlashEnabled,
+                flashIntensity = settings.webcamFlashIntensity,
                 intensity = settings.webcamFilterIntensity,
                 filters = settings.webcamFilters,
                 onEnabled = { touchpadEngine.updateSettings(settings.copy(webcamEnabled = it)) },
-                onLens = { touchpadEngine.updateSettings(settings.copy(webcamLens = it)) },
                 onResolution = { touchpadEngine.updateSettings(settings.copy(webcamResolution = it)) },
                 onFps = { touchpadEngine.updateSettings(settings.copy(webcamFps = it)) },
                 onMirror = { touchpadEngine.updateSettings(settings.copy(webcamMirror = it)) },
                 onZoom = { touchpadEngine.updateSettings(settings.copy(webcamZoom = it)) },
                 onExposure = { touchpadEngine.updateSettings(settings.copy(webcamExposure = it)) },
+                onFlashEnabled = { touchpadEngine.updateSettings(settings.copy(webcamFlashEnabled = it)) },
+                onFlashIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFlashIntensity = it)) },
                 onIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFilterIntensity = it)) },
                 onToggleFilter = { filter ->
                     val next = if (filter in settings.webcamFilters) settings.webcamFilters - filter else settings.webcamFilters + filter
