@@ -584,7 +584,7 @@ fun BluetoothKeyboardOverlay(
         }
         // The clock pill remains visible above this sheet and is the sole open/close affordance.
         Column(
-            Modifier.align(Alignment.TopCenter).padding(top = if (editorMode) 190.dp else 136.dp).fillMaxWidth()
+            Modifier.align(Alignment.TopCenter).padding(top = if (editorMode) 118.dp else 64.dp).fillMaxWidth()
                 .padding(horizontal = 7.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
@@ -625,7 +625,7 @@ fun BluetoothKeyboardOverlay(
         }
         if (showLanguageSwitcher) {
             Row(
-                Modifier.align(Alignment.TopCenter).padding(top = 340.dp).fillMaxWidth(.62f),
+                Modifier.align(Alignment.TopCenter).padding(top = 268.dp).fillMaxWidth(.62f),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 KeyboardLanguage.entries.forEach { option ->
