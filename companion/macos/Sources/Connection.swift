@@ -51,8 +51,11 @@ final class BluetoothBridgeTransport: NSObject, BridgeTransport, IOBluetoothRFCO
 
     static var pairedMiniMateCandidates: [IOBluetoothDevice] {
         (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? []).filter {
-            ($0.name ?? "").localizedCaseInsensitiveContains("MiniMate") ||
-            ($0.name ?? "").localizedCaseInsensitiveContains("Galaxy")
+            let name = $0.name ?? ""
+            let looksLikePhone = name.localizedCaseInsensitiveContains("MiniMate") ||
+                name.localizedCaseInsensitiveContains("Galaxy")
+            let isAccessory = name.localizedCaseInsensitiveContains("buds")
+            return looksLikePhone && !isAccessory
         }
     }
 

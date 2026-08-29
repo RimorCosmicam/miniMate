@@ -88,61 +88,80 @@ struct CompanionView: View {
     private var devicesReady: Bool { controller.driverInstalled && controller.cameraInstalled }
 
     var body: some View {
-        GlassEffectContainer(spacing: 14) {
-            VStack(spacing: 18) {
-                HStack(spacing: 9) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable().frame(width: 30, height: 30)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    Text("MiniMate Audio").font(.system(size: 14, weight: .bold))
+        ZStack {
+            // The base pane: fills the whole window so it neither reads as an
+            // empty void nor lets clicks fall through to whatever is behind it.
+            Color.clear.glassEffect(.regular, in: Rectangle())
+
+            GlassEffectContainer(spacing: 14) {
+                VStack(spacing: 18) {
+                    HStack(spacing: 9) {
+                        Image(nsImage: NSApp.applicationIconImage)
+                            .resizable().frame(width: 30, height: 30)
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        Text("MiniMate Audio").font(.system(size: 14, weight: .bold))
+                        Spacer()
+                        StatusPill(connected: controller.connected, text: controller.status)
+                    }
+
                     Spacer()
-                    StatusPill(connected: controller.connected, text: controller.status)
-                }
 
-                Spacer()
+                    if controller.wifiServices.isEmpty {
+                        Text("Looking for your phone…")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(controller.wifiServices.enumerated()), id: \.offset) { _, service in
+                            Button("Connect to \(service.name)") { controller.connectWiFi(service) }
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 3)
+                                .buttonStyle(.glassProminent)
+                        }
+                    }
 
-                if controller.wifiServices.isEmpty {
-                    Text("Looking for your phone…")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(controller.wifiServices.enumerated()), id: \.offset) { _, service in
-                        Button("Connect to \(service.name)") { controller.connectWiFi(service) }
-                            .font(.system(size: 14, weight: .semibold))
+                    if !controller.bluetoothDevices.isEmpty {
+                        ForEach(controller.bluetoothDevices, id: \.addressString) { device in
+                            Button {
+                                controller.connectBluetooth(device)
+                            } label: {
+                                Label(device.name ?? device.addressString ?? "Paired device", systemImage: "dot.radiowaves.left.and.right")
+                            }
+                            .font(.system(size: 12, weight: .medium))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 3)
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.glass)
+                        }
                     }
-                }
 
-                if !devicesReady {
-                    Button("Install MiniMate Devices") { controller.installAudioDevices() }
-                        .font(.system(size: 11.5, weight: .medium))
-                        .buttonStyle(.glass)
-                } else if controller.cameraDeviceName.hasPrefix("OBS") {
-                    Text("Camera available as OBS Virtual Camera")
-                        .font(.system(size: 10)).foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-
-                HStack(spacing: 8) {
-                    Button(controller.streaming ? "Stop audio" : "Start audio") {
-                        controller.streaming ? controller.stopStreaming() : controller.startStreaming()
+                    if !devicesReady {
+                        Button("Install MiniMate Devices") { controller.installAudioDevices() }
+                            .font(.system(size: 11.5, weight: .medium))
+                            .buttonStyle(.glass)
+                    } else if controller.cameraDeviceName.hasPrefix("OBS") {
+                        Text("Camera available as OBS Virtual Camera")
+                            .font(.system(size: 10)).foregroundStyle(.tertiary)
                     }
-                    .frame(maxWidth: .infinity)
-                    .buttonStyle(.glass)
-                    .disabled(!controller.connected)
 
-                    Button("Disconnect") { controller.disconnect() }
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Button(controller.streaming ? "Stop audio" : "Start audio") {
+                            controller.streaming ? controller.stopStreaming() : controller.startStreaming()
+                        }
                         .frame(maxWidth: .infinity)
                         .buttonStyle(.glass)
                         .disabled(!controller.connected)
+
+                        Button("Disconnect") { controller.disconnect() }
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.glass)
+                            .disabled(!controller.connected)
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 18)
+                .padding(.top, 32)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 18)
-            .padding(.top, 32)
         }
         .frame(width: 340, height: 320)
     }
