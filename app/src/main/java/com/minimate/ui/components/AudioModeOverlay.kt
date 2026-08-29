@@ -44,8 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
+import com.minimate.bluetooth.AudioDeviceSummary
+import com.minimate.bluetooth.PHONE_DEVICE_KEY
 import com.minimate.touchpad.model.AudioTransport
-import com.minimate.touchpad.model.AudioDeviceRoute
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 
@@ -57,9 +58,9 @@ private enum class AudioEditorTab(val label: String) {
 fun AudioModeOverlay(
     state: AudioBridgeState,
     onOutputEnabled: (Boolean) -> Unit,
-    onOutputRoute: (AudioDeviceRoute) -> Unit,
+    onOutputDeviceSelected: (String) -> Unit,
     onMicrophoneEnabled: (Boolean) -> Unit,
-    onInputRoute: (AudioDeviceRoute) -> Unit,
+    onInputDeviceSelected: (String) -> Unit,
     onVoiceIsolation: (Boolean) -> Unit,
     onOutputVolume: (Float) -> Unit,
     onOutputPreset: (AudioOutputPreset) -> Unit,
@@ -88,11 +89,11 @@ fun AudioModeOverlay(
         ) {
             when (selectedTab) {
                 AudioEditorTab.OUTPUT -> OutputControls(
-                    state, onOutputEnabled, onOutputRoute, onOutputVolume,
+                    state, onOutputEnabled, onOutputDeviceSelected, onOutputVolume,
                     onOutputPreset, onOutputEqBand
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
-                    state, onMicrophoneEnabled, onInputRoute, onMicrophoneGain,
+                    state, onMicrophoneEnabled, onInputDeviceSelected, onMicrophoneGain,
                     onMicrophoneNoiseGate, onMicrophonePreset
                 )
                 AudioEditorTab.TOOLS -> AudioToolsControls(
@@ -150,7 +151,7 @@ private fun AudioTopBar(
 private fun OutputControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
-    onRoute: (AudioDeviceRoute) -> Unit,
+    onDeviceSelected: (String) -> Unit,
     onVolume: (Float) -> Unit,
     onPreset: (AudioOutputPreset) -> Unit,
     onBand: (Int, Float) -> Unit
@@ -173,10 +174,11 @@ private fun OutputControls(
             }
             Switch(checked = state.outputEnabled, onCheckedChange = onEnabled, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White))
         }
-        RouteSelector(
-            selected = state.outputRoute,
-            connectedName = state.connectedOutputName,
-            onSelected = onRoute
+        DeviceList(
+            devices = state.outputDevices,
+            selectedKey = state.selectedOutputKey,
+            enabled = state.outputEnabled,
+            onSelected = onDeviceSelected
         )
         LabeledAudioSlider(
             label = "VOLUME", value = state.outputVolume, range = 0f..1f,
@@ -244,22 +246,17 @@ private fun CompactChoice(label: String, selected: Boolean, enabled: Boolean = t
     }
 }
 
+/** Every available device is tappable directly — no separate enable/toggle step. */
 @Composable
-private fun RouteSelector(
-    selected: AudioDeviceRoute,
-    connectedName: String?,
-    onSelected: (AudioDeviceRoute) -> Unit
+private fun DeviceList(
+    devices: List<AudioDeviceSummary>,
+    selectedKey: String,
+    enabled: Boolean,
+    onSelected: (String) -> Unit
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.weight(1f)) {
-            CompactChoice("Phone", selected == AudioDeviceRoute.BUILT_IN) { onSelected(AudioDeviceRoute.BUILT_IN) }
-        }
-        Box(Modifier.weight(1f)) {
-            CompactChoice(
-                connectedName?.take(18) ?: "No connected device",
-                selected == AudioDeviceRoute.CONNECTED,
-                connectedName != null
-            ) { onSelected(AudioDeviceRoute.CONNECTED) }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        devices.forEach { device ->
+            CompactChoice(device.name.take(18), device.key == selectedKey, enabled) { onSelected(device.key) }
         }
     }
 }
@@ -268,7 +265,7 @@ private fun RouteSelector(
 private fun MicrophoneControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
-    onRoute: (AudioDeviceRoute) -> Unit,
+    onDeviceSelected: (String) -> Unit,
     onGain: (Float) -> Unit,
     onNoiseGate: (Float) -> Unit,
     onPreset: (MicrophoneVoicePreset) -> Unit
@@ -295,10 +292,11 @@ private fun MicrophoneControls(
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
             )
         }
-        RouteSelector(
-            selected = state.inputRoute,
-            connectedName = state.connectedInputName,
-            onSelected = onRoute
+        DeviceList(
+            devices = state.inputDevices,
+            selectedKey = state.selectedInputKey,
+            enabled = state.microphoneEnabled,
+            onSelected = onDeviceSelected
         )
         LinearProgressIndicator(
             progress = state.microphoneLevel,
@@ -374,7 +372,7 @@ private fun AudioToolsControls(
                     if (state.microphonePreset == preset) "ON" else "USE",
                     state.microphonePreset == preset,
                     state.microphoneEnabled
-                ) { onPreset(preset) }
+                ) { onPreset(if (state.microphonePreset == preset) MicrophoneVoicePreset.CLEAN else preset) }
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(.08f)))
@@ -384,7 +382,7 @@ private fun AudioToolsControls(
                 Text(
                     when {
                         state.ambientReferenceActive -> "Phone microphone array is filtering ambient noise"
-                        state.inputRoute == AudioDeviceRoute.CONNECTED -> "Uses the phone microphones as an ambient reference"
+                        state.selectedInputKey != PHONE_DEVICE_KEY -> "Uses the phone microphones as an ambient reference"
                         else -> "Phone array noise and echo suppression"
                     },
                     color = Color.White.copy(.42f), fontSize = 7.5.sp

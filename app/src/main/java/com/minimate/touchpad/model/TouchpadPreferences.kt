@@ -83,7 +83,7 @@ class TouchpadPreferences(context: Context) {
                 put("audioOutputEnabled", settings.audioOutputEnabled)
                 put("audioMicrophoneEnabled", settings.audioMicrophoneEnabled)
                 put("audioOutputVolume", settings.audioOutputVolume.toDouble())
-                put("audioOutputRoute", settings.audioOutputRoute.name)
+                put("audioOutputDeviceKey", settings.audioOutputDeviceKey)
                 put("audioDeviceEqProfiles", JSONArray().apply {
                     settings.audioDeviceEqProfiles.forEach { profile ->
                         put(JSONObject().apply {
@@ -95,7 +95,7 @@ class TouchpadPreferences(context: Context) {
                     }
                 })
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
-                put("audioInputRoute", settings.audioInputRoute.name)
+                put("audioInputDeviceKey", settings.audioInputDeviceKey)
                 put("audioVoiceIsolation", settings.audioVoiceIsolation)
                 put("audioMicrophoneNoiseGate", settings.audioMicrophoneNoiseGate.toDouble())
                 put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
@@ -267,9 +267,7 @@ class TouchpadPreferences(context: Context) {
                 audioOutputEnabled = json.optBoolean("audioOutputEnabled", true),
                 audioMicrophoneEnabled = json.optBoolean("audioMicrophoneEnabled", true),
                 audioOutputVolume = json.optDouble("audioOutputVolume", .8).toFloat().coerceIn(0f, 1f),
-                audioOutputRoute = runCatching {
-                    AudioDeviceRoute.valueOf(json.optString("audioOutputRoute", "CONNECTED"))
-                }.getOrDefault(AudioDeviceRoute.CONNECTED),
+                audioOutputDeviceKey = json.optString("audioOutputDeviceKey", "phone"),
                 audioDeviceEqProfiles = json.optJSONArray("audioDeviceEqProfiles")?.let { profiles ->
                     (0 until profiles.length()).mapNotNull { index ->
                         profiles.optJSONObject(index)?.let { profile ->
@@ -286,9 +284,7 @@ class TouchpadPreferences(context: Context) {
                     }
                 } ?: emptyList(),
                 audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 2f),
-                audioInputRoute = runCatching {
-                    AudioDeviceRoute.valueOf(json.optString("audioInputRoute", "BUILT_IN"))
-                }.getOrDefault(AudioDeviceRoute.BUILT_IN),
+                audioInputDeviceKey = json.optString("audioInputDeviceKey", "phone"),
                 audioVoiceIsolation = json.optBoolean("audioVoiceIsolation", true),
                 audioMicrophoneNoiseGate = json.optDouble("audioMicrophoneNoiseGate", .015).toFloat().coerceIn(0f, .15f),
                 audioMicrophonePreset = runCatching {
