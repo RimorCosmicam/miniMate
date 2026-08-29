@@ -71,7 +71,7 @@ fun WebcamModeOverlay(
                 else -> "CAMERA READY"
             },
             active = captureState.running,
-            modifier = Modifier.align(Alignment.TopRight).padding(top = 20.dp, end = 20.dp)
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 20.dp)
         )
 
         Column(

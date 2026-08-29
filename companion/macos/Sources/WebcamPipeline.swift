@@ -31,7 +31,7 @@ final class WebcamPipeline: @unchecked Sendable {
                 image = image.transformed(by: CGAffineTransform(translationX: image.extent.width, y: 0).scaledBy(x: -1, y: 1))
             }
             for name in filters { image = apply(name, to: image).cropped(to: image.extent) }
-            if intensity < .999, !filters.isEmpty,
+            if intensity < 0.999, !filters.isEmpty,
                let dissolve = CIFilter(name: "CIDissolveTransition") {
                 dissolve.setValue(image, forKey: kCIInputImageKey)
                 dissolve.setValue(original, forKey: kCIInputBackgroundImageKey)
@@ -39,7 +39,7 @@ final class WebcamPipeline: @unchecked Sendable {
                 image = dissolve.outputImage ?? image
             }
             guard let color = CGColorSpace(name: CGColorSpace.sRGB),
-                  let data = context.jpegRepresentation(of: image, colorSpace: color, options: [.lossyCompressionQuality: 0.92])
+                  let data = context.jpegRepresentation(of: image, colorSpace: color, options: [:])
             else { return }
             try? data.write(to: Self.frameURL, options: .atomic)
         }
@@ -73,7 +73,7 @@ final class WebcamPipeline: @unchecked Sendable {
         case "NEGATIVE": return filtered("CIColorInvert")
         case "POSTERIZE": return filtered("CIColorPosterize", ["inputLevels": 6])
         case "FILM_GRAIN": return filtered("CIPhotoEffectProcess").applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": 0.035, "inputSharpness": 0.55])
-        case "MIRROR_PRISM": return filtered("CITriangleKaleidoscope", [kCIInputPointKey: center, "inputSize": min(extent.width, extent.height) * 0.55, "inputRotation": 0.7, "inputDecay": 0.86])
+        case "MIRROR_PRISM": return filtered("CITriangleKaleidoscope", ["inputPoint": center, "inputSize": min(extent.width, extent.height) * 0.55, "inputRotation": 0.7, "inputDecay": 0.86])
         case "LIQUID_GLASS": return filtered("CIBumpDistortion", [kCIInputCenterKey: center, kCIInputRadiusKey: min(extent.width, extent.height) * 0.34, kCIInputScaleKey: 0.32])
         case "NIGHT_VISION": return filtered("CIPhotoEffectMono").applyingFilter("CIFalseColor", parameters: ["inputColor0": CIColor.black, "inputColor1": CIColor(red: 0.36, green: 1, blue: 0.38)]).applyingFilter("CIBloom", parameters: [kCIInputRadiusKey: 5, kCIInputIntensityKey: 0.55])
         default: return input
