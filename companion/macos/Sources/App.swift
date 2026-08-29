@@ -39,7 +39,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
-        window.setContentSize(NSSize(width: 400, height: 470))
+        // Real translucency needs a non-opaque window backing it, not just a
+        // material fill sitting on an opaque canvas — otherwise "glass" just
+        // reads as flat gray with nothing behind it to actually blur.
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.setContentSize(NSSize(width: 340, height: 320))
         window.center()
         window.delegate = self
         // An installer launch must be visible. The app returns to menu-bar-only mode when
@@ -63,45 +68,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 }
 
-// MARK: - Liquid glass design system
-
-private extension Color {
-    static let miniCyan = Color(red: 0x4C / 255, green: 0xC9 / 255, blue: 0xF0 / 255)
-    static let miniPink = Color(red: 0xFF / 255, green: 0x69 / 255, blue: 0xB4 / 255)
-    static let miniEmerald = Color(red: 0x10 / 255, green: 0xB9 / 255, blue: 0x81 / 255)
-    static let miniAmber = Color(red: 0xFF / 255, green: 0xCA / 255, blue: 0x3A / 255)
-}
-
-/// A native Liquid Glass panel — the base unit of every section in this window.
-private struct GlassCard<Content: View>: View {
-    var title: String
-    var systemImage: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            content
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
 private struct StatusPill: View {
     var connected: Bool
     var text: String
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(connected ? Color.miniEmerald : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
-            Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            Circle().fill(connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
+            Text(text).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10).padding(.vertical, 5)
+        .padding(.horizontal, 9).padding(.vertical, 4)
         .glassEffect(.regular, in: Capsule())
     }
 }
@@ -112,91 +88,62 @@ struct CompanionView: View {
     private var devicesReady: Bool { controller.driverInstalled && controller.cameraInstalled }
 
     var body: some View {
-        ScrollView {
-            GlassEffectContainer(spacing: 16) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 12) {
-                        Image(nsImage: NSApp.applicationIconImage)
-                            .resizable().frame(width: 46, height: 46)
-                            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("MiniMate Audio").font(.system(size: 18, weight: .bold))
-                            StatusPill(connected: controller.connected, text: controller.status)
-                        }
-                        Spacer()
-                    }
+        GlassEffectContainer(spacing: 14) {
+            VStack(spacing: 18) {
+                HStack(spacing: 9) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable().frame(width: 30, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    Text("MiniMate Audio").font(.system(size: 14, weight: .bold))
+                    Spacer()
+                    StatusPill(connected: controller.connected, text: controller.status)
+                }
 
-                    GlassCard(title: "Wi-Fi · Lossless", systemImage: "wifi") {
-                        if controller.wifiServices.isEmpty {
-                            Text("Searching this network…").font(.system(size: 12)).foregroundStyle(.secondary)
-                        } else {
-                            ForEach(Array(controller.wifiServices.enumerated()), id: \.offset) { _, service in
-                                Button("Connect to \(service.name)") { controller.connectWiFi(service) }
-                                    .frame(maxWidth: .infinity)
-                                    .buttonStyle(.glassProminent)
-                                    .tint(.miniCyan)
-                            }
-                        }
-                        Text("24-bit / 48 kHz PCM · no audio compression")
-                            .font(.system(size: 10)).foregroundStyle(.tertiary)
-                    }
+                Spacer()
 
-                    GlassCard(title: "Bluetooth · Fallback", systemImage: "dot.radiowaves.left.and.right") {
-                        if controller.bluetoothDevices.isEmpty {
-                            Text("Pair the Z Flip in System Settings first.").font(.system(size: 12)).foregroundStyle(.secondary)
-                        } else {
-                            ForEach(controller.bluetoothDevices, id: \.addressString) { device in
-                                Button("Connect to \(device.name ?? device.addressString ?? "Paired device")") {
-                                    controller.connectBluetooth(device)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .buttonStyle(.glass)
-                                .tint(.miniPink)
-                            }
-                        }
-                    }
-
-                    GlassCard(title: "MiniMate Devices", systemImage: "checkmark.seal") {
-                        HStack(spacing: 7) {
-                            Image(systemName: devicesReady ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                                .foregroundStyle(devicesReady ? Color.miniEmerald : Color.miniAmber)
-                            Text(devicesReady ? "Installed and available to apps" : "Not installed yet")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        if controller.cameraDeviceName.hasPrefix("OBS") {
-                            Text("Select OBS Virtual Camera in Photo Booth. MiniMate feeds it directly; OBS does not need to be open.")
-                                .font(.system(size: 10)).foregroundStyle(.tertiary)
-                        }
-                        if !devicesReady {
-                            Button("Install") { controller.installAudioDevices() }
-                                .buttonStyle(.glass)
-                                .tint(.miniAmber)
-                        }
-                    }
-
-                    HStack(spacing: 10) {
-                        Button(controller.streaming ? "Stop audio" : "Start audio") {
-                            controller.streaming ? controller.stopStreaming() : controller.startStreaming()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .buttonStyle(.glassProminent)
-                        .tint(.miniEmerald)
-                        .disabled(!controller.connected)
-
-                        Button("Disconnect") { controller.disconnect() }
+                if controller.wifiServices.isEmpty {
+                    Text("Looking for your phone…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(controller.wifiServices.enumerated()), id: \.offset) { _, service in
+                        Button("Connect to \(service.name)") { controller.connectWiFi(service) }
+                            .font(.system(size: 14, weight: .semibold))
                             .frame(maxWidth: .infinity)
-                            .buttonStyle(.glass)
-                            .disabled(!controller.connected)
+                            .padding(.vertical, 3)
+                            .buttonStyle(.glassProminent)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-                .padding(.top, 34)
+
+                if !devicesReady {
+                    Button("Install MiniMate Devices") { controller.installAudioDevices() }
+                        .font(.system(size: 11.5, weight: .medium))
+                        .buttonStyle(.glass)
+                } else if controller.cameraDeviceName.hasPrefix("OBS") {
+                    Text("Camera available as OBS Virtual Camera")
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button(controller.streaming ? "Stop audio" : "Start audio") {
+                        controller.streaming ? controller.stopStreaming() : controller.startStreaming()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.glass)
+                    .disabled(!controller.connected)
+
+                    Button("Disconnect") { controller.disconnect() }
+                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.glass)
+                        .disabled(!controller.connected)
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 18)
+            .padding(.top, 32)
         }
-        .background(.regularMaterial)
-        .frame(minWidth: 400, minHeight: 470)
+        .frame(width: 340, height: 320)
     }
 }
