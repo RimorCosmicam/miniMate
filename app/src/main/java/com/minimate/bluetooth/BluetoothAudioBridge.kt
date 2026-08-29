@@ -53,6 +53,8 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 import kotlin.math.abs
@@ -60,6 +62,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tanh
+import com.minimate.touchpad.model.ThemeFilter
 
 data class AudioBridgeState(
     val listening: Boolean = false,
@@ -87,7 +90,8 @@ data class AudioBridgeState(
     val microphoneLevel: Float = 0f,
     val error: String? = null,
     val receivedPackets: Long = 0,
-    val sentPackets: Long = 0
+    val sentPackets: Long = 0,
+    val webcamFramesSent: Long = 0
 )
 
 @SuppressLint("MissingPermission")
@@ -491,6 +495,49 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
 
     private fun writeFrame(output: DataOutputStream, frame: AudioBridgeProtocol.Frame) {
         synchronized(writeLock) { AudioBridgeProtocol.write(output, frame) }
+    }
+
+    fun sendWebcamFrame(jpeg: ByteArray) {
+        val link = activeLink ?: return
+        // RFCOMM remains available for audio and control fallback, but live
+        // camera imagery is Wi-Fi only so quality never collapses silently.
+        if (link.transport != AudioTransport.WIFI || jpeg.isEmpty()) return
+        runCatching {
+            writeFrame(link.output, AudioBridgeProtocol.Frame(
+                AudioBridgeProtocol.TYPE_WEBCAM_JPEG,
+                AudioBridgeProtocol.CODEC_JPEG,
+                0,
+                0,
+                sequence.getAndIncrement(),
+                jpeg
+            ))
+            _state.update { it.copy(webcamFramesSent = it.webcamFramesSent + 1) }
+        }.onFailure { Log.w(TAG, "Unable to send webcam frame", it) }
+    }
+
+    fun sendWebcamConfiguration(
+        enabled: Boolean,
+        mirror: Boolean,
+        intensity: Float,
+        filters: List<ThemeFilter>
+    ) {
+        val link = activeLink ?: return
+        val payload = JSONObject().apply {
+            put("enabled", enabled)
+            put("mirror", mirror)
+            put("intensity", intensity.coerceIn(0f, 1f).toDouble())
+            put("filters", JSONArray(filters.filter { it != ThemeFilter.NONE }.map { it.name }))
+        }.toString().toByteArray(Charsets.UTF_8)
+        runCatching {
+            writeFrame(link.output, AudioBridgeProtocol.Frame(
+                AudioBridgeProtocol.TYPE_WEBCAM_CONFIG,
+                AudioBridgeProtocol.CODEC_JSON,
+                0,
+                0,
+                sequence.getAndIncrement(),
+                payload
+            ))
+        }.onFailure { Log.w(TAG, "Unable to send webcam configuration", it) }
     }
 
     private fun stopMicrophone() {

@@ -8,12 +8,14 @@ final class BridgeController: ObservableObject {
     @Published var wifiServices: [(name: String, host: String, port: Int)] = []
     @Published var bluetoothDevices: [IOBluetoothDevice] = BluetoothBridgeTransport.pairedMiniMateCandidates
     @Published var driverInstalled = false
+    @Published var cameraInstalled = false
     @Published var connected = false
     @Published var streaming = false
 
     private let discovery = MiniMateDiscovery()
     private let endpoints = CoreAudioEndpointBridge()
     private let parser = MMAudioProtocol.Parser()
+    private let webcam = WebcamPipeline()
     private var transport: BridgeTransport?
     private var transportKind = "Wi-Fi"
     private var sequence: UInt32 = 0
@@ -26,6 +28,7 @@ final class BridgeController: ObservableObject {
             self?.sendAudio(CoreAudioEndpointBridge.pcm16StereoToPCM24(packet))
         }
         driverInstalled = endpoints.isInstalled
+        cameraInstalled = FileManager.default.fileExists(atPath: CoreAudioDriverInstaller.installedCameraURL.path)
         discovery.start()
     }
 
@@ -87,7 +90,8 @@ final class BridgeController: ObservableObject {
         do {
             try CoreAudioDriverInstaller.install()
             driverInstalled = endpoints.isInstalled
-            status = driverInstalled ? "Audio devices installed" : "Restart the companion to finish installation"
+            cameraInstalled = FileManager.default.fileExists(atPath: CoreAudioDriverInstaller.installedCameraURL.path)
+            status = driverInstalled && cameraInstalled ? "Audio and camera devices installed" : "Restart the companion to finish installation"
         } catch {
             status = error.localizedDescription
         }
@@ -129,6 +133,12 @@ final class BridgeController: ObservableObject {
                 if let pcm = CoreAudioEndpointBridge.microphonePCM16(frame: frame) {
                     endpoints.sendMicrophonePCM16(pcm)
                 }
+            }
+            for frame in frames where frame.type == MMAudioProtocol.typeWebcamConfig {
+                webcam.configure(frame.payload)
+            }
+            for frame in frames where frame.type == MMAudioProtocol.typeWebcamJPEG {
+                webcam.consume(jpeg: frame.payload)
             }
             if frames.contains(where: { $0.type == MMAudioProtocol.typeHello }) {
                 status = transportKind == "Wi-Fi" ? "Lossless 24-bit / 48 kHz" : "Bluetooth audio"

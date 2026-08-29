@@ -97,8 +97,10 @@ jobs:
           fi
           test -x "/Applications/MiniMate Audio.app/Contents/MacOS/MiniMateAudio"
           test -x "/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver/Contents/MacOS/MiniMateAudio"
+          test -x "/Library/CoreMediaIO/Plug-Ins/DAL/MiniMateCamera.plugin/Contents/MacOS/MiniMateCamera"
           codesign --verify --deep --strict "/Applications/MiniMate Audio.app"
           codesign --verify --strict "/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver"
+          codesign --verify --strict "/Library/CoreMediaIO/Plug-Ins/DAL/MiniMateCamera.plugin"
 
       - name: Upload macOS Installer
         uses: actions/upload-artifact@v4

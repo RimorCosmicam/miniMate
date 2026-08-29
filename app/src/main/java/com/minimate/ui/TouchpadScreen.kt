@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.minimate.bluetooth.BluetoothAudioBridge
 import com.minimate.bluetooth.BluetoothHidManager
+import com.minimate.bluetooth.WebcamCapture
 import com.minimate.bluetooth.BluetoothUiState
 import com.minimate.bluetooth.ConnectionStatus
 import com.minimate.bluetooth.HidDescriptor
@@ -60,6 +61,7 @@ import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.SettingsSheet
 import com.minimate.ui.components.ThemeTesterOverlay
+import com.minimate.ui.components.WebcamModeOverlay
 import com.minimate.ui.shader.BackgroundShaderCanvas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -70,6 +72,7 @@ fun TouchpadScreen(
     touchpadEngine: TouchpadEngine,
     hidManager: BluetoothHidManager,
     audioBridge: BluetoothAudioBridge,
+    webcamCapture: WebcamCapture,
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
     onRequestPermissions: () -> Unit,
@@ -77,6 +80,7 @@ fun TouchpadScreen(
 ) {
     val settings by touchpadEngine.settings.collectAsState()
     val audioState by audioBridge.state.collectAsState()
+    val webcamState by webcamCapture.state.collectAsState()
     val shaderTouchPoints by touchpadEngine.shaderTouchPoints.collectAsState()
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
@@ -85,6 +89,7 @@ fun TouchpadScreen(
     var showThemeTester by remember { mutableStateOf(false) }
     var showKeyboard by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
+    var showWebcam by remember { mutableStateOf(false) }
     var showKeyboardThemeEditor by remember { mutableStateOf(false) }
     var showEdgeThemeEditor by remember { mutableStateOf(false) }
     var liveCalibrationMode by remember { mutableStateOf<LiveCalibrationMode?>(null) }
@@ -123,6 +128,40 @@ fun TouchpadScreen(
             settings.audioVoiceIsolation,
             settings.audioMicrophoneNoiseGate,
             settings.audioMicrophonePreset
+        )
+    }
+
+    LaunchedEffect(
+        settings.webcamEnabled,
+        settings.webcamLens,
+        settings.webcamResolution,
+        settings.webcamFps,
+        settings.webcamZoom,
+        settings.webcamExposure
+    ) {
+        if (settings.webcamEnabled) {
+            webcamCapture.start(
+                settings.webcamLens,
+                settings.webcamResolution,
+                settings.webcamFps,
+                settings.webcamZoom,
+                settings.webcamExposure
+            )
+        } else webcamCapture.stop()
+    }
+
+    LaunchedEffect(
+        settings.webcamEnabled,
+        settings.webcamMirror,
+        settings.webcamFilterIntensity,
+        settings.webcamFilters,
+        audioState.connected
+    ) {
+        audioBridge.sendWebcamConfiguration(
+            settings.webcamEnabled,
+            settings.webcamMirror,
+            settings.webcamFilterIntensity,
+            settings.webcamFilters
         )
     }
 
@@ -227,8 +266,8 @@ fun TouchpadScreen(
     ) {
         // Layer 1: Interactive GPU Background Shader with 10 Inspired Themes
         EdgeRefractionSurface(
-            railEnabled = !showKeyboard && !showAudio && (settings.edgeScrollEnabled || showEdgeThemeEditor),
-            cornerEnabled = !showKeyboard && !showAudio && (settings.edgeRightClickEnabled || showEdgeThemeEditor),
+            railEnabled = !showKeyboard && !showAudio && !showWebcam && (settings.edgeScrollEnabled || showEdgeThemeEditor),
+            cornerEnabled = !showKeyboard && !showAudio && !showWebcam && (settings.edgeRightClickEnabled || showEdgeThemeEditor),
             railSide = settings.edgeControlSide,
             railScale = settings.edgeRailScale,
             cornerScale = settings.edgeCornerScale,
@@ -257,7 +296,7 @@ fun TouchpadScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInteropFilter { motionEvent ->
-                    if (!showScreenEditor && !showKeyboard && !showAudio) {
+                    if (!showScreenEditor && !showKeyboard && !showAudio && !showWebcam) {
                         touchpadEngine.onTouchEvent(motionEvent)
                     } else {
                         false
@@ -277,7 +316,7 @@ fun TouchpadScreen(
 
         // Mirrored single-hand edge controls sit above the touchpad but below the HUD/stick.
         // Their narrow hit regions consume edge gestures so cursor motion never leaks through.
-        if (!isDimMode && !showKeyboard && !showAudio && !showSettingsSheet && !showPairingDialog && !showScreenEditor &&
+        if (!isDimMode && !showKeyboard && !showAudio && !showWebcam && !showSettingsSheet && !showPairingDialog && !showScreenEditor &&
             !showThemeTester && liveCalibrationMode == null
         ) {
             EdgeControlsOverlay(
@@ -465,8 +504,36 @@ fun TouchpadScreen(
             )
         }
 
+        if (showWebcam) {
+            WebcamModeOverlay(
+                linkState = audioState,
+                captureState = webcamState,
+                enabled = settings.webcamEnabled,
+                lens = settings.webcamLens,
+                resolution = settings.webcamResolution,
+                fps = settings.webcamFps,
+                mirror = settings.webcamMirror,
+                zoom = settings.webcamZoom,
+                exposure = settings.webcamExposure,
+                intensity = settings.webcamFilterIntensity,
+                filters = settings.webcamFilters,
+                onEnabled = { touchpadEngine.updateSettings(settings.copy(webcamEnabled = it)) },
+                onLens = { touchpadEngine.updateSettings(settings.copy(webcamLens = it)) },
+                onResolution = { touchpadEngine.updateSettings(settings.copy(webcamResolution = it)) },
+                onFps = { touchpadEngine.updateSettings(settings.copy(webcamFps = it)) },
+                onMirror = { touchpadEngine.updateSettings(settings.copy(webcamMirror = it)) },
+                onZoom = { touchpadEngine.updateSettings(settings.copy(webcamZoom = it)) },
+                onExposure = { touchpadEngine.updateSettings(settings.copy(webcamExposure = it)) },
+                onIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFilterIntensity = it)) },
+                onToggleFilter = { filter ->
+                    val next = if (filter in settings.webcamFilters) settings.webcamFilters - filter else settings.webcamFilters + filter
+                    touchpadEngine.updateSettings(settings.copy(webcamFilters = next))
+                }
+            )
+        }
+
         // Layer 6: Pure Liquid Glass 2D Analog Stick (Single-Hand Scroll / Click Mastery)
-        if (!isDimMode && !showKeyboard && !showAudio && !showThemeTester && !showScreenEditor && !showEdgeThemeEditor && !settings.isLocked && settings.stickEnabled) {
+        if (!isDimMode && !showKeyboard && !showAudio && !showWebcam && !showThemeTester && !showScreenEditor && !showEdgeThemeEditor && !settings.isLocked && settings.stickEnabled) {
             val centeringStick = liveCalibrationMode == LiveCalibrationMode.STICK
             LiquidGlassAnalogStick(
                 stickSizeDp = settings.ballSizeDp,
@@ -542,18 +609,21 @@ fun TouchpadScreen(
                         settings.copy(shaderRecolor = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor))
                     )
                     showSettingsSheet = false
+                    showWebcam = false
                     showThemeTester = true
                 },
                 onOpenKeyboardThemeEditor = {
                     keyboardThemeEditorOriginal = settings
                     showEdgeThemeEditor = false
                     showAudio = false
+                    showWebcam = false
                     showKeyboard = true
                     showKeyboardThemeEditor = true
                 },
                 onOpenEdgeThemeEditor = {
                     edgeThemeEditorOriginal = settings
                     showAudio = false
+                    showWebcam = false
                     showKeyboard = false
                     showKeyboardThemeEditor = false
                     showEdgeThemeEditor = true
@@ -643,10 +713,10 @@ fun TouchpadScreen(
         }
 
         // One pill, one gesture contract in every primary mode and editor:
-        // tap advances Trackpad -> Keyboard -> Audio -> Trackpad,
+        // tap advances Trackpad -> Keyboard -> Audio -> Webcam -> Trackpad,
         // double-tap toggles true-black AMOLED rendering, and hold opens Settings.
         ClockBatteryOverlay(
-            clockStyle = if (isDimMode || showKeyboard || showAudio || showThemeTester) {
+            clockStyle = if (isDimMode || showKeyboard || showAudio || showWebcam || showThemeTester) {
                 com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL
             } else settings.clockStyle,
             positionXFraction = settings.clockPositionX,
@@ -663,8 +733,12 @@ fun TouchpadScreen(
             onTap = {
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
                 when {
+                    showWebcam -> {
+                        showWebcam = false
+                    }
                     showAudio -> {
                         showAudio = false
+                        showWebcam = true
                     }
                     showKeyboard -> {
                         hidManager.sendKeyboardInput()

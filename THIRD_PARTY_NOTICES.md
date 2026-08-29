@@ -4,6 +4,10 @@
 
 The macOS MiniMate CoreAudio endpoint driver uses libASPL, copyright Victor Gaydov and contributors, under the MIT License. The vendored source and complete license texts are stored in `companion/macos/Driver/vendor/libASPL`.
 
+## coremediaio-dal-minimal-example
+
+The private-distribution MiniMate Camera plug-in adapts John Boiles' CoreMediaIO DAL minimal example, copyright 2020 John Boiles, under the MIT License. The build is pinned to commit `d7d24bc801f07303ac3367c2791fbf13f573cc7c`; MiniMate's frame source and the complete license are stored in `companion/macos/CameraDriver`.
+
 MiniMate's five theme worlds are rendered from code. The application bundles no downloaded
 Space/Beach photographs, Arcade screenshots, sprite sheets, character likenesses, or scene JPEGs.
 

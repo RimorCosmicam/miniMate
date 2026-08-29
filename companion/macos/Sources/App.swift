@@ -98,17 +98,18 @@ struct CompanionView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
             }
 
-            GroupBox("macOS audio devices") {
+            GroupBox("macOS devices") {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("MiniMate Speaker · output", systemImage: "speaker.wave.2.fill")
                     Label("MiniMate Microphone · input", systemImage: "mic.fill")
-                    if controller.driverInstalled {
+                    Label("MiniMate Camera · camera", systemImage: "video.fill")
+                    if controller.driverInstalled && controller.cameraInstalled {
                         Label("Installed and available to apps", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     } else {
-                        Button("Install Audio Devices") { controller.installAudioDevices() }
+                        Button("Install Audio + Camera Devices") { controller.installAudioDevices() }
                             .buttonStyle(.borderedProminent)
-                        Text("One administrator prompt installs both CoreAudio endpoints. No screen-recording permission or routing picker is used.")
+                        Text("One administrator prompt installs both CoreAudio endpoints and MiniMate Camera. Reopen camera apps after installation.")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(4)

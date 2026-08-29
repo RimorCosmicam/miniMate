@@ -10,6 +10,8 @@ enum MMAudioProtocol {
     static let typeHello: UInt8 = 3
     static let typeState: UInt8 = 4
     static let typePing: UInt8 = 5
+    static let typeWebcamJPEG: UInt8 = 6
+    static let typeWebcamConfig: UInt8 = 7
     static let codecPCM16: UInt8 = 0
     static let codecIMA: UInt8 = 1
     static let codecPCM24: UInt8 = 2
@@ -46,7 +48,7 @@ enum MMAudioProtocol {
                 guard buffer.readBEUInt32(at: 0) == magic else { throw BridgeError.invalidFrame }
                 guard buffer[4] == version else { throw BridgeError.unsupportedVersion }
                 let length = Int(buffer.readBEUInt32(at: 16))
-                guard length <= 65_536 else { throw BridgeError.invalidFrame }
+                guard length <= 4 * 1_024 * 1_024 else { throw BridgeError.invalidFrame }
                 guard buffer.count >= 20 + length else { break }
                 frames.append(Frame(
                     type: buffer[5], codec: buffer[6], channels: buffer[7],

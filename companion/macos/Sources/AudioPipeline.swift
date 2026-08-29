@@ -122,15 +122,20 @@ final class CoreAudioEndpointBridge {
 }
 
 enum CoreAudioDriverInstaller {
+    static let installedCameraURL = URL(fileURLWithPath: "/Library/CoreMediaIO/Plug-Ins/DAL/MiniMateCamera.plugin")
+
     static func install() throws {
-        guard let bundled = Bundle.main.url(forResource: "MiniMateAudio", withExtension: "driver") else {
+        guard let bundled = Bundle.main.url(forResource: "MiniMateAudio", withExtension: "driver"),
+              let bundledCamera = Bundle.main.url(forResource: "MiniMateCamera", withExtension: "plugin") else {
             throw NSError(domain: "MiniMateAudio", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "The MiniMate audio driver is missing from this app build."
+                NSLocalizedDescriptionKey: "The MiniMate audio or camera device is missing from this app build."
             ])
         }
         let source = shellQuote(bundled.path)
         let destination = shellQuote(CoreAudioEndpointBridge.installedDriverURL.path)
-        let command = "mkdir -p /Library/Audio/Plug-Ins/HAL && /usr/bin/ditto \(source) \(destination) && /usr/sbin/chown -R root:wheel \(destination) && /bin/chmod -R a+rX \(destination) && (/usr/bin/killall coreaudiod || true)"
+        let cameraSource = shellQuote(bundledCamera.path)
+        let cameraDestination = shellQuote(installedCameraURL.path)
+        let command = "mkdir -p /Library/Audio/Plug-Ins/HAL /Library/CoreMediaIO/Plug-Ins/DAL && /usr/bin/ditto \(source) \(destination) && /usr/bin/ditto \(cameraSource) \(cameraDestination) && /usr/sbin/chown -R root:wheel \(destination) \(cameraDestination) && /bin/chmod -R a+rX \(destination) \(cameraDestination) && (/usr/bin/killall coreaudiod || true) && (/usr/bin/killall VDCAssistant || true)"
         let script = "do shell script \(appleScriptQuote(command)) with administrator privileges"
         var error: NSDictionary?
         let result = NSAppleScript(source: script)?.executeAndReturnError(&error)

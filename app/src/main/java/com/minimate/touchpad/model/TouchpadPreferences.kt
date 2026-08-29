@@ -100,6 +100,15 @@ class TouchpadPreferences(context: Context) {
                 put("audioMicrophoneNoiseGate", settings.audioMicrophoneNoiseGate.toDouble())
                 put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
                 put("audioTransport", settings.audioTransport.name)
+                put("webcamEnabled", settings.webcamEnabled)
+                put("webcamLens", settings.webcamLens.name)
+                put("webcamResolution", settings.webcamResolution.name)
+                put("webcamFps", settings.webcamFps)
+                put("webcamMirror", settings.webcamMirror)
+                put("webcamZoom", settings.webcamZoom.toDouble())
+                put("webcamExposure", settings.webcamExposure.toDouble())
+                put("webcamFilterIntensity", settings.webcamFilterIntensity.toDouble())
+                put("webcamFilters", JSONArray(settings.webcamFilters.map { it.name }))
 
                 // Screen Editor layout
                 put("ballPositionX", settings.ballPositionX.toDouble())
@@ -287,6 +296,27 @@ class TouchpadPreferences(context: Context) {
                 audioTransport = runCatching {
                     AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))
                 }.getOrDefault(AudioTransport.WIFI),
+                webcamEnabled = json.optBoolean("webcamEnabled", false),
+                webcamLens = runCatching {
+                    WebcamLens.valueOf(json.optString("webcamLens", "REAR"))
+                }.getOrDefault(WebcamLens.REAR),
+                webcamResolution = runCatching {
+                    WebcamResolution.valueOf(json.optString("webcamResolution", "FULL_HD"))
+                }.getOrDefault(WebcamResolution.FULL_HD),
+                webcamFps = json.optInt("webcamFps", 30).let { if (it in listOf(15, 24, 30)) it else 30 },
+                webcamMirror = json.optBoolean("webcamMirror", false),
+                webcamZoom = json.optDouble("webcamZoom", 1.0).toFloat().coerceIn(1f, 8f),
+                webcamExposure = json.optDouble("webcamExposure", 0.0).toFloat().coerceIn(-1f, 1f),
+                webcamFilterIntensity = json.optDouble("webcamFilterIntensity", 1.0).toFloat().coerceIn(0f, 1f),
+                webcamFilters = json.optJSONArray("webcamFilters")?.let { values ->
+                    buildList {
+                        for (index in 0 until values.length()) {
+                            runCatching { ThemeFilter.valueOf(values.getString(index)) }.getOrNull()
+                                ?.takeIf { it != ThemeFilter.NONE && it !in this }
+                                ?.let(::add)
+                        }
+                    }
+                } ?: emptyList(),
                 ballPositionX = json.optDouble("ballPositionX", 0.15).toFloat(),
                 ballPositionY = json.optDouble("ballPositionY", 0.82).toFloat(),
                 ballSizeDp = json.optDouble("ballSizeDp", 64.0).toFloat(),

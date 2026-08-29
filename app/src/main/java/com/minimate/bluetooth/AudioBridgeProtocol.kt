@@ -20,10 +20,14 @@ object AudioBridgeProtocol {
     const val TYPE_HELLO = 3
     const val TYPE_STATE = 4
     const val TYPE_PING = 5
+    const val TYPE_WEBCAM_JPEG = 6
+    const val TYPE_WEBCAM_CONFIG = 7
     const val CODEC_PCM16 = 0
     const val CODEC_IMA_ADPCM = 1
     const val CODEC_PCM24 = 2
-    private const val MAX_PAYLOAD = 64 * 1024
+    const val CODEC_JPEG = 10
+    const val CODEC_JSON = 11
+    private const val MAX_PAYLOAD = 4 * 1024 * 1024
 
     data class Frame(
         val type: Int,

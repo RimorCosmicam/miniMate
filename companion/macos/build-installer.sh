@@ -13,11 +13,14 @@ if [[ ! -d "$app_path" ]]; then
 fi
 
 rm -rf "$package_root" "$package_path" "$component_plist"
-mkdir -p "$package_root/Applications" "$package_root/Library/Audio/Plug-Ins/HAL"
+mkdir -p "$package_root/Applications" "$package_root/Library/Audio/Plug-Ins/HAL" "$package_root/Library/CoreMediaIO/Plug-Ins/DAL"
 /usr/bin/ditto "$app_path" "$package_root/Applications/MiniMate Audio.app"
 /usr/bin/ditto \
   "$app_path/Contents/Resources/MiniMateAudio.driver" \
   "$package_root/Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver"
+/usr/bin/ditto \
+  "$app_path/Contents/Resources/MiniMateCamera.plugin" \
+  "$package_root/Library/CoreMediaIO/Plug-Ins/DAL/MiniMateCamera.plugin"
 
 # PackageKit otherwise searches the whole Mac for matching bundle identifiers and
 # may "relocate" MiniMate back into an extracted download/build directory. Pin every
@@ -45,5 +48,6 @@ done
 payload=$(/usr/sbin/pkgutil --payload-files "$package_path")
 grep -Fq "./Applications/MiniMate Audio.app/Contents/MacOS/MiniMateAudio" <<< "$payload"
 grep -Fq "./Library/Audio/Plug-Ins/HAL/MiniMateAudio.driver/Contents/MacOS/MiniMateAudio" <<< "$payload"
+grep -Fq "./Library/CoreMediaIO/Plug-Ins/DAL/MiniMateCamera.plugin/Contents/MacOS/MiniMateCamera" <<< "$payload"
 
 echo "$package_path"

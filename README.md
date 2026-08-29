@@ -14,7 +14,7 @@ The project is an experimental, privately distributed Android application. It is
 - Locks the activity orientation so the cover-screen coordinate system does not rotate.
 - Uses a single active theme configuration rather than theme presets.
 - Toggles AMOLED mode immediately when the clock pill is tapped.
-- Adds a third Audio mode for simultaneous desktop playback and phone-microphone return.
+- Adds Audio and Webcam modes alongside the trackpad and keyboard.
 
 ## Procedural Theme System
 
@@ -93,7 +93,7 @@ Trackpad-speed calibration returns to the live surface so changes can be tested 
 
 ## Audio bridge
 
-Audio mode is full duplex and continues through a foreground service while the phone screen is off. On a shared network it automatically prefers lossless PCM over Wi-Fi (24-bit/48 kHz stereo playback and 16-bit/48 kHz microphone return), with Bluetooth as a compressed fallback—there is no transport switch to manage on the phone. The bottom of Audio mode includes previous, play/pause, next, and host-volume controls. Android's active audio route is respected, so wired TRRS and compatible USB-C headset/IEM microphone combos work in both directions.
+Audio mode is full duplex and continues through a foreground service while the phone screen is off. On a shared network it automatically prefers lossless PCM over Wi-Fi (24-bit/48 kHz stereo playback and 16-bit/48 kHz microphone return), with Bluetooth as a compressed fallback—there is no transport switch to manage on the phone. Android's active audio route is respected, so wired TRRS and compatible USB-C headset/IEM microphone combos work in both directions.
 
 The macOS companion is a menu-bar app that appears in the Dock only while its window is open. Its bundled CoreAudio HAL plug-in creates two real devices:
 
@@ -102,7 +102,13 @@ The macOS companion is a menu-bar app that appears in the Dock only while its wi
 
 There is no microphone-output picker and no screen-capture permission. The GitHub Actions macOS artifact is a system installer package: it places the companion in `/Applications`, installs both CoreAudio endpoints system-wide, applies the required ownership and permissions, reloads CoreAudio, and opens the installed app so macOS can request Local Network and Bluetooth access. Those privacy prompts must be approved by the signed-in user; they cannot be silently pre-granted outside managed-device deployment.
 
-The companion can also repair its audio endpoints from its **Install Audio Devices** button. Build the app and installer with:
+## Webcam bridge
+
+The fourth pill mode turns the phone cameras into **MiniMate Camera**, a real selectable macOS camera device. The phone intentionally shows configuration rather than a redundant preview. It provides rear/front lens selection, 720p or 1080p output, 15/24/30 fps modes, mirror, zoom, exposure, filter strength, and a stackable filter list shared with Theme Studio.
+
+Camera imagery uses Wi-Fi while the Bluetooth connection remains available for HID and compressed audio fallback. The Mac companion applies the stacked filters with Core Image and publishes the latest frame through its bundled CoreMediaIO DAL plug-in. The system installer places that plug-in in `/Library/CoreMediaIO/Plug-Ins/DAL`; camera applications should be reopened after installation. This private-distribution DAL route is intentional because MiniMate is not a Mac App Store product.
+
+The companion can also repair its audio and camera endpoints from its **Install Audio + Camera Devices** button. Build the app and installer with:
 
 ```bash
 cd companion/macos

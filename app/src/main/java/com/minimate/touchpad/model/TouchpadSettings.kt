@@ -252,6 +252,16 @@ enum class ThemeFilter(val label: String, val description: String) {
     NIGHT_VISION("Night Vision", "Green phosphor response, bloom, noise, and edge falloff")
 }
 
+enum class WebcamLens(val label: String) {
+    REAR("Rear camera"),
+    FRONT("Front camera")
+}
+
+enum class WebcamResolution(val label: String, val width: Int, val height: Int) {
+    HD("720p", 1280, 720),
+    FULL_HD("1080p", 1920, 1080)
+}
+
 enum class AnalogStickMode(val label: String, val description: String) {
     ANALOG_SCROLL("2D Analog Scroller", "Tilt stick in any direction to scroll continuously with velocity scaling"),
     ANALOG_CURSOR("Continuous Cursor", "Tilt stick to glide the mouse pointer continuously"),
@@ -472,6 +482,18 @@ data class TouchpadSettings(
     val audioMicrophoneNoiseGate: Float = .015f,
     val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioTransport: AudioTransport = AudioTransport.WIFI,
+
+    // MiniMate Camera. Frames use the companion's active Wi-Fi link; the Mac
+    // applies this same stack of scene filters before publishing the camera.
+    val webcamEnabled: Boolean = false,
+    val webcamLens: WebcamLens = WebcamLens.REAR,
+    val webcamResolution: WebcamResolution = WebcamResolution.FULL_HD,
+    val webcamFps: Int = 30,
+    val webcamMirror: Boolean = false,
+    val webcamZoom: Float = 1f,
+    val webcamExposure: Float = 0f,
+    val webcamFilterIntensity: Float = 1f,
+    val webcamFilters: List<ThemeFilter> = emptyList(),
     
     // Screen Editor: Freeform Positions & Sizes
     val ballPositionX: Float = 0.15f,

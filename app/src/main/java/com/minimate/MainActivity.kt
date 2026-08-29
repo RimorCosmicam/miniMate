@@ -24,6 +24,7 @@ import com.minimate.bluetooth.BatteryReporter
 import com.minimate.bluetooth.BluetoothAudioBridge
 import com.minimate.bluetooth.AudioBridgeService
 import com.minimate.bluetooth.BluetoothHidManager
+import com.minimate.bluetooth.WebcamCapture
 import com.minimate.touchpad.engine.TouchpadEngine
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.ui.TouchpadScreen
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var audioBridge: BluetoothAudioBridge
     private lateinit var batteryReporter: BatteryReporter
     private lateinit var touchpadEngine: TouchpadEngine
+    private lateinit var webcamCapture: WebcamCapture
 
     // State tracking for Volume Up + Down combo unlock
     private var isVolUpPressed = false
@@ -78,6 +80,7 @@ class MainActivity : ComponentActivity() {
         audioBridge = (application as MinimateApp).audioBridge
         batteryReporter = BatteryReporter(this)
         touchpadEngine = TouchpadEngine(this, hidManager)
+        webcamCapture = WebcamCapture(this, audioBridge)
 
         checkAndRequestPermissions()
 
@@ -90,6 +93,7 @@ class MainActivity : ComponentActivity() {
                     touchpadEngine = touchpadEngine,
                     hidManager = hidManager,
                     audioBridge = audioBridge,
+                    webcamCapture = webcamCapture,
                     bluetoothState = bluetoothState,
                     batteryPercentage = batteryPercentage,
                     onRequestPermissions = { checkAndRequestPermissions() },
@@ -150,7 +154,8 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
                 Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.CAMERA
             )
             val needed = permissions.filter {
                 ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -161,8 +166,10 @@ class MainActivity : ComponentActivity() {
                 startBluetoothServicesIfAllowed()
             }
         } else {
-            val microphoneGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-            if (!microphoneGranted) permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            val needed = listOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA).filter {
+                ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+            }
+            if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
             startBluetoothServicesIfAllowed()
         }
     }
@@ -198,6 +205,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         touchpadEngine.close()
+        webcamCapture.close()
         hidManager.stop()
     }
 }
