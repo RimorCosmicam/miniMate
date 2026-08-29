@@ -70,7 +70,9 @@ final class WebcamPipeline: @unchecked Sendable {
             dissolve.setValue(intensity, forKey: kCIInputTimeKey)
             image = dissolve.outputImage ?? image
         }
-        guard image.extent.isFinite, !image.extent.isEmpty,
+        let extent = image.extent
+        guard extent.origin.x.isFinite, extent.origin.y.isFinite,
+              extent.width.isFinite, extent.height.isFinite, !extent.isEmpty,
               let color = CGColorSpace(name: CGColorSpace.sRGB),
               let data = context.jpegRepresentation(of: image, colorSpace: color, options: [:])
         else { return }
