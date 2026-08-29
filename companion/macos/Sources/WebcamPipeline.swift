@@ -65,9 +65,10 @@ final class WebcamPipeline: @unchecked Sendable {
         for name in filters { image = apply(name, to: image).cropped(to: image.extent) }
         if intensity < 0.999, !filters.isEmpty,
            let dissolve = CIFilter(name: "CIDissolveTransition") {
-            dissolve.setValue(image, forKey: kCIInputImageKey)
-            dissolve.setValue(original, forKey: kCIInputBackgroundImageKey)
-            dissolve.setValue(intensity, forKey: kCIInputTimeKey)
+            let keys = Set(dissolve.inputKeys)
+            if keys.contains(kCIInputImageKey) { dissolve.setValue(image, forKey: kCIInputImageKey) }
+            if keys.contains(kCIInputBackgroundImageKey) { dissolve.setValue(original, forKey: kCIInputBackgroundImageKey) }
+            if keys.contains(kCIInputTimeKey) { dissolve.setValue(intensity, forKey: kCIInputTimeKey) }
             image = dissolve.outputImage ?? image
         }
         let extent = image.extent
@@ -89,11 +90,18 @@ final class WebcamPipeline: @unchecked Sendable {
     private func apply(_ name: String, to input: CIImage) -> CIImage {
         let extent = input.extent
         let center = CIVector(x: extent.midX, y: extent.midY)
-        func filtered(_ filterName: String, _ values: [String: Any] = [:]) -> CIImage {
-            guard let filter = CIFilter(name: filterName) else { return input }
-            filter.setValue(input, forKey: kCIInputImageKey)
-            values.forEach { filter.setValue($1, forKey: $0) }
-            return filter.outputImage ?? input
+        func filtered(_ filterName: String, source: CIImage = input, _ values: [String: Any] = [:]) -> CIImage {
+            guard let filter = CIFilter(name: filterName) else { return source }
+            // Core Image's accepted KVC keys vary between macOS releases. Setting
+            // one missing key raises an Objective-C exception, which Swift cannot
+            // catch and previously terminated the whole companion.
+            let keys = Set(filter.inputKeys)
+            guard keys.contains(kCIInputImageKey) else { return source }
+            filter.setValue(source, forKey: kCIInputImageKey)
+            for (key, value) in values where keys.contains(key) {
+                filter.setValue(value, forKey: key)
+            }
+            return filter.outputImage ?? source
         }
         switch name {
         case "CHROMATIC":
@@ -103,7 +111,7 @@ final class WebcamPipeline: @unchecked Sendable {
                 .transformed(by: .init(translationX: -4, y: 0))
             return red.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: cyan])
         case "CRT": return filtered("CILineScreen", [kCIInputCenterKey: center, kCIInputWidthKey: 2.2, kCIInputSharpnessKey: 0.35])
-        case "VHS": return filtered("CIColorControls", [kCIInputSaturationKey: 0.82, kCIInputContrastKey: 1.13]).applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.7])
+        case "VHS": return filtered("CIGaussianBlur", source: filtered("CIColorControls", [kCIInputSaturationKey: 0.82, kCIInputContrastKey: 1.13]), [kCIInputRadiusKey: 0.7])
         case "PIXELATE": return filtered("CIPixellate", [kCIInputCenterKey: center, kCIInputScaleKey: 12])
         case "DREAM_BLOOM": return filtered("CIBloom", [kCIInputRadiusKey: 14, kCIInputIntensityKey: 0.85])
         case "MONO_INK": return filtered("CIPhotoEffectNoir")
@@ -113,10 +121,13 @@ final class WebcamPipeline: @unchecked Sendable {
         case "THERMAL": return filtered("CIFalseColor", ["inputColor0": CIColor(red: 0.03, green: 0, blue: 0.2), "inputColor1": CIColor(red: 1, green: 0.93, blue: 0.08)])
         case "NEGATIVE": return filtered("CIColorInvert")
         case "POSTERIZE": return filtered("CIColorPosterize", ["inputLevels": 6])
-        case "FILM_GRAIN": return filtered("CIPhotoEffectProcess").applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": 0.035, "inputSharpness": 0.55])
+        case "FILM_GRAIN": return filtered("CINoiseReduction", source: filtered("CIPhotoEffectProcess"), ["inputNoiseLevel": 0.035, "inputSharpness": 0.55])
         case "MIRROR_PRISM": return filtered("CITriangleKaleidoscope", ["inputPoint": center, "inputSize": min(extent.width, extent.height) * 0.55, "inputRotation": 0.7, "inputDecay": 0.86])
         case "LIQUID_GLASS": return filtered("CIBumpDistortion", [kCIInputCenterKey: center, kCIInputRadiusKey: min(extent.width, extent.height) * 0.34, kCIInputScaleKey: 0.32])
-        case "NIGHT_VISION": return filtered("CIPhotoEffectMono").applyingFilter("CIFalseColor", parameters: ["inputColor0": CIColor.black, "inputColor1": CIColor(red: 0.36, green: 1, blue: 0.38)]).applyingFilter("CIBloom", parameters: [kCIInputRadiusKey: 5, kCIInputIntensityKey: 0.55])
+        case "NIGHT_VISION":
+            let mono = filtered("CIPhotoEffectMono")
+            let green = filtered("CIFalseColor", source: mono, ["inputColor0": CIColor.black, "inputColor1": CIColor(red: 0.36, green: 1, blue: 0.38)])
+            return filtered("CIBloom", source: green, [kCIInputRadiusKey: 5, kCIInputIntensityKey: 0.55])
         default: return input
         }
     }
