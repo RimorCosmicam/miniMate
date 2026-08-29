@@ -52,7 +52,7 @@ static bool MMFindOBSDevice(CMIODeviceID *deviceOut, CMIOStreamID *streamOut) {
         size < sizeof(CMIODeviceID)) return false;
 
     size_t count = size / sizeof(CMIODeviceID);
-    CMIODeviceID *devices = calloc(count, sizeof(CMIODeviceID));
+    CMIODeviceID *devices = static_cast<CMIODeviceID *>(calloc(count, sizeof(CMIODeviceID)));
     if (!devices) return false;
     UInt32 used = 0;
     bool found = false;
@@ -78,7 +78,7 @@ static bool MMFindOBSDevice(CMIODeviceID *deviceOut, CMIOStreamID *streamOut) {
                     size < 2 * sizeof(CMIOStreamID)) continue;
             }
             size_t streamCount = size / sizeof(CMIOStreamID);
-            CMIOStreamID *streams = calloc(streamCount, sizeof(CMIOStreamID));
+            CMIOStreamID *streams = static_cast<CMIOStreamID *>(calloc(streamCount, sizeof(CMIOStreamID)));
             if (!streams) continue;
             UInt32 streamUsed = 0;
             if (CMIOObjectGetPropertyData(devices[index], &address, 0, NULL, size,
