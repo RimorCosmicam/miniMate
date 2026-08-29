@@ -153,6 +153,7 @@ struct CompanionView: View {
             .padding(.top, 32)
         }
         .background(.regularMaterial)
+        .ignoresSafeArea()
         .frame(width: 340, height: 320)
     }
 }
