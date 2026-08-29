@@ -8,7 +8,6 @@ let package = Package(
         .executableTarget(
             name: "MiniMateAudio",
             path: "Sources",
-            resources: [.copy("Resources/Mini.png")],
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedFramework("AppKit"),

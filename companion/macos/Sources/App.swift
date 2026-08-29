@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let iconURL = Bundle.module.url(forResource: "Mini", withExtension: "png"),
+        if let iconURL = Bundle.main.url(forResource: "Mini", withExtension: "png"),
            let icon = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = icon
         }
