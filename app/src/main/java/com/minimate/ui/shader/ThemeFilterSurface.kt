@@ -112,7 +112,9 @@ internal fun ThemeFilterStack(
     modifier: Modifier,
     content: @Composable () -> Unit
 ) {
-    val active = filters.filter { it != ThemeFilter.NONE }.distinct()
+    // Each pass is a hardware graphics layer. Bounding the live stack prevents
+    // HWUI/minikin resource exhaustion on Samsung's cover display.
+    val active = filters.filter { it != ThemeFilter.NONE }.distinct().takeLast(4)
     Box(modifier = modifier) {
         StackedFilterLayers(active, active.lastIndex, content)
     }
