@@ -381,6 +381,10 @@ fun TouchpadScreen(
                 onOpaqueChange = { opaque ->
                     touchpadEngine.updateSettings(settings.copy(keyboardOpaque = opaque))
                 },
+                keyboardScale = settings.keyboardScale,
+                onKeyboardScaleChange = { scale ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardScale = scale))
+                },
                 editorMode = showKeyboardThemeEditor,
                 onEditorCancel = {
                     keyboardThemeEditorOriginal?.let(touchpadEngine::updateSettings)

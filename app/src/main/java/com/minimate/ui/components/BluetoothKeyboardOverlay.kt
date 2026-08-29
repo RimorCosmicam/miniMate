@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -74,7 +76,7 @@ private enum class KeyboardPanel(val label: String) {
 }
 
 private enum class KeyboardCustomizer(val label: String) {
-    THEME("Themes"), TRAIL("Trail"), FONT("Font")
+    THEME("Themes"), TRAIL("Trail"), FONT("Font"), SIZE("Size")
 }
 
 private fun composeFont(font: KeyboardFont): FontFamily = when (font) {
@@ -113,12 +115,14 @@ private fun KeyboardCustomizerTop(
     font: KeyboardFont,
     fontWeight: KeyboardWeightSetting,
     opaque: Boolean,
+    scale: Float,
     onSection: (KeyboardCustomizer) -> Unit,
     onTheme: (KeyboardTheme) -> Unit,
     onTrail: (KeyboardTrail) -> Unit,
     onFont: (KeyboardFont) -> Unit,
     onFontWeight: (KeyboardWeightSetting) -> Unit,
     onOpaque: (Boolean) -> Unit,
+    onScale: (Float) -> Unit,
     onCancel: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier
@@ -127,6 +131,7 @@ private fun KeyboardCustomizerTop(
         KeyboardCustomizer.THEME -> theme.label
         KeyboardCustomizer.TRAIL -> trail.label
         KeyboardCustomizer.FONT -> "${font.label} · ${fontWeight.label}"
+        KeyboardCustomizer.SIZE -> "%.0f%%".format(scale * 100)
     }
     StudioPanel("Keyboard Studio", subtitle, onCancel, onDone, modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -159,6 +164,12 @@ private fun KeyboardCustomizerTop(
                     }
                 }
             }
+            KeyboardCustomizer.SIZE -> Slider(
+                value = scale,
+                onValueChange = onScale,
+                valueRange = 0.65f..1.3f,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(.18f))
+            )
         }
         if (section == KeyboardCustomizer.THEME) {
             Row(Modifier.fillMaxWidth()) {
@@ -464,6 +475,7 @@ private val LocalKeyboardFont = staticCompositionLocalOf { KeyboardFont.SYSTEM }
 private val LocalKeyboardFontWeight = staticCompositionLocalOf { KeyboardWeightSetting.REGULAR }
 private val LocalKeyboardTrail = staticCompositionLocalOf { KeyboardTrail.AURORA }
 private val LocalKeyboardOpaque = staticCompositionLocalOf { false }
+private val LocalKeyboardScale = staticCompositionLocalOf { 1f }
 
 private data class KeyboardKey(val label: String, val usage: Int, val requiredModifier: Int = 0, val weight: Float = 1f)
 
@@ -509,6 +521,8 @@ fun BluetoothKeyboardOverlay(
     onFontWeightChange: (KeyboardWeightSetting) -> Unit,
     opaque: Boolean,
     onOpaqueChange: (Boolean) -> Unit,
+    keyboardScale: Float,
+    onKeyboardScaleChange: (Float) -> Unit,
     editorMode: Boolean,
     onEditorCancel: () -> Unit,
     onEditorDone: () -> Unit,
@@ -541,7 +555,8 @@ fun BluetoothKeyboardOverlay(
         LocalKeyboardFont provides font,
         LocalKeyboardFontWeight provides fontWeight,
         LocalKeyboardTrail provides trail,
-        LocalKeyboardOpaque provides opaque
+        LocalKeyboardOpaque provides opaque,
+        LocalKeyboardScale provides keyboardScale
     ) {
     Box(modifier.fillMaxSize()
         .background(if (amoledMode) Color.Black else Color.Transparent)
@@ -571,12 +586,14 @@ fun BluetoothKeyboardOverlay(
                 font = font,
                 fontWeight = fontWeight,
                 opaque = opaque,
+                scale = keyboardScale,
                 onSection = { customizer = it },
                 onTheme = { onHaptic(); onThemeChange(it) },
                 onTrail = { onHaptic(); onTrailChange(it) },
                 onFont = { onHaptic(); onFontChange(it) },
                 onFontWeight = { onHaptic(); onFontWeightChange(it) },
                 onOpaque = { onHaptic(); onOpaqueChange(it) },
+                onScale = onKeyboardScaleChange,
                 onCancel = onEditorCancel,
                 onDone = onEditorDone,
                 modifier = Modifier.align(Alignment.TopStart)
@@ -586,7 +603,7 @@ fun BluetoothKeyboardOverlay(
         Column(
             Modifier.align(Alignment.TopCenter).padding(top = if (editorMode) 118.dp else 64.dp).fillMaxWidth()
                 .padding(horizontal = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp * keyboardScale)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 KeyboardPanel.entries.forEach { item ->
@@ -793,6 +810,7 @@ private fun RowScope.GlassKey(
     val font = LocalKeyboardFont.current
     val fontWeight = LocalKeyboardFontWeight.current
     val opaque = LocalKeyboardOpaque.current
+    val scale = LocalKeyboardScale.current
     val active = pressed || selected
     val colors = if (amoled) {
         if (active) listOf(Color.White.copy(.18f), Color.White.copy(.07f)) else listOf(Color.Black, Color.Black)
@@ -852,7 +870,7 @@ private fun RowScope.GlassKey(
     } else {
         Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
     }
-    Box(Modifier.weight(weight).height(if (compact) 28.dp else 37.dp).clip(shape)
+    Box(Modifier.weight(weight).height((if (compact) 28.dp else 37.dp) * scale).clip(shape)
         .background(Brush.verticalGradient(fillColors)).border(1.dp, border, shape).then(actionModifier),
         contentAlignment = Alignment.Center) {
         if (label.isNotEmpty() && font == KeyboardFont.PIXEL) {
@@ -861,7 +879,7 @@ private fun RowScope.GlassKey(
                     isAntiAlias = false
                     color = foreground.toArgb()
                     textAlign = android.graphics.Paint.Align.CENTER
-                    textSize = (if (compact) 10.sp else 12.sp).toPx()
+                    textSize = ((if (compact) 10.sp else 12.sp) * scale).toPx()
                     typeface = androidFont(font, fontWeight)
                 }
                 drawContext.canvas.nativeCanvas.drawText(
@@ -872,7 +890,7 @@ private fun RowScope.GlassKey(
                 )
             }
         } else if (label.isNotEmpty()) {
-            Text(label, color = foreground, fontSize = if (compact) 10.sp else 12.sp, fontWeight = composeWeight(fontWeight), fontFamily = composeFont(font))
+            Text(label, color = foreground, fontSize = (if (compact) 10.sp else 12.sp) * scale, fontWeight = composeWeight(fontWeight), fontFamily = composeFont(font))
         }
     }
 }

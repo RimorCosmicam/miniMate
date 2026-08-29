@@ -461,6 +461,7 @@ data class TouchpadSettings(
     val keyboardFont: KeyboardFont = KeyboardFont.SYSTEM,
     val keyboardFontWeight: KeyboardFontWeight = KeyboardFontWeight.REGULAR,
     val keyboardOpaque: Boolean = false,
+    val keyboardScale: Float = 1f,
 
     // Bidirectional MiniMate Audio companion link.
     val audioOutputEnabled: Boolean = true,

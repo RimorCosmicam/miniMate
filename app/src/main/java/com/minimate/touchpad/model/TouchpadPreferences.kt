@@ -80,6 +80,7 @@ class TouchpadPreferences(context: Context) {
                 put("keyboardFont", settings.keyboardFont.name)
                 put("keyboardFontWeight", settings.keyboardFontWeight.name)
                 put("keyboardOpaque", settings.keyboardOpaque)
+                put("keyboardScale", settings.keyboardScale.toDouble())
                 put("audioOutputEnabled", settings.audioOutputEnabled)
                 put("audioMicrophoneEnabled", settings.audioMicrophoneEnabled)
                 put("audioOutputVolume", settings.audioOutputVolume.toDouble())
@@ -264,6 +265,7 @@ class TouchpadPreferences(context: Context) {
                     KeyboardFontWeight.valueOf(json.optString("keyboardFontWeight", "REGULAR"))
                 }.getOrDefault(KeyboardFontWeight.REGULAR),
                 keyboardOpaque = json.optBoolean("keyboardOpaque", false),
+                keyboardScale = json.optDouble("keyboardScale", 1.0).toFloat().coerceIn(0.65f, 1.3f),
                 audioOutputEnabled = json.optBoolean("audioOutputEnabled", true),
                 audioMicrophoneEnabled = json.optBoolean("audioMicrophoneEnabled", true),
                 audioOutputVolume = json.optDouble("audioOutputVolume", .8).toFloat().coerceIn(0f, 1f),
