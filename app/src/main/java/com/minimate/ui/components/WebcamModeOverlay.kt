@@ -70,7 +70,7 @@ fun WebcamModeOverlay(
                 enabled -> "STARTING"
                 else -> "CAMERA READY"
             },
-            active = captureState.running,
+            active = captureState.running && linkState.connected && linkState.transport.name == "WIFI",
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 20.dp)
         )
 
