@@ -102,8 +102,6 @@ fun WebcamModeOverlay(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Choice("0.5× Ultra", zoom < .8f, Modifier.weight(1f)) { onZoom(.5f) }
-                Choice("1× Wide", zoom in .8f..1.2f, Modifier.weight(1f)) { onZoom(1f) }
                 Choice(resolution.label, resolution == WebcamResolution.FULL_HD, Modifier.weight(1f)) {
                     onResolution(if (resolution == WebcamResolution.FULL_HD) WebcamResolution.HD else WebcamResolution.FULL_HD)
                 }

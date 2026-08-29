@@ -140,15 +140,26 @@ private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, conte
         }
         return
     }
-    val effect = remember(shader) { RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect() }
+    val effect = remember(shader) {
+        runCatching { RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect() }.getOrNull()
+    }
+    if (effect == null) {
+        Box(modifier = modifier) {
+            content()
+            LegacyFilterOverlay(filter, Modifier.fillMaxSize())
+        }
+        return
+    }
     val transition = rememberInfiniteTransition(label = "FilterClock")
     val time by transition.animateFloat(0f, 100f, infiniteRepeatable(tween(100_000, easing = LinearEasing)), label = "FilterTime")
     var width by remember { mutableFloatStateOf(1f) }
     var height by remember { mutableFloatStateOf(1f) }
     SideEffect {
-        shader.setFloatUniform("uMode", filter.ordinal.toFloat())
-        shader.setFloatUniform("uTime", time)
-        shader.setFloatUniform("uResolution", width, height)
+        runCatching {
+            shader.setFloatUniform("uMode", filter.ordinal.toFloat())
+            shader.setFloatUniform("uTime", time)
+            shader.setFloatUniform("uResolution", width, height)
+        }
     }
     Box(modifier = modifier
         .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f); height = it.height.toFloat().coerceAtLeast(1f) }

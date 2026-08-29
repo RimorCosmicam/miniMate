@@ -9,6 +9,9 @@ final class WebcamPipeline: @unchecked Sendable {
     static let frameURL = URL(fileURLWithPath: "/tmp/minimate-camera.jpg")
     private let queue = DispatchQueue(label: "MiniMate.Webcam", qos: .userInteractive)
     private let context = CIContext(options: [.cacheIntermediates: true])
+    private let pendingLock = NSLock()
+    private var pendingJPEG: Data?
+    private var frameScheduled = false
     private var filters: [String] = []
     private var intensity = 1.0
     private var mirror = false
@@ -25,31 +28,59 @@ final class WebcamPipeline: @unchecked Sendable {
     }
 
     func consume(jpeg: Data) {
-        queue.async { [self] in
-            guard enabled, var image = CIImage(data: jpeg) else { return }
-            let original = image
-            if mirror {
-                image = image.transformed(by: CGAffineTransform(translationX: image.extent.width, y: 0).scaledBy(x: -1, y: 1))
-            }
-            for name in filters { image = apply(name, to: image).cropped(to: image.extent) }
-            if intensity < 0.999, !filters.isEmpty,
-               let dissolve = CIFilter(name: "CIDissolveTransition") {
-                dissolve.setValue(image, forKey: kCIInputImageKey)
-                dissolve.setValue(original, forKey: kCIInputBackgroundImageKey)
-                dissolve.setValue(intensity, forKey: kCIInputTimeKey)
-                image = dissolve.outputImage ?? image
-            }
-            guard let color = CGColorSpace(name: CGColorSpace.sRGB),
-                  let data = context.jpegRepresentation(of: image, colorSpace: color, options: [:])
-            else { return }
-            try? data.write(to: Self.frameURL, options: .atomic)
-            // Modern macOS blocks legacy DAL cameras by default. If another signed
-            // camera extension exposes a producer sink (OBS 30+), publish the same
-            // processed frame to it so Photo Booth and hardened apps can use MiniMate.
-            data.withUnsafeBytes { bytes in
-                guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return }
-                _ = MMModernCameraSendJPEG(base, data.count)
-            }
+        pendingLock.lock()
+        pendingJPEG = jpeg
+        let shouldSchedule = !frameScheduled
+        frameScheduled = true
+        pendingLock.unlock()
+        if shouldSchedule {
+            queue.async { [weak self] in self?.processPendingFrame() }
+        }
+    }
+
+    /// Filtering may take longer than a camera frame. Retain only the newest JPEG
+    /// instead of allowing captured Data and lazy Core Image graphs to queue forever.
+    private func processPendingFrame() {
+        pendingLock.lock()
+        let jpeg = pendingJPEG
+        pendingJPEG = nil
+        if jpeg == nil { frameScheduled = false }
+        pendingLock.unlock()
+        guard let jpeg else { return }
+
+        autoreleasepool { process(jpeg) }
+        // Reschedule instead of looping so configuration messages already queued on
+        // this serial executor can be applied between frames.
+        queue.async { [weak self] in self?.processPendingFrame() }
+    }
+
+    private func process(_ jpeg: Data) {
+        guard enabled,
+              var image = CIImage(data: jpeg, options: [.applyOrientationProperty: true])
+        else { return }
+        let original = image
+        if mirror {
+            image = image.transformed(by: CGAffineTransform(translationX: image.extent.width, y: 0).scaledBy(x: -1, y: 1))
+        }
+        for name in filters { image = apply(name, to: image).cropped(to: image.extent) }
+        if intensity < 0.999, !filters.isEmpty,
+           let dissolve = CIFilter(name: "CIDissolveTransition") {
+            dissolve.setValue(image, forKey: kCIInputImageKey)
+            dissolve.setValue(original, forKey: kCIInputBackgroundImageKey)
+            dissolve.setValue(intensity, forKey: kCIInputTimeKey)
+            image = dissolve.outputImage ?? image
+        }
+        guard image.extent.isFinite, !image.extent.isEmpty,
+              let color = CGColorSpace(name: CGColorSpace.sRGB),
+              let data = context.jpegRepresentation(of: image, colorSpace: color, options: [:])
+        else { return }
+        try? data.write(to: Self.frameURL, options: .atomic)
+        // Modern macOS blocks legacy DAL cameras by default. If another signed
+        // camera extension exposes a producer sink (OBS 30+), publish the same
+        // processed frame to it so Photo Booth and hardened apps can use MiniMate.
+        data.withUnsafeBytes { bytes in
+            guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return }
+            _ = MMModernCameraSendJPEG(base, data.count)
         }
     }
 
