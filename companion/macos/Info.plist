@@ -12,7 +12,7 @@
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>CFBundleVersion</key><string>1</string>
-    <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>NSBluetoothAlwaysUsageDescription</key><string>MiniMate uses Bluetooth as a fallback audio connection to your paired phone.</string>
     <key>NSLocalNetworkUsageDescription</key><string>MiniMate discovers your phone and streams lossless audio on your local network.</string>
     <key>NSBonjourServices</key><array><string>_minimate-audio._tcp</string></array>

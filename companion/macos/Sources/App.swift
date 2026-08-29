@@ -72,7 +72,7 @@ private extension Color {
     static let miniAmber = Color(red: 0xFF / 255, green: 0xCA / 255, blue: 0x3A / 255)
 }
 
-/// A frosted, softly-bordered panel — the base unit of every section in this window.
+/// A native Liquid Glass panel — the base unit of every section in this window.
 private struct GlassCard<Content: View>: View {
     var title: String
     var systemImage: String
@@ -88,38 +88,7 @@ private struct GlassCard<Content: View>: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
-    }
-}
-
-/// A translucent capsule button — used for every action in this window instead of the stock macOS button.
-private struct GlassButtonStyle: ButtonStyle {
-    var tint: Color = .miniCyan
-    var filled: Bool = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .frame(maxWidth: filled ? .infinity : nil)
-            .background {
-                Capsule().fill(tint.opacity(configuration.isPressed ? 0.30 : 0.20))
-                Capsule().fill(.regularMaterial)
-            }
-            .overlay(Capsule().strokeBorder(tint.opacity(configuration.isPressed ? 0.9 : 0.55), lineWidth: 1))
-            .foregroundStyle(tint)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: configuration.isPressed)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -133,8 +102,7 @@ private struct StatusPill: View {
             Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(.thinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .glassEffect(.regular, in: Capsule())
     }
 }
 
@@ -144,10 +112,8 @@ struct CompanionView: View {
     private var devicesReady: Bool { controller.driverInstalled && controller.cameraInstalled }
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
-
-            ScrollView {
+        ScrollView {
+            GlassEffectContainer(spacing: 16) {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
                         Image(nsImage: NSApp.applicationIconImage)
@@ -168,7 +134,9 @@ struct CompanionView: View {
                         } else {
                             ForEach(Array(controller.wifiServices.enumerated()), id: \.offset) { _, service in
                                 Button("Connect to \(service.name)") { controller.connectWiFi(service) }
-                                    .buttonStyle(GlassButtonStyle(tint: .miniCyan, filled: true))
+                                    .frame(maxWidth: .infinity)
+                                    .buttonStyle(.glassProminent)
+                                    .tint(.miniCyan)
                             }
                         }
                         Text("24-bit / 48 kHz PCM · no audio compression")
@@ -183,7 +151,9 @@ struct CompanionView: View {
                                 Button("Connect to \(device.name ?? device.addressString ?? "Paired device")") {
                                     controller.connectBluetooth(device)
                                 }
-                                .buttonStyle(GlassButtonStyle(tint: .miniPink, filled: true))
+                                .frame(maxWidth: .infinity)
+                                .buttonStyle(.glass)
+                                .tint(.miniPink)
                             }
                         }
                     }
@@ -201,7 +171,8 @@ struct CompanionView: View {
                         }
                         if !devicesReady {
                             Button("Install") { controller.installAudioDevices() }
-                                .buttonStyle(GlassButtonStyle(tint: .miniAmber))
+                                .buttonStyle(.glass)
+                                .tint(.miniAmber)
                         }
                     }
 
@@ -209,11 +180,14 @@ struct CompanionView: View {
                         Button(controller.streaming ? "Stop audio" : "Start audio") {
                             controller.streaming ? controller.stopStreaming() : controller.startStreaming()
                         }
-                        .buttonStyle(GlassButtonStyle(tint: .miniEmerald, filled: true))
+                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.glassProminent)
+                        .tint(.miniEmerald)
                         .disabled(!controller.connected)
 
                         Button("Disconnect") { controller.disconnect() }
-                            .buttonStyle(GlassButtonStyle(tint: .secondary, filled: true))
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.glass)
                             .disabled(!controller.connected)
                     }
                 }
@@ -222,6 +196,7 @@ struct CompanionView: View {
                 .padding(.top, 34)
             }
         }
+        .background(.regularMaterial)
         .frame(minWidth: 400, minHeight: 470)
     }
 }

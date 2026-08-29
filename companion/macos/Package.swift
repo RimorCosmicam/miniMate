@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MiniMateAudio",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v26)],
     targets: [
         .target(
             name: "ModernCameraBridge",
