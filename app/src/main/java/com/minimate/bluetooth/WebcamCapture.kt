@@ -54,7 +54,6 @@ class WebcamCapture(
     private var session: CameraCaptureSession? = null
     private var reader: ImageReader? = null
     private var characteristics: CameraCharacteristics? = null
-    private var activeCameraId: String? = null
     private var fps = 30
     private var zoom = 1f
     private var exposure = 0f
@@ -78,7 +77,6 @@ class WebcamCapture(
             return
         }
         val characteristics = cameraManager.getCameraCharacteristics(cameraId)
-        activeCameraId = cameraId
         this.characteristics = characteristics
         this.fps = fps
         val zoomRange = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -167,7 +165,9 @@ class WebcamCapture(
     ) {
         this.zoom = zoom
         this.exposure = exposure
-        this.flashEnabled = flashEnabled
+        // Torch support was removed: Samsung's logical multi-camera HAL can
+        // leave the JPEG stream black when flash is requested on this device.
+        this.flashEnabled = false
         this.flashIntensity = flashIntensity
         handler.post { applyRepeatingRequest() }
     }
@@ -192,42 +192,16 @@ class WebcamCapture(
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     val range = info[CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE]
-                    // Samsung's logical camera silently suppresses its LED while the
-                    // ultrawide physical sensor is active. Torch mode therefore pins
-                    // the logical device to the flash-equipped wide sensor.
-                    val requestedZoom = if (flashEnabled) maxOf(1f, zoom) else zoom
-                    if (range != null) set(CaptureRequest.CONTROL_ZOOM_RATIO, requestedZoom.coerceIn(range.lower, range.upper))
+                    if (range != null) set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom.coerceIn(range.lower, range.upper))
                     else cropForZoom(info, zoom)?.let { set(CaptureRequest.SCALER_CROP_REGION, it) }
                 } else cropForZoom(info, zoom)?.let { set(CaptureRequest.SCALER_CROP_REGION, it) }
 
-                val hasFlash = info[CameraCharacteristics.FLASH_INFO_AVAILABLE] == true
-                if (flashEnabled && hasFlash) {
-                    set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-                    set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH)
-                    if (Build.VERSION.SDK_INT >= 35) {
-                        val maximum = info[CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL] ?: 1
-                        val level = (1 + flashIntensity.coerceIn(0f, 1f) * (maximum - 1)).toInt().coerceIn(1, maximum)
-                        set(CaptureRequest.FLASH_STRENGTH_LEVEL, level)
-                    }
-                } else set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
+                set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
                 set(CaptureRequest.JPEG_QUALITY, 91.toByte())
                 set(CaptureRequest.JPEG_ORIENTATION, info[CameraCharacteristics.SENSOR_ORIENTATION] ?: 0)
             }.build()
             captureSession.setRepeatingRequest(request, null, handler)
-            // Samsung exposes torch both as a repeating capture control and as a
-            // camera-device control. Drive both paths: some logical rear-camera
-            // combinations acknowledge FLASH_MODE_TORCH without lighting the LED.
-            activeCameraId?.let { cameraId ->
-                runCatching {
-                    if (flashEnabled && Build.VERSION.SDK_INT >= 33) {
-                        val maximum = info[CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL] ?: 1
-                        val level = (1 + flashIntensity.coerceIn(0f, 1f) * (maximum - 1)).toInt().coerceIn(1, maximum)
-                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, level)
-                    } else {
-                        cameraManager.setTorchMode(cameraId, flashEnabled)
-                    }
-                }
-            }
         }.onFailure { failure ->
             _state.update { it.copy(error = failure.message ?: "Unable to update camera controls") }
         }
@@ -266,8 +240,6 @@ class WebcamCapture(
         runCatching { session?.stopRepeating() }
         session?.close(); session = null
         camera?.close(); camera = null
-        activeCameraId?.let { cameraId -> runCatching { cameraManager.setTorchMode(cameraId, false) } }
-        activeCameraId = null
         reader?.close(); reader = null
         characteristics = null
         _state.update { it.copy(running = false) }

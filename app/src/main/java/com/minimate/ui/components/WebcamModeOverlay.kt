@@ -112,35 +112,7 @@ fun WebcamModeOverlay(
 
             LabeledSlider("ZOOM", "%.1f×".format(zoom), zoom, .5f..min(captureState.maximumZoom, 3f).coerceAtLeast(1f), onZoom)
             LabeledSlider("EXPOSURE", "%+.1f".format(exposure), exposure, -1f..1f, onExposure)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Choice(if (mirror) "Mirrored" else "Natural", mirror, Modifier.width(82.dp)) { onMirror(!mirror) }
-                Text("FLASH", color = Color.White.copy(.48f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                Switch(
-                    checked = flashEnabled && captureState.flashAvailable,
-                    onCheckedChange = { if (captureState.flashAvailable) onFlashEnabled(it) },
-                    enabled = captureState.flashAvailable,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.Black,
-                        checkedTrackColor = Color.White,
-                        uncheckedThumbColor = Color.White.copy(.72f),
-                        uncheckedTrackColor = Color.White.copy(.12f)
-                    )
-                )
-                if (flashEnabled && captureState.flashAvailable && captureState.flashMaximumLevel > 1) {
-                    Slider(
-                        value = flashIntensity,
-                        onValueChange = onFlashIntensity,
-                        modifier = Modifier.weight(1f).height(24.dp),
-                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(.12f))
-                    )
-                    Text("${(flashIntensity * 100).toInt()}%", color = Color.White.copy(.72f), fontSize = 8.5.sp, modifier = Modifier.width(32.dp))
-                } else {
-                    Text(
-                        if (captureState.flashAvailable) "Torch" else "Unavailable",
-                        color = Color.White.copy(.42f), fontSize = 8.sp, modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            Choice(if (mirror) "Mirrored" else "Natural", mirror, Modifier.width(82.dp)) { onMirror(!mirror) }
             LabeledSlider("FILTER MIX", "${(intensity * 100).toInt()}%", intensity, 0f..1f, onIntensity)
 
             Text("STACKED FILTERS", color = Color.White.copy(.42f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
