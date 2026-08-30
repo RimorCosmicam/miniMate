@@ -490,17 +490,26 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     }
 
     private fun startMicrophone(explicitLink: Link? = null) {
-        if (microphoneJob?.isActive == true) return
-        val link = explicitLink ?: activeLink ?: return
+        if (microphoneJob?.isActive == true) {
+            Log.i(TAG, "startMicrophone: already running, ignoring")
+            return
+        }
+        val link = explicitLink ?: activeLink ?: run {
+            Log.i(TAG, "startMicrophone: no active link, aborting")
+            return
+        }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "startMicrophone: RECORD_AUDIO not granted")
             _state.update { it.copy(error = "Microphone permission is required") }
             return
         }
         val myGeneration = ++micGeneration
         microphoneJob = scope.launch {
             val targetDevice = preferredInputDevice()
+            Log.i(TAG, "startMicrophone: selectedInputKey=${_state.value.selectedInputKey} targetDevice=${targetDevice?.type} id=${targetDevice?.id} product=${targetDevice?.productName}")
             val routed = engageInputRouting(targetDevice)
             if (!routed) {
+                Log.w(TAG, "startMicrophone: engageInputRouting failed for $targetDevice")
                 _state.update { it.copy(error = "Couldn't connect to the selected microphone") }
             }
             // Communication-device routing takes a moment to actually apply; starting the
@@ -515,20 +524,29 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
             if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w(TAG, "startMicrophone: AudioRecord failed to initialize, state=${recorder.state}")
                 _state.update { it.copy(error = "Microphone failed to initialize") }
                 recorder.release()
                 releaseInputRouting()
                 return@launch
             }
-            recorder.setPreferredDevice(targetDevice)
+            val preferSet = recorder.setPreferredDevice(targetDevice)
+            Log.i(TAG, "startMicrophone: setPreferredDevice($targetDevice) returned $preferSet, routedDevice=${recorder.preferredDevice?.type}/${recorder.preferredDevice?.id}")
             val samples = ShortArray(frames)
             val processor = MicrophoneProcessor()
             try {
                 recorder.startRecording()
                 check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
+                Log.i(TAG, "startMicrophone: recording started, actual routed device=${recorder.routedDevice?.type}/${recorder.routedDevice?.id}/${recorder.routedDevice?.productName}")
                 var consecutiveEmptyReads = 0
+                var readsLogged = 0
                 while (running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
+                    if (readsLogged < 20 || readsLogged % 100 == 0) {
+                        val peak = (0 until count.coerceAtLeast(0)).maxOfOrNull { kotlin.math.abs(samples[it].toInt()) } ?: -1
+                        Log.i(TAG, "startMicrophone: read #$readsLogged count=$count peak=$peak routedDevice=${recorder.routedDevice?.id}")
+                    }
+                    readsLogged++
                     if (count <= 0) {
                         // A misrouted device (e.g. Bluetooth audio that never actually connected)
                         // reads 0/negative forever. Without a bound this loop never exits, the
@@ -548,6 +566,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     _state.update { it.copy(sentPackets = it.sentPackets + 1, microphoneLevel = processor.level) }
                 }
             } catch (e: Exception) {
+                Log.w(TAG, "startMicrophone: capture loop ended", e)
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
             } finally {
                 runCatching { recorder.stop() }
