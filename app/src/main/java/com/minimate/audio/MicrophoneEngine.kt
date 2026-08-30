@@ -28,19 +28,28 @@ import kotlin.math.tanh
  */
 class MicrophoneEngine(private val sampleRate: Int) {
     private companion object {
-        /** Where speech should land, ≈ -22 dBFS RMS. */
-        const val TARGET_RMS = 2_600f
-        const val MAX_TARGET_RMS = 7_000f
-        /** Amplified peaks aim here. Leaves the limiter idle during normal speech. */
-        const val PEAK_CEILING = .82f
-        /** The estimated noise floor may never be amplified past ≈ -38 dBFS. */
-        const val MAX_NOISE_RMS_OUT = 420f
-        const val MAX_GAIN = 250f
-        /** Speech must exceed the noise floor by this factor. Measured separation is ~10x. */
-        const val SPEECH_SNR = 2.5f
+        /** Where speech should land, ≈ -18 dBFS RMS. */
+        const val TARGET_RMS = 4_000f
+        const val MAX_TARGET_RMS = 14_000f
+        /**
+         * Peaks are allowed past full scale before limiting. This capsule's measured crest
+         * factor is extreme — isolated impulses of 5000-18000 sit beside speech whose RMS is
+         * 5-30 — so constraining the absolute peak below full scale lets one cable knock set
+         * the gain for the next half second and holds real speech far too quiet. Transients
+         * are the soft limiter's job; the RMS target is what should govern loudness.
+         */
+        const val PEAK_CEILING = 1.5f
+        /** The estimated noise floor may never be amplified past ≈ -35 dBFS. */
+        const val MAX_NOISE_RMS_OUT = 550f
+        const val MAX_GAIN = 400f
+        /** Speech must exceed the noise floor by this factor. */
+        const val SPEECH_SNR = 3.0f
         /** Rejects digital silence only; far below any usable capsule. */
         const val SPEECH_ABSOLUTE_FLOOR = 4f
-        const val SPEECH_HANGOVER_SECONDS = .40f
+        const val SPEECH_HANGOVER_SECONDS = .25f
+        /** Level held during pauses. Attenuating rather than passing room tone at unity is what
+         *  makes isolation audible between words. */
+        const val NON_VOICE_LEVEL = .12f
         const val LIMIT_THRESHOLD = .88f
         const val NOISE_WINDOW_BLOCKS = 200
     }
@@ -88,7 +97,13 @@ class MicrophoneEngine(private val sampleRate: Int) {
 
         val envelopeTau = if (blockRms > smoothedRms) .012f else .160f
         smoothedRms += (blockRms - smoothedRms) * (1f - exp(-dt / envelopeTau))
-        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / .6f))
+        // Attack is smoothed rather than instantaneous so a single-block impulse cannot slam the
+        // envelope to its own height and starve the following speech of gain.
+        peakEnvelope = if (blockPeak > peakEnvelope) {
+            peakEnvelope + (blockPeak - peakEnvelope) * (1f - exp(-dt / .05f))
+        } else {
+            peakEnvelope * exp(-dt / .5f)
+        }
 
         speechHoldSeconds = if (blockRms > noiseRms * SPEECH_SNR && blockRms > SPEECH_ABSOLUTE_FLOOR) {
             SPEECH_HANGOVER_SECONDS
@@ -97,16 +112,18 @@ class MicrophoneEngine(private val sampleRate: Int) {
         }
         val voiceActive = speechHoldSeconds > 0f
 
-        // Four independent limits, smallest wins. Holding gain at unity while no voice is present
-        // is what stops room tone being lifted to full scale during pauses.
-        val wanted = if (voiceActive) {
-            minOf(TARGET_RMS * trim.coerceIn(.25f, 3f), MAX_TARGET_RMS) / smoothedRms.coerceAtLeast(1f)
+        // While voice is present: three independent limits, smallest wins. While it is absent the
+        // signal is attenuated instead of passed at unity, so room tone actually drops away
+        // between words rather than merely failing to be amplified.
+        val targetGain = if (voiceActive) {
+            val wanted = minOf(TARGET_RMS * trim.coerceIn(.25f, 3f), MAX_TARGET_RMS) /
+                smoothedRms.coerceAtLeast(1f)
+            val peakLimit = (PEAK_CEILING * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f)).coerceAtLeast(1f)
+            val noiseLimit = (MAX_NOISE_RMS_OUT / noiseRms).coerceAtLeast(1f)
+            wanted.coerceIn(1f, minOf(MAX_GAIN, peakLimit, noiseLimit))
         } else {
-            1f
+            NON_VOICE_LEVEL
         }
-        val peakLimit = (PEAK_CEILING * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f)).coerceAtLeast(1f)
-        val noiseLimit = (MAX_NOISE_RMS_OUT / noiseRms).coerceAtLeast(1f)
-        val targetGain = wanted.coerceIn(1f, minOf(MAX_GAIN, peakLimit, noiseLimit))
 
         val tau = if (targetGain < currentGain) .025f else .250f
         val previousGain = currentGain
