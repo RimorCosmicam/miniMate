@@ -425,11 +425,14 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
      * Bluetooth carries a microphone signal only over its SCO (classic) or BLE-audio link — never
      * over A2DP. Selecting such a device for input requires actively engaging that link first, or
      * AudioRecord silently keeps capturing from whatever the system defaulted to.
+     *
+     * Every external accessory — not just Bluetooth — needs this: capturing from a wired/USB
+     * mic with a plain MIC-source AudioRecord in MODE_NORMAL skips the phone's call-tuned audio
+     * path entirely (the gain staging a wired headset gets during an actual phone call). Only
+     * the phone's own built-in mic is exempt.
      */
-    private fun needsCommunicationRouting(device: AudioDeviceInfo?): Boolean = device != null && (
-        device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
-        )
+    private fun needsCommunicationRouting(device: AudioDeviceInfo?): Boolean =
+        device != null && device.type != AudioDeviceInfo.TYPE_BUILTIN_MIC
 
     @Volatile private var scoReceiver: BroadcastReceiver? = null
     @Volatile private var scoActive = false
@@ -437,10 +440,14 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private suspend fun engageInputRouting(device: AudioDeviceInfo?): Boolean {
         if (!needsCommunicationRouting(device)) return true
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            runCatching { audioManager.setCommunicationDevice(device!!) }.getOrDefault(false)
-        } else {
-            startClassicSco()
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                runCatching { audioManager.setCommunicationDevice(device!!) }.getOrDefault(false)
+            device!!.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> startClassicSco()
+            // Pre-S wired/USB: no API to pin a specific non-BT communication device, but
+            // MODE_IN_COMMUNICATION alone is enough for the platform to prefer a connected
+            // wired/USB accessory over the built-in mic.
+            else -> true
         }
     }
 
@@ -519,8 +526,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            // VOICE_COMMUNICATION (not plain MIC) engages the phone's call-tuned mic gain
+            // path — the same one used when you're actually on a call through this same
+            // accessory, which has always had normal, audible mic level.
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
@@ -572,7 +582,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     val now = System.nanoTime()
                     if (now - windowStart > 1_000_000_000L) {
-                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) trim=$gain autoGain=${"%.1f".format(processor.lastAutoGain)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
+                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) noiseFloor=${"%.0f".format(processor.lastNoiseFloor)} trim=$gain autoGain=${"%.1f".format(processor.lastAutoGain)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
                         windowRawPeak = 0
                         windowOutPeak = 0
                         windowStart = now
@@ -736,10 +746,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
  */
 private class MicrophoneProcessor {
     private var envelope = 1_200f
+    private var noiseFloor = 200f
     var level: Float = 0f
         private set
     var lastAutoGain: Float = 1f
         private set
+    val lastNoiseFloor: Float get() = noiseFloor
 
     fun process(samples: ShortArray, count: Int, trim: Float): ShortArray {
         val output = ShortArray(count)
@@ -752,7 +764,16 @@ private class MicrophoneProcessor {
             // Fast attack so a sudden loud transient pulls gain down before it clips; slow
             // decay so gain doesn't hunt/pump during normal pauses between words.
             envelope += (absDry - envelope) * (if (absDry > envelope) .05f else .0006f)
-            val autoGain = (target / envelope.coerceAtLeast(80f)).coerceIn(1f, 80f)
+            // Tracks the quiet parts only (falls fast toward quiet, rises very slowly) so it
+            // settles on the mic's own self-noise level rather than chasing real speech.
+            noiseFloor += (absDry - noiseFloor) * (if (absDry < noiseFloor) .01f else .00005f)
+            // Only trust gain once the signal is meaningfully louder than that noise floor —
+            // without this, a mic sitting near its own noise floor gets that noise amplified
+            // into audible hiss instead of staying quiet like it should.
+            val snr = envelope / noiseFloor.coerceAtLeast(40f)
+            val confidence = ((snr - 1.2f) / 2f).coerceIn(0f, 1f)
+            val targetGain = (target / envelope.coerceAtLeast(80f)).coerceIn(1f, 80f)
+            val autoGain = 1f + (targetGain - 1f) * confidence
             lastAutoGain = autoGain
             val driven = dry * autoGain * trim
             val limited = 32_000f * kotlin.math.tanh(driven / 32_000f)
