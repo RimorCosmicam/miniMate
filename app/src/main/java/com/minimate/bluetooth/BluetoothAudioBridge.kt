@@ -169,7 +169,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
                 outputEqGains = profile?.gains?.takeIf { gains -> gains.size == 9 }?.map { gain -> gain.coerceIn(-12f, 12f) }
                     ?: AudioOutputPreset.FLAT.gains,
-                microphoneGain = microphoneGain.coerceIn(0f, 2f),
+                microphoneGain = microphoneGain.coerceIn(0f, 12f),
                 selectedInputKey = inputDeviceKey,
                 error = null
             )
