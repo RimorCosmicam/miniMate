@@ -8,34 +8,49 @@ import kotlin.math.sqrt
 import kotlin.math.tanh
 
 /**
- * Microphone gain stage: push the signal to the loudest it can go, always.
+ * Microphone level control.
  *
- * No filters, no voice-activity gating, no noise ceiling. Every earlier version decided, on its
- * own, when the microphone "deserved" gain — and on a low-output inline capsule those decisions
- * were consistently wrong, leaving the gain at 1.0 while the wearer heard nothing. There is no
- * such decision here. Every block is normalised toward full scale on the strength of its own
- * peak, so a quiet capsule is driven just as hard as a loud one.
+ * No frequency filtering of any kind: the signal is passed through untouched apart from gain.
+ * Noise reduction is the platform NoiseSuppressor effect on the capture session, not anything
+ * reimplemented here.
  *
- * Noise suppression is the platform NoiseSuppressor effect applied at the capture session, ahead
- * of this stage, rather than anything reimplemented here.
+ * Calibrated against measured capture from the actual hardware rather than assumed levels. With
+ * the AudioSource the device probe selects, speech blocks measure RMS 150-290 with peaks reaching
+ * 12000-plus, while the gaps between words sit at RMS 5-30. That order-of-magnitude separation is
+ * what every threshold below is derived from, and it is the separation that did not exist while
+ * capture ran on a source delivering 25x less signal — which is why earlier attempts at level
+ * control either gated speech off entirely or amplified silence.
  *
- * The only restraint is the soft limiter: gain aims peaks near full scale, and the limiter
- * absorbs whatever overshoots. Without it the same signal would wrap around the 16-bit range and
- * arrive as hard clipping, which is louder in no useful sense.
+ * The immediately preceding version applied maximum gain unconditionally. Measurement showed the
+ * consequence plainly: output peak pinned at 100% of full scale on every single block, with gain
+ * swinging between 9x and 637x as it chased room tone during pauses. Permanent limiter saturation
+ * is heard as noise and as a flat, lifeless voice, which is why "louder" made it worse.
  */
 class MicrophoneEngine(private val sampleRate: Int) {
     private companion object {
-        /** Aim peaks here, as a fraction of full scale. 1.0 is hard clipping by definition. */
-        const val PEAK_TARGET = .97f
-        /** Ceiling on the multiplier itself, purely to bound a divide-by-near-zero. */
-        const val MAX_GAIN = 400f
-        /** Peak envelope decay. Short, so level recovers quickly after a loud transient. */
-        const val PEAK_DECAY_SECONDS = .35f
-        /** Soft-limit only above this; below it the signal passes through untouched. */
-        const val LIMIT_THRESHOLD = .90f
+        /** Where speech should land, ≈ -22 dBFS RMS. */
+        const val TARGET_RMS = 2_600f
+        const val MAX_TARGET_RMS = 7_000f
+        /** Amplified peaks aim here. Leaves the limiter idle during normal speech. */
+        const val PEAK_CEILING = .82f
+        /** The estimated noise floor may never be amplified past ≈ -38 dBFS. */
+        const val MAX_NOISE_RMS_OUT = 420f
+        const val MAX_GAIN = 250f
+        /** Speech must exceed the noise floor by this factor. Measured separation is ~10x. */
+        const val SPEECH_SNR = 2.5f
+        /** Rejects digital silence only; far below any usable capsule. */
+        const val SPEECH_ABSOLUTE_FLOOR = 4f
+        const val SPEECH_HANGOVER_SECONDS = .40f
+        const val LIMIT_THRESHOLD = .88f
+        const val NOISE_WINDOW_BLOCKS = 200
     }
 
+    private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
+    private var recentIndex = 0
+    private var recentCount = 0
+    private var smoothedRms = 0f
     private var peakEnvelope = 0f
+    private var speechHoldSeconds = 0f
     private var currentGain = 1f
     private val ceiling = LIMIT_THRESHOLD * Short.MAX_VALUE
     private val headroom = Short.MAX_VALUE - ceiling
@@ -61,18 +76,39 @@ class MicrophoneEngine(private val sampleRate: Int) {
         val blockRms = sqrt(energy / count).toFloat()
         level = (blockRms / Short.MAX_VALUE).coerceIn(0f, 1f)
 
-        // Instant attack so a sudden loud sound cannot clip; quick decay so the level climbs
-        // straight back to maximum afterwards instead of ducking for the next second.
-        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / PEAK_DECAY_SECONDS))
+        // Noise floor by minimum statistics: the quietest block across several seconds is room
+        // tone, because speech is intermittent. The running minimum sits below the true noise
+        // RMS by construction, hence the bias correction.
+        recentRms[recentIndex] = blockRms
+        recentIndex = (recentIndex + 1) % recentRms.size
+        if (recentCount < recentRms.size) recentCount++
+        var minimum = Float.MAX_VALUE
+        for (index in 0 until recentCount) if (recentRms[index] < minimum) minimum = recentRms[index]
+        val noiseRms = (minimum * 1.5f).coerceAtLeast(.5f)
 
-        // Unconditional: whatever the block's peak is, drive it to the target. Nothing here can
-        // decide the signal is "not speech" and withhold gain.
-        val targetGain = (PEAK_TARGET * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f))
-            .coerceIn(1f, MAX_GAIN) * trim.coerceIn(.25f, 3f)
+        val envelopeTau = if (blockRms > smoothedRms) .012f else .160f
+        smoothedRms += (blockRms - smoothedRms) * (1f - exp(-dt / envelopeTau))
+        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / .6f))
 
-        // Fall fast, rise briskly. The rise is far quicker than a conventional AGC because the
-        // complaint was never that level surged, it was that level never arrived.
-        val tau = if (targetGain < currentGain) .020f else .120f
+        speechHoldSeconds = if (blockRms > noiseRms * SPEECH_SNR && blockRms > SPEECH_ABSOLUTE_FLOOR) {
+            SPEECH_HANGOVER_SECONDS
+        } else {
+            (speechHoldSeconds - dt).coerceAtLeast(0f)
+        }
+        val voiceActive = speechHoldSeconds > 0f
+
+        // Four independent limits, smallest wins. Holding gain at unity while no voice is present
+        // is what stops room tone being lifted to full scale during pauses.
+        val wanted = if (voiceActive) {
+            minOf(TARGET_RMS * trim.coerceIn(.25f, 3f), MAX_TARGET_RMS) / smoothedRms.coerceAtLeast(1f)
+        } else {
+            1f
+        }
+        val peakLimit = (PEAK_CEILING * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f)).coerceAtLeast(1f)
+        val noiseLimit = (MAX_NOISE_RMS_OUT / noiseRms).coerceAtLeast(1f)
+        val targetGain = wanted.coerceIn(1f, minOf(MAX_GAIN, peakLimit, noiseLimit))
+
+        val tau = if (targetGain < currentGain) .025f else .250f
         val previousGain = currentGain
         currentGain += (targetGain - currentGain) * (1f - exp(-dt / tau))
 
@@ -95,6 +131,8 @@ class MicrophoneEngine(private val sampleRate: Int) {
         lastStats = MicrophoneFrameStats(
             rawPeak = blockPeak,
             rawRms = blockRms,
+            noiseRms = noiseRms,
+            voiceActive = voiceActive,
             gain = currentGain,
             outputPeak = outputPeak
         )
@@ -106,6 +144,8 @@ class MicrophoneEngine(private val sampleRate: Int) {
 data class MicrophoneFrameStats(
     val rawPeak: Float,
     val rawRms: Float,
+    val noiseRms: Float,
+    val voiceActive: Boolean,
     val gain: Float,
     val outputPeak: Float
 )
