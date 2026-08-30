@@ -53,8 +53,8 @@ import com.minimate.touchpad.model.subthemesFor
 import com.minimate.touchpad.model.validColorway
 
 private enum class StudioPicker(val label: String) {
-    THEME("Theme"), SUBTHEME("Subtheme"), RECOLOR("Color"),
-    MOTION("Motion"), FILTER("Filter"), TOUCH("Touch"), STICK("Stick")
+    THEME("Theme"), FILTER("Filter"), SUBTHEME("Subtheme"), RECOLOR("Color"),
+    MOTION("Motion"), TOUCH("Touch"), STICK("Stick")
 }
 
 /** Unified top-left Theme Studio controls over a full-screen live canvas. */
