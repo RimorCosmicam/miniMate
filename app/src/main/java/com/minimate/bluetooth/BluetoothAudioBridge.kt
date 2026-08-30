@@ -20,6 +20,7 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.NoiseSuppressor
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -559,7 +560,14 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     AutomaticGainControl.create(recorder.audioSessionId)?.apply { enabled = true }
                 }.onFailure { Log.w(TAG, "startMicrophone: AGC effect failed", it) }.getOrNull()
             } else null
-            Log.i(TAG, "startMicrophone: platform AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}")
+            // Platform noise suppression, on for every microphone. This is a single-channel
+            // spectral effect, so it needs no mic array and works for external capsules too.
+            val noiseSuppressor = if (NoiseSuppressor.isAvailable()) {
+                runCatching {
+                    NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true }
+                }.onFailure { Log.w(TAG, "startMicrophone: NoiseSuppressor failed", it) }.getOrNull()
+            } else null
+            Log.i(TAG, "startMicrophone: platform AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}; NS available=${NoiseSuppressor.isAvailable()} enabled=${noiseSuppressor?.enabled}")
             val samples = ShortArray(frames)
             val processor = MicrophoneProcessor(sampleRate)
             try {
@@ -621,6 +629,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             } finally {
                 runCatching { recorder.stop() }
                 runCatching { automaticGain?.release() }
+                runCatching { noiseSuppressor?.release() }
                 recorder.release()
                 // Only the most recent session releases routing: if a newer one has already
                 // started (e.g. the user switched devices while this one was still tearing
@@ -782,15 +791,26 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
  */
 private class MicrophoneProcessor(private val sampleRate: Int) {
     private companion object {
-        /** ≈ -19 dBFS RMS: a comfortable speech level with plenty of headroom. */
-        const val TARGET_RMS = 3_500f
+        /** ≈ -23 dBFS RMS. Speech has a 12-18 dB crest factor, so an RMS target much hotter than
+         *  this puts peaks past full scale and pins the limiter permanently — measured as a
+         *  constant outPeak of 100% FS, which is what made capture sound distorted. */
+        const val TARGET_RMS = 2_200f
+        const val MAX_TARGET_RMS = 6_000f
         /** ≈ -35 dBFS RMS: the loudest the noise floor is ever allowed to become. */
         const val MAX_NOISE_RMS_OUT = 550f
-        // Deliberately high: the noise ceiling below is the principled limit on how much gain a
-        // given microphone earns, so this only exists to stop a pathological divide-by-tiny.
+        /** Keep amplified peaks below this fraction of full scale so the limiter stays idle
+         *  during normal speech instead of shaving every syllable. */
+        const val PEAK_CEILING = .82f
+        // Deliberately high: the noise and peak ceilings are the principled limits on how much
+        // gain a mic earns, so this only exists to stop a pathological divide-by-tiny.
         const val MAX_GAIN = 200f
-        /** ≈ 10 dB above the noise floor before a block counts as speech. */
-        const val SPEECH_SNR = 3.2f
+        /** ≈ 8 dB above the noise floor before a block counts as speech. */
+        const val SPEECH_SNR = 2.5f
+        /** Absolute floor purely to reject digital silence. This must stay far below the
+         *  quietest usable capsule: a low-output inline mic's entire speech range measured
+         *  under RMS 25, so the previous value classified all of its speech as silence and the
+         *  gain therefore never left 1.0 — the mic was not quiet, it was gated off. */
+        const val SPEECH_ABSOLUTE_FLOOR = 4f
         const val SPEECH_HANGOVER_SECONDS = .35f
         const val LIMIT_THRESHOLD = .86f
         /** Minimum-statistics window. Long enough to span phrases, short enough to follow a room. */
@@ -798,6 +818,7 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
     }
 
     private var smoothedRms = 0f
+    private var peakEnvelope = 0f
     private var currentGain = 1f
     private var speechHoldSeconds = 0f
     private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
@@ -819,12 +840,19 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         val dt = count.toFloat() / sampleRate
 
         var energy = 0.0
+        var blockPeak = 0f
         for (index in 0 until count) {
             val sample = samples[index].toFloat()
             energy += sample.toDouble() * sample
+            val magnitude = abs(sample)
+            if (magnitude > blockPeak) blockPeak = magnitude
         }
         val blockRms = sqrt(energy / count).toFloat()
         level = (blockRms / Short.MAX_VALUE).coerceIn(0f, 1f)
+
+        // Peak envelope: instant attack, ~1 s decay. Gain has to respect the crest factor, not
+        // just the average, or loud syllables clip while the RMS still looks well below target.
+        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / 1.0f))
 
         // Noise floor by minimum statistics: speech is intermittent, so the quietest block in a
         // multi-second window is room tone. The bias factor corrects the running minimum, which
@@ -842,7 +870,7 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         val envelopeTau = if (blockRms > smoothedRms) .010f else .150f
         smoothedRms += (blockRms - smoothedRms) * (1f - exp(-dt / envelopeTau))
 
-        if (blockRms > noiseRms * SPEECH_SNR && blockRms > 25f) {
+        if (blockRms > noiseRms * SPEECH_SNR && blockRms > SPEECH_ABSOLUTE_FLOOR) {
             speechHoldSeconds = SPEECH_HANGOVER_SECONDS
         } else {
             speechHoldSeconds = (speechHoldSeconds - dt).coerceAtLeast(0f)
@@ -853,12 +881,16 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         // Amplifying the noise floor past MAX_NOISE_RMS_OUT is forbidden outright, so a mic that
         // is picking up only room tone stays quiet no matter how far the trim is turned up.
         val noiseCeilingGain = (MAX_NOISE_RMS_OUT / noiseRms).coerceAtLeast(1f)
+        // Peak headroom is a hard constraint, not a preference: without it an RMS-only target
+        // drives every consonant into the limiter, which is audible as constant distortion.
+        val peakCeilingGain = (PEAK_CEILING * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f))
+            .coerceAtLeast(1f)
         val wantedGain = if (voiceActive) {
-            TARGET_RMS * trim.coerceIn(.25f, 3f) / smoothedRms.coerceAtLeast(1f)
+            minOf(TARGET_RMS * trim.coerceIn(.25f, 3f), MAX_TARGET_RMS) / smoothedRms.coerceAtLeast(1f)
         } else {
             1f
         }
-        val targetGain = wantedGain.coerceIn(1f, minOf(MAX_GAIN, noiseCeilingGain))
+        val targetGain = wantedGain.coerceIn(1f, minOf(MAX_GAIN, noiseCeilingGain, peakCeilingGain))
 
         // Drop gain quickly when something gets loud, restore it slowly, so onsets never clip
         // and the level does not audibly surge between words.
