@@ -57,12 +57,7 @@ import java.net.SocketException
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.abs
-import kotlin.math.exp
-import kotlin.math.roundToInt
-import kotlin.math.sign
-import kotlin.math.sqrt
-import kotlin.math.tanh
+import com.minimate.audio.MicrophoneEngine
 import com.minimate.touchpad.model.ThemeFilter
 
 /** Stable sentinel key for the phone's own built-in speaker/microphone. */
@@ -583,7 +578,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             Log.i(TAG, "startMicrophone: platform AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}; NS available=${NoiseSuppressor.isAvailable()} enabled=${noiseSuppressor?.enabled}")
             activeRecorder = recorder
             val samples = ShortArray(frames)
-            val processor = MicrophoneProcessor(sampleRate)
+            val engine = MicrophoneEngine(sampleRate)
             try {
                 recorder.startRecording()
                 check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
@@ -612,7 +607,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     consecutiveEmptyReads = 0
                     val gain = _state.value.microphoneGain
-                    val adjusted = processor.process(samples, count, gain)
+                    val adjusted = engine.process(samples, count, gain)
                     for (index in 0 until count) {
                         val rawAbs = kotlin.math.abs(samples[index].toInt())
                         if (rawAbs > windowRawPeak) windowRawPeak = rawAbs
@@ -621,7 +616,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     val now = System.nanoTime()
                     if (now - windowStart > 1_000_000_000L) {
-                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) noiseRms=${"%.0f".format(processor.lastNoiseFloor)} speech=${processor.lastSpeech} trim=$gain autoGain=${"%.1f".format(processor.lastAutoGain)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
+                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) noiseRms=${"%.0f".format(engine.lastStats?.noiseRms ?: 0f)} fRms=${"%.0f".format(engine.lastStats?.filteredRms ?: 0f)} fPeak=${"%.0f".format(engine.lastStats?.filteredPeak ?: 0f)} speech=${engine.lastStats?.voiceActive} trim=$gain autoGain=${"%.1f".format(engine.lastStats?.gain ?: 0f)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
                         windowRawPeak = 0
                         windowOutPeak = 0
                         windowStart = now
@@ -635,7 +630,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         AudioBridgeProtocol.TYPE_MICROPHONE, AudioBridgeProtocol.CODEC_PCM16, 1, sampleRate,
                         sequence.getAndIncrement(), payload
                     ))
-                    _state.update { it.copy(sentPackets = it.sentPackets + 1, microphoneLevel = processor.level) }
+                    _state.update { it.copy(sentPackets = it.sentPackets + 1, microphoneLevel = engine.level) }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "startMicrophone: capture loop ended", e)
@@ -780,163 +775,6 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         releaseTrack()
         releaseInputRouting()
         scope.cancel()
-    }
-}
-
-/**
- * Block-based automatic gain control with voice-activity detection.
- *
- * The previous implementation recomputed gain per individual sample from a per-sample envelope.
- * At 48 kHz its attack coefficient of .05 gives a ~0.4 ms time constant, so the "envelope"
- * tracked the speech waveform itself (a 150 Hz voiced pitch period is ~6.7 ms) rather than its
- * loudness. Gain therefore modulated at audio rate, which is intermodulation distortion — that
- * is the "crispy" artefact, and no amount of retuning a per-sample follower removes it.
- *
- * Its noise-floor estimator was broken for the same reason: a ~2 ms decay tracked every waveform
- * zero crossing straight down to zero, which the captured logs confirm (noiseFloor read 0-3 while
- * peaks were 100-15000). Since the speech gate divided by that floor, the gate never engaged and
- * ambient noise was amplified exactly like speech.
- *
- * This version works in the block domain (one gain decision per 20 ms packet):
- *  - loudness is a proper block RMS, not an instantaneous sample magnitude;
- *  - the noise floor uses minimum statistics — the minimum block RMS over a multi-second window,
- *    which settles on room tone during the natural gaps between words instead of on speech;
- *  - gain is only raised while voice is actually detected, with hangover so it does not pump;
- *  - gain is hard-capped so the estimated noise floor can never be amplified past a fixed
- *    ceiling, which is what mathematically prevents boosting a quiet room into loud hiss;
- *  - the chosen gain is interpolated across the block, so it never steps (zipper noise);
- *  - limiting applies only above 86% FS, leaving normal-level audio bit-for-bit untouched
- *    instead of running every sample through a distortion curve.
- */
-private class MicrophoneProcessor(private val sampleRate: Int) {
-    private companion object {
-        /** ≈ -23 dBFS RMS. Speech has a 12-18 dB crest factor, so an RMS target much hotter than
-         *  this puts peaks past full scale and pins the limiter permanently — measured as a
-         *  constant outPeak of 100% FS, which is what made capture sound distorted. */
-        const val TARGET_RMS = 2_200f
-        const val MAX_TARGET_RMS = 6_000f
-        /** ≈ -35 dBFS RMS: the loudest the noise floor is ever allowed to become. */
-        const val MAX_NOISE_RMS_OUT = 550f
-        /** Where amplified peaks are aimed, as a fraction of full scale. This sits just above
-         *  the limiter threshold on purpose: a genuinely quiet capsule is peak-limited rather
-         *  than RMS-limited, so holding peaks well below the limiter throws away most of the
-         *  available level. Occasional overshoot is what the soft limiter is for. */
-        const val PEAK_CEILING = .95f
-        // Deliberately high: the noise and peak ceilings are the principled limits on how much
-        // gain a mic earns, so this only exists to stop a pathological divide-by-tiny.
-        const val MAX_GAIN = 200f
-        /** ≈ 8 dB above the noise floor before a block counts as speech. */
-        const val SPEECH_SNR = 2.5f
-        /** Absolute floor purely to reject digital silence. This must stay far below the
-         *  quietest usable capsule: a low-output inline mic's entire speech range measured
-         *  under RMS 25, so the previous value classified all of its speech as silence and the
-         *  gain therefore never left 1.0 — the mic was not quiet, it was gated off. */
-        const val SPEECH_ABSOLUTE_FLOOR = 4f
-        const val SPEECH_HANGOVER_SECONDS = .35f
-        const val LIMIT_THRESHOLD = .86f
-        /** Minimum-statistics window. Long enough to span phrases, short enough to follow a room. */
-        const val NOISE_WINDOW_BLOCKS = 200
-    }
-
-    private var smoothedRms = 0f
-    private var peakEnvelope = 0f
-    private var currentGain = 1f
-    private var speechHoldSeconds = 0f
-    private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
-    private var recentIndex = 0
-    private var recentCount = 0
-
-    var level: Float = 0f
-        private set
-    var lastAutoGain: Float = 1f
-        private set
-    var lastNoiseFloor: Float = 0f
-        private set
-    var lastSpeech: Boolean = false
-        private set
-
-    fun process(samples: ShortArray, count: Int, trim: Float): ShortArray {
-        val output = ShortArray(count)
-        if (count <= 0) return output
-        val dt = count.toFloat() / sampleRate
-
-        var energy = 0.0
-        var blockPeak = 0f
-        for (index in 0 until count) {
-            val sample = samples[index].toFloat()
-            energy += sample.toDouble() * sample
-            val magnitude = abs(sample)
-            if (magnitude > blockPeak) blockPeak = magnitude
-        }
-        val blockRms = sqrt(energy / count).toFloat()
-        level = (blockRms / Short.MAX_VALUE).coerceIn(0f, 1f)
-
-        // Peak envelope: instant attack, ~0.45 s decay. Gain has to respect the crest factor,
-        // not just the average, or loud syllables clip while the RMS still looks well below
-        // target. The decay is kept short so one stray knock does not hold gain down for a
-        // second afterwards, which on a quiet capsule is heard as the level dropping out.
-        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / .45f))
-
-        // Noise floor by minimum statistics: speech is intermittent, so the quietest block in a
-        // multi-second window is room tone. The bias factor corrects the running minimum, which
-        // by construction sits below the true noise RMS.
-        recentRms[recentIndex] = blockRms
-        recentIndex = (recentIndex + 1) % recentRms.size
-        if (recentCount < recentRms.size) recentCount++
-        var minimum = Float.MAX_VALUE
-        for (index in 0 until recentCount) if (recentRms[index] < minimum) minimum = recentRms[index]
-        val noiseRms = (minimum * 1.5f).coerceAtLeast(1f)
-        lastNoiseFloor = noiseRms
-
-        // Block-domain envelope: quick to follow a rise, slow to fall, both far longer than a
-        // pitch period so this measures loudness rather than waveform.
-        val envelopeTau = if (blockRms > smoothedRms) .010f else .150f
-        smoothedRms += (blockRms - smoothedRms) * (1f - exp(-dt / envelopeTau))
-
-        if (blockRms > noiseRms * SPEECH_SNR && blockRms > SPEECH_ABSOLUTE_FLOOR) {
-            speechHoldSeconds = SPEECH_HANGOVER_SECONDS
-        } else {
-            speechHoldSeconds = (speechHoldSeconds - dt).coerceAtLeast(0f)
-        }
-        val voiceActive = speechHoldSeconds > 0f
-        lastSpeech = voiceActive
-
-        // Amplifying the noise floor past MAX_NOISE_RMS_OUT is forbidden outright, so a mic that
-        // is picking up only room tone stays quiet no matter how far the trim is turned up.
-        val noiseCeilingGain = (MAX_NOISE_RMS_OUT / noiseRms).coerceAtLeast(1f)
-        // Peak headroom is a hard constraint, not a preference: without it an RMS-only target
-        // drives every consonant into the limiter, which is audible as constant distortion.
-        val peakCeilingGain = (PEAK_CEILING * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f))
-            .coerceAtLeast(1f)
-        val wantedGain = if (voiceActive) {
-            minOf(TARGET_RMS * trim.coerceIn(.25f, 3f), MAX_TARGET_RMS) / smoothedRms.coerceAtLeast(1f)
-        } else {
-            1f
-        }
-        val targetGain = wantedGain.coerceIn(1f, minOf(MAX_GAIN, noiseCeilingGain, peakCeilingGain))
-
-        // Drop gain quickly when something gets loud, restore it slowly, so onsets never clip
-        // and the level does not audibly surge between words.
-        val gainTau = if (targetGain < currentGain) .030f else .400f
-        val previousGain = currentGain
-        currentGain += (targetGain - currentGain) * (1f - exp(-dt / gainTau))
-        lastAutoGain = currentGain
-
-        val ceiling = LIMIT_THRESHOLD * Short.MAX_VALUE
-        val headroom = Short.MAX_VALUE - ceiling
-        for (index in 0 until count) {
-            val gain = previousGain + (currentGain - previousGain) * (index.toFloat() / count)
-            val value = samples[index].toFloat() * gain
-            val magnitude = abs(value)
-            val limited = if (magnitude <= ceiling) {
-                value
-            } else {
-                sign(value) * (ceiling + headroom * tanh((magnitude - ceiling) / headroom))
-            }
-            output[index] = limited.roundToInt()
-                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-        }
-        return output
     }
 }
 
