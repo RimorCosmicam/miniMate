@@ -530,6 +530,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         val buffer = ShortArray(frames)
         var best = MediaRecorder.AudioSource.VOICE_RECOGNITION
         var bestRms = -1f
+        val scores = HashMap<Int, Float>()
         val report = StringBuilder()
 
         for ((source, name) in candidates) {
@@ -567,9 +568,25 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             }.getOrDefault(-1f)
 
             report.append(name).append('=').append(if (rms < 0) "n/a" else "%.1f".format(rms)).append(' ')
+            scores[source] = rms
             if (rms > bestRms) { bestRms = rms; best = source }
         }
-        Log.i(TAG, "probeLoudestSource: $report-> chose ${candidates.firstOrNull { it.first == best }?.second} (rms ${"%.1f".format(bestRms)})")
+
+        // Break near-ties toward CAMCORDER. Probing hears whatever is in the room, and on room
+        // tone alone every profile scores about the same — measured at 124 / 106 / 107 across
+        // MIC / CAMCORDER / DEFAULT, which makes the winner essentially arbitrary. The moment
+        // real speech is present the same comparison reads 227 against 3824 in CAMCORDER's
+        // favour. The noise floor is the one thing that does not separate these profiles, so a
+        // marginal ambient lead is not evidence and must not override a profile that has
+        // repeatedly delivered an order of magnitude more actual signal on this hardware.
+        val camcorder = scores[MediaRecorder.AudioSource.CAMCORDER] ?: -1f
+        if (camcorder > 0f && bestRms > 0f && camcorder >= bestRms * .55f) {
+            best = MediaRecorder.AudioSource.CAMCORDER
+            bestRms = camcorder
+            report.append("(near-tie resolved to CAMCORDER) ")
+        }
+
+        Log.i(TAG, "probeLoudestSource: $report-> chose ${candidates.firstOrNull { it.first == best }?.second} (peak ${"%.1f".format(bestRms)})")
         return best
     }
 
