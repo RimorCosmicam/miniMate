@@ -3,6 +3,7 @@ package com.minimate.ui.shader
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -71,18 +72,21 @@ private const val FILTER_SHADER = """
             half4 c = content.eval(p); half luma = dot(c.rgb, half3(0.299, 0.587, 0.114));
             luma = smoothstep(0.12, 0.88, luma); return half4(half3(luma), c.a);
         }
-        float2 uv=p/uResolution;float2 sampleP=p;
-        if(uMode<7.5){float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);float r=length(q),a=atan(q.y,q.x);a=abs(fract(a/6.283185*8.0+.5)-.5)*6.283185/8.0;sampleP=(.5+float2(cos(a),sin(a))*r/float2(uResolution.x/uResolution.y,1.0))*uResolution;}
-        else if(uMode<8.5){float2 q=uv-.5;float r2=dot(q,q);sampleP=(.5+q*(1.0+r2*1.4+r2*r2))*uResolution;}
-        else if(uMode<14.5&&uMode>=13.5){float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);float a=atan(q.y,q.x),r=length(q);a=abs(fract(a/6.283185*6.0+.5)-.5)*6.283185/6.0;sampleP=(.5+float2(cos(a),sin(a))*abs(fract(r*3.0)-.5)*.62/float2(uResolution.x/uResolution.y,1.0))*uResolution;}
-        else if(uMode<15.5&&uMode>=14.5){float n=sin(uv.y*31.0+uTime)*cos(uv.x*27.0-uTime*.8);sampleP=p+float2(n,sin(n*4.0))*8.0;}
+        float2 uv=p/uResolution;float2 sampleP=p;bool warped=false;
+        if(uMode<7.5){float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);float r=length(q),a=atan(q.y,q.x);a=abs(fract(a/6.283185*8.0+.5)-.5)*6.283185/8.0;sampleP=(.5+float2(cos(a),sin(a))*r/float2(uResolution.x/uResolution.y,1.0))*uResolution;warped=true;}
+        else if(uMode<8.5){float2 q=uv-.5;float r2=dot(q,q);sampleP=(.5+q*(1.0+r2*1.4+r2*r2))*uResolution;warped=true;}
+        else if(uMode<14.5&&uMode>=13.5){float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);float a=atan(q.y,q.x),r=length(q);a=abs(fract(a/6.283185*6.0+.5)-.5)*6.283185/6.0;sampleP=(.5+float2(cos(a),sin(a))*abs(fract(r*3.0)-.5)*.62/float2(uResolution.x/uResolution.y,1.0))*uResolution;warped=true;}
+        else if(uMode<15.5&&uMode>=14.5){float n=sin(uv.y*31.0+uTime)*cos(uv.x*27.0-uTime*.8);sampleP=p+float2(n,sin(n*4.0))*8.0;warped=true;}
         half4 c=content.eval(sampleP);half luma=dot(c.rgb,half3(.299,.587,.114));
+        // Kaleidoscope/fisheye/mirror-prism/liquid-glass are pure UV warps: return the
+        // warped sample as-is instead of falling into the unrelated buckets below, which
+        // used to catch any uMode under their threshold rather than a mutually exclusive range.
+        if(warped)return c;
         if(uMode<9.5){float2 cell=fract(p/6.0)-.5;float dots=1.0-smoothstep(sqrt(float(luma))*.48,sqrt(float(luma))*.48+.08,length(cell));return half4(mix(half3(.01),c.rgb,half(dots)),c.a);}
         if(uMode<10.5){half3 cold=half3(.02,0,.25),mid=half3(.95,.03,0),hot=half3(1,.9,.08);half3 thermal=luma<.5?mix(cold,mid,luma*2):mix(mid,hot,(luma-.5)*2);return half4(thermal,c.a);}
         if(uMode<11.5)return half4(half3(1)-c.rgb,c.a);
         if(uMode<12.5)return half4(floor(c.rgb*5+half3(.5))/5,c.a);
         if(uMode<13.5){float grain=fract(sin(dot(p+floor(uTime*24),float2(12.9898,78.233)))*43758.5453)-.5;float vig=1.0-smoothstep(.3,.75,length(uv-.5));return half4(c.rgb*half(.7+.3*vig)+half3(grain*.13)+half3(.04,.015,-.01),c.a);}
-        if(uMode<15.5)return c;
         float noise=fract(sin(dot(p+floor(uTime*20),float2(12.9898,78.233)))*43758.5453)-.5;float vig=1.0-smoothstep(.28,.72,length(uv-.5));return half4(half3(.03,luma*1.35+.12,.05)*half(vig)+half3(noise*.05),c.a);
     }
 """
@@ -134,7 +138,11 @@ private fun StackedFilterLayers(filters: List<ThemeFilter>, index: Int, content:
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, content: @Composable () -> Unit) {
-    val shader = remember { runCatching { RuntimeShader(FILTER_SHADER) }.getOrNull() }
+    val shader = remember {
+        runCatching { RuntimeShader(FILTER_SHADER) }
+            .onFailure { Log.e("MiniMateFilter", "Filter shader failed to compile, falling back to overlay", it) }
+            .getOrNull()
+    }
     if (shader == null) {
         Box(modifier = modifier) {
             content()
@@ -143,7 +151,9 @@ private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, conte
         return
     }
     val effect = remember(shader) {
-        runCatching { RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect() }.getOrNull()
+        runCatching { RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect() }
+            .onFailure { Log.e("MiniMateFilter", "Filter RenderEffect failed to create, falling back to overlay", it) }
+            .getOrNull()
     }
     if (effect == null) {
         Box(modifier = modifier) {
