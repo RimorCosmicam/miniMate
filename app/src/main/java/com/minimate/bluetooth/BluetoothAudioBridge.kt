@@ -131,6 +131,9 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private var bluetoothServer: BluetoothServerSocket? = null
     private var wifiServer: ServerSocket? = null
     private var microphoneJob: Job? = null
+    /** The recorder the capture loop is currently blocked on, so a stop can unblock read()
+     *  immediately instead of waiting for the current buffer to fill. */
+    @Volatile private var activeRecorder: AudioRecord? = null
     @Volatile private var micGeneration = 0
     private var audioTrack: AudioTrack? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -185,8 +188,18 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         audioTrack?.setPreferredDevice(preferredOutputDevice())
         applyOutputProcessing()
         if (restartMicrophone && microphoneJob?.isActive == true) {
+            // Wait for the previous session to fully tear down before opening the next one.
+            // A fixed delay was a guess: cancellation is cooperative and the old loop sits
+            // inside a blocking read, so the new AudioRecord could be created while the old
+            // one still held the route — two recorders on one device, heard as artefacts and
+            // noise until the user manually toggled the input off and on again.
+            val previous = microphoneJob
+            microphoneJob = null
             stopMicrophone()
-            if (microphoneEnabled && activeLink != null) scope.launch { delay(80); startMicrophone() }
+            if (microphoneEnabled && activeLink != null) scope.launch {
+                previous?.join()
+                startMicrophone()
+            }
         } else if (microphoneEnabled && activeLink != null) startMicrophone() else stopMicrophone()
     }
 
@@ -568,6 +581,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 }.onFailure { Log.w(TAG, "startMicrophone: NoiseSuppressor failed", it) }.getOrNull()
             } else null
             Log.i(TAG, "startMicrophone: platform AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}; NS available=${NoiseSuppressor.isAvailable()} enabled=${noiseSuppressor?.enabled}")
+            activeRecorder = recorder
             val samples = ShortArray(frames)
             val processor = MicrophoneProcessor(sampleRate)
             try {
@@ -627,6 +641,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 Log.w(TAG, "startMicrophone: capture loop ended", e)
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
             } finally {
+                if (activeRecorder === recorder) activeRecorder = null
                 runCatching { recorder.stop() }
                 runCatching { automaticGain?.release() }
                 runCatching { noiseSuppressor?.release() }
@@ -689,6 +704,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private fun stopMicrophone() {
         microphoneJob?.cancel()
         microphoneJob = null
+        // Cancellation alone cannot interrupt AudioRecord.read(), so stop the recorder directly.
+        // This returns the pending read at once and lets the loop observe cancellation now
+        // rather than after the current buffer fills.
+        runCatching { activeRecorder?.stop() }
         _state.update { it.copy(microphoneLevel = 0f) }
     }
 
@@ -798,9 +817,11 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         const val MAX_TARGET_RMS = 6_000f
         /** ≈ -35 dBFS RMS: the loudest the noise floor is ever allowed to become. */
         const val MAX_NOISE_RMS_OUT = 550f
-        /** Keep amplified peaks below this fraction of full scale so the limiter stays idle
-         *  during normal speech instead of shaving every syllable. */
-        const val PEAK_CEILING = .82f
+        /** Where amplified peaks are aimed, as a fraction of full scale. This sits just above
+         *  the limiter threshold on purpose: a genuinely quiet capsule is peak-limited rather
+         *  than RMS-limited, so holding peaks well below the limiter throws away most of the
+         *  available level. Occasional overshoot is what the soft limiter is for. */
+        const val PEAK_CEILING = .95f
         // Deliberately high: the noise and peak ceilings are the principled limits on how much
         // gain a mic earns, so this only exists to stop a pathological divide-by-tiny.
         const val MAX_GAIN = 200f
@@ -850,9 +871,11 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         val blockRms = sqrt(energy / count).toFloat()
         level = (blockRms / Short.MAX_VALUE).coerceIn(0f, 1f)
 
-        // Peak envelope: instant attack, ~1 s decay. Gain has to respect the crest factor, not
-        // just the average, or loud syllables clip while the RMS still looks well below target.
-        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / 1.0f))
+        // Peak envelope: instant attack, ~0.45 s decay. Gain has to respect the crest factor,
+        // not just the average, or loud syllables clip while the RMS still looks well below
+        // target. The decay is kept short so one stray knock does not hold gain down for a
+        // second afterwards, which on a quiet capsule is heard as the level dropping out.
+        peakEnvelope = maxOf(blockPeak, peakEnvelope * exp(-dt / .45f))
 
         // Noise floor by minimum statistics: speech is intermittent, so the quietest block in a
         // multi-second window is room tone. The bias factor corrects the running minimum, which
