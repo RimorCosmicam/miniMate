@@ -424,15 +424,15 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     /**
      * Bluetooth carries a microphone signal only over its SCO (classic) or BLE-audio link — never
      * over A2DP. Selecting such a device for input requires actively engaging that link first, or
-     * AudioRecord silently keeps capturing from whatever the system defaulted to.
-     *
-     * Every external accessory — not just Bluetooth — needs this: capturing from a wired/USB
-     * mic with a plain MIC-source AudioRecord in MODE_NORMAL skips the phone's call-tuned audio
-     * path entirely (the gain staging a wired headset gets during an actual phone call). Only
-     * the phone's own built-in mic is exempt.
+     * AudioRecord silently keeps capturing from whatever the system defaulted to. Wired/USB mics
+     * don't need this — setPreferredDevice() on the AudioRecord is enough to pin them directly,
+     * and forcing MODE_IN_COMMUNICATION for them only added a failure mode (setCommunicationDevice
+     * can reject a USB accessory outright) with no upside.
      */
-    private fun needsCommunicationRouting(device: AudioDeviceInfo?): Boolean =
-        device != null && device.type != AudioDeviceInfo.TYPE_BUILTIN_MIC
+    private fun needsCommunicationRouting(device: AudioDeviceInfo?): Boolean = device != null && (
+        device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+        )
 
     @Volatile private var scoReceiver: BroadcastReceiver? = null
     @Volatile private var scoActive = false
@@ -440,14 +440,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private suspend fun engageInputRouting(device: AudioDeviceInfo?): Boolean {
         if (!needsCommunicationRouting(device)) return true
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        return when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-                runCatching { audioManager.setCommunicationDevice(device!!) }.getOrDefault(false)
-            device!!.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> startClassicSco()
-            // Pre-S wired/USB: no API to pin a specific non-BT communication device, but
-            // MODE_IN_COMMUNICATION alone is enough for the platform to prefer a connected
-            // wired/USB accessory over the built-in mic.
-            else -> true
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching { audioManager.setCommunicationDevice(device!!) }.getOrDefault(false)
+        } else {
+            startClassicSco()
         }
     }
 
@@ -526,11 +522,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            // VOICE_COMMUNICATION (not plain MIC) engages the phone's call-tuned mic gain
-            // path — the same one used when you're actually on a call through this same
-            // accessory, which has always had normal, audible mic level.
+            // Plain MIC, not VOICE_COMMUNICATION: the latter routes through Android's telephony
+            // call-audio path, which applies its own narrowband compression/AGC tuned for
+            // intelligibility over a phone line, not fidelity — directly at odds with this
+            // being a lossless audio link. MIC is the full-bandwidth, unprocessed source.
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                MediaRecorder.AudioSource.MIC,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
