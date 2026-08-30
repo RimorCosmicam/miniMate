@@ -50,18 +50,23 @@ class MicrophoneEngine(private val sampleRate: Int) {
         const val MAX_NOISE_RMS_OUT = 550f
         const val MAX_GAIN = 400f
         /** Speech must exceed the noise floor by this factor. */
-        const val SPEECH_SNR = 3.0f
+        const val SPEECH_SNR = 2.0f
         /**
-         * Measured speech on this capsule sits at RMS 400-1136 while room tone measures 1-26,
-         * so this sits an order of magnitude below speech and well above noise. With the noise
-         * floor estimate collapsing to ~1, the ratio test alone treated room tone as speech and
-         * the gate never closed, which is why suppression was inaudible.
+         * Rejects digital silence only. This must never be tuned to one capture profile's
+         * levels: set to 50 from CAMCORDER measurements, it sat above the entire speech range of
+         * the profile actually selected on a later run, so the gate shut on every word and
+         * reopened between them. Which profile wins is not fixed, so the ratio test against the
+         * measured noise floor has to do the real work.
          */
-        const val SPEECH_ABSOLUTE_FLOOR = 50f
-        const val SPEECH_HANGOVER_SECONDS = .25f
-        /** Level held during pauses. Attenuating rather than passing room tone at unity is what
-         *  makes isolation audible between words. */
-        const val NON_VOICE_LEVEL = .12f
+        const val SPEECH_ABSOLUTE_FLOOR = 8f
+        const val SPEECH_HANGOVER_SECONDS = .60f
+        /**
+         * Level held during pauses. Deliberately gentle: at .12 the transition between speaking
+         * and not speaking was a 18 dB jump, and with the gate mis-triggering mid-word the
+         * result chopped audibly on every syllable. A shallow duck cannot destroy speech when
+         * the detector is wrong, and the detector will sometimes be wrong.
+         */
+        const val NON_VOICE_LEVEL = .45f
         const val LIMIT_THRESHOLD = .88f
         const val NOISE_WINDOW_BLOCKS = 200
     }
@@ -140,8 +145,9 @@ class MicrophoneEngine(private val sampleRate: Int) {
             NON_VOICE_LEVEL
         }
 
-        // Both directions are slow enough that gain is effectively constant across a phrase.
-        val tau = if (targetGain < currentGain) .080f else .350f
+        // Both directions are slow enough that gain is effectively constant across a phrase, and
+        // slow enough that a mis-triggered gate fades rather than chops.
+        val tau = if (targetGain < currentGain) .150f else .350f
         val previousGain = currentGain
         currentGain += (targetGain - currentGain) * (1f - exp(-dt / tau))
 

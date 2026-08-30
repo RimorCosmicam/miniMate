@@ -544,23 +544,26 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 }
                 probe.setPreferredDevice(device)
                 probe.startRecording()
-                var energy = 0.0
-                var counted = 0
-                // Discard the first blocks: a freshly started capture emits a burst of zeros
-                // while the route settles, which would score every source as silent.
-                repeat(8) { attempt ->
+                var peak = 0f
+                var measured = 0
+                // Discard generously before measuring. A freshly opened capture emits zeros and
+                // then settles, and measuring too early scored the same source anywhere between
+                // 1.5 and 347 across runs — which made the choice effectively random.
+                repeat(28) { attempt ->
                     val read = probe.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
-                    if (attempt >= 3 && read > 0) {
+                    if (attempt >= 12 && read > 0) {
                         for (index in 0 until read) {
-                            val sample = buffer[index].toDouble()
-                            energy += sample * sample
+                            val magnitude = kotlin.math.abs(buffer[index].toInt()).toFloat()
+                            if (magnitude > peak) peak = magnitude
                         }
-                        counted += read
+                        measured++
                     }
                 }
                 runCatching { probe.stop() }
                 probe.release()
-                if (counted > 0) kotlin.math.sqrt(energy / counted).toFloat() else -1f
+                // Peak rather than RMS: what matters is how much signal the profile can deliver,
+                // and a peak survives a quiet moment during the probe where an average does not.
+                if (measured > 0) peak else -1f
             }.getOrDefault(-1f)
 
             report.append(name).append('=').append(if (rms < 0) "n/a" else "%.1f".format(rms)).append(' ')
