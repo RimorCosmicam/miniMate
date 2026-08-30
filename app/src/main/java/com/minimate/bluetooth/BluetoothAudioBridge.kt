@@ -18,10 +18,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
-import android.media.MicrophoneDirection
-import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.DynamicsProcessing
-import android.media.audiofx.NoiseSuppressor
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -34,7 +31,6 @@ import androidx.core.content.ContextCompat
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.AudioDeviceEqProfile
-import com.minimate.touchpad.model.MicrophoneVoicePreset
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,17 +51,11 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.concurrent.thread
 import kotlin.math.roundToInt
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
-import kotlin.math.tanh
 import com.minimate.touchpad.model.ThemeFilter
 
 /** Stable sentinel key for the phone's own built-in speaker/microphone. */
@@ -96,10 +86,6 @@ data class AudioBridgeState(
     val microphoneGain: Float = 1f,
     val selectedInputKey: String = PHONE_DEVICE_KEY,
     val inputDevices: List<AudioDeviceSummary> = listOf(PHONE_INPUT),
-    val voiceIsolation: Boolean = true,
-    val ambientReferenceActive: Boolean = false,
-    val microphoneNoiseGate: Float = .015f,
-    val microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val microphoneLevel: Float = 0f,
     val error: String? = null,
     val receivedPackets: Long = 0,
@@ -167,13 +153,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputDeviceKey: String,
         outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
-        inputDeviceKey: String,
-        voiceIsolation: Boolean,
-        microphoneNoiseGate: Float,
-        microphonePreset: MicrophoneVoicePreset
+        inputDeviceKey: String
     ) {
         val oldState = _state.value
-        val restartMicrophone = oldState.selectedInputKey != inputDeviceKey || oldState.voiceIsolation != voiceIsolation
+        val restartMicrophone = oldState.selectedInputKey != inputDeviceKey
         deviceEqProfiles = outputProfiles
         _state.update {
             val profile = outputProfiles.firstOrNull { profile -> profile.deviceKey == it.outputDeviceKey }
@@ -187,9 +170,6 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     ?: AudioOutputPreset.FLAT.gains,
                 microphoneGain = microphoneGain.coerceIn(0f, 2f),
                 selectedInputKey = inputDeviceKey,
-                voiceIsolation = voiceIsolation,
-                microphoneNoiseGate = microphoneNoiseGate.coerceIn(0f, .15f),
-                microphonePreset = microphonePreset,
                 error = null
             )
         }
@@ -518,23 +498,19 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         }
         val myGeneration = ++micGeneration
         microphoneJob = scope.launch {
-            val initialState = _state.value
-            val isPhoneMic = initialState.selectedInputKey == PHONE_DEVICE_KEY
             val targetDevice = preferredInputDevice()
             val routed = engageInputRouting(targetDevice)
-            if (!isPhoneMic && !routed) {
+            if (!routed) {
                 _state.update { it.copy(error = "Couldn't connect to the selected microphone") }
             }
             // Communication-device routing takes a moment to actually apply; starting the
             // recorder before it does silently captures nothing from the intended device.
-            if (!isPhoneMic && routed) delay(200)
+            if (needsCommunicationRouting(targetDevice) && routed) delay(200)
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             val recorder = AudioRecord(
-                if (isPhoneMic && initialState.voiceIsolation) {
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION
-                } else MediaRecorder.AudioSource.MIC,
+                MediaRecorder.AudioSource.MIC,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
@@ -545,41 +521,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 return@launch
             }
             recorder.setPreferredDevice(targetDevice)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Direction/field-dimension beamforming hints describe the phone's OWN
-                // multi-capsule mic array. Applying them to an external mic's single-capsule
-                // mono signal (wired or Bluetooth) has no array to shape and was producing
-                // garbled/warbling audio there — restrict both to the phone mic.
-                if (isPhoneMic) {
-                    recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
-                    recorder.setPreferredMicrophoneFieldDimension(if (initialState.voiceIsolation) .75f else 0f)
-                } else {
-                    recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_EXTERNAL)
-                }
-            }
-            // Unlike the array-specific beamforming hints above, NoiseSuppressor works on a
-            // single mono channel's spectral content — it doesn't need a multi-mic array, so
-            // it stays available for external mics too.
-            val noiseSuppressor = if (initialState.voiceIsolation && NoiseSuppressor.isAvailable()) {
-                runCatching { NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true } }.getOrNull()
-            } else null
-            val echoCanceler = if (initialState.voiceIsolation && isPhoneMic && AcousticEchoCanceler.isAvailable()) {
-                runCatching { AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true } }.getOrNull()
-            } else null
             val samples = ShortArray(frames)
-            val processor = MicrophoneProcessor(sampleRate)
-            var ambientReference: AmbientReferenceCapture? = null
+            val processor = MicrophoneProcessor()
             try {
                 recorder.startRecording()
                 check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
-                if (initialState.voiceIsolation && !isPhoneMic) {
-                    ambientReference = AmbientReferenceCapture.create(
-                        sampleRate = sampleRate,
-                        frames = frames,
-                        device = preferredBuiltInInputDevice()
-                    )?.takeIf { it.start() }
-                    _state.update { it.copy(ambientReferenceActive = ambientReference != null) }
-                }
                 var consecutiveEmptyReads = 0
                 while (running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
@@ -592,15 +538,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         continue
                     }
                     consecutiveEmptyReads = 0
-                    val current = _state.value
-                    val adjusted = processor.process(
-                        samples = samples,
-                        count = count,
-                        gain = current.microphoneGain,
-                        gateThreshold = current.microphoneNoiseGate,
-                        preset = current.microphonePreset,
-                        ambientNoiseLevel = ambientReference?.noiseFloor ?: 0f
-                    )
+                    val adjusted = processor.process(samples, count, _state.value.microphoneGain)
                     val codec = if (link.transport == AudioTransport.WIFI) AudioBridgeProtocol.CODEC_PCM16 else AudioBridgeProtocol.CODEC_IMA_ADPCM
                     val payload = if (codec == AudioBridgeProtocol.CODEC_PCM16) adjusted.toByteArrayLittleEndian() else ImaAdpcm.encode(adjusted, 1)
                     writeFrame(link.output, AudioBridgeProtocol.Frame(
@@ -612,16 +550,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             } catch (e: Exception) {
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
             } finally {
-                ambientReference?.close()
                 runCatching { recorder.stop() }
-                noiseSuppressor?.release()
-                echoCanceler?.release()
                 recorder.release()
                 // Only the most recent session releases routing: if a newer one has already
                 // started (e.g. the user switched devices while this one was still tearing
                 // down), it owns cleanup now, and releasing here would stomp its routing instead.
                 if (myGeneration == micGeneration) releaseInputRouting()
-                _state.update { it.copy(ambientReferenceActive = false) }
             }
         }
     }
@@ -676,7 +610,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private fun stopMicrophone() {
         microphoneJob?.cancel()
         microphoneJob = null
-        _state.update { it.copy(microphoneLevel = 0f, ambientReferenceActive = false) }
+        _state.update { it.copy(microphoneLevel = 0f) }
     }
 
     private fun disconnectLink(link: Link) {
@@ -751,213 +685,22 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     }
 }
 
-/**
- * Captures the phone mic array as an environment-only reference while an external mic is primary.
- * If Android does not allow concurrent capture, creation/start fails silently and the normal
- * platform noise suppressor remains active on the external microphone.
- */
-private class AmbientReferenceCapture private constructor(
-    private val recorder: AudioRecord,
-    private val frames: Int
-) {
-    private val running = AtomicBoolean(false)
-    private var worker: Thread? = null
-    @Volatile var noiseFloor: Float = 0f
-        private set
-
-    fun start(): Boolean = runCatching {
-        recorder.startRecording()
-        check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
-        running.set(true)
-        worker = thread(name = "MiniMate-phone-mic-reference", isDaemon = true) {
-            val buffer = ShortArray(frames)
-            while (running.get()) {
-                val count = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
-                if (count <= 0) continue
-                var energy = 0.0
-                for (index in 0 until count) {
-                    val sample = buffer[index].toDouble()
-                    energy += sample * sample
-                }
-                val measured = (sqrt(energy / count) / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
-                // Follow quieter ambience quickly, but require sustained sound before raising the
-                // reference floor so speech leaking into the phone array is not treated as noise.
-                val smoothing = if (measured < noiseFloor) .18f else .025f
-                noiseFloor += (measured - noiseFloor) * smoothing
-            }
-        }
-        true
-    }.getOrElse {
-        close()
-        false
-    }
-
-    fun close() {
-        running.set(false)
-        runCatching { recorder.stop() }
-        runCatching { worker?.join(120) }
-        worker = null
-        recorder.release()
-        noiseFloor = 0f
-    }
-
-    companion object {
-        @SuppressLint("MissingPermission")
-        fun create(sampleRate: Int, frames: Int, device: AudioDeviceInfo?): AmbientReferenceCapture? = runCatching {
-            val min = AudioRecord.getMinBufferSize(
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            check(min > 0 && device != null)
-            val recorder = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                maxOf(min, frames * 2 * 4)
-            )
-            check(recorder.state == AudioRecord.STATE_INITIALIZED)
-            check(recorder.setPreferredDevice(device))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_UNSPECIFIED)
-                recorder.setPreferredMicrophoneFieldDimension(0f)
-            }
-            AmbientReferenceCapture(recorder, frames)
-        }.getOrNull()
-    }
-}
-
-/** Lightweight, stateful microphone color that is safe to run in the capture loop. */
-private class MicrophoneProcessor(private val sampleRate: Int) {
-    private var lowPass = 0f
-    private var subBass = 0f
-    private var previousDry = 0f
-    private var auditionEnvelope = 0f
-    private var gateEnvelope = 0f
-    private var detectorEnvelope = 0f
-    private var robotPhase = 0.0
-    private val pitchBuffer = FloatArray(4096)
-    private var pitchWriteIndex = 0
-    private var pitchPhase = 0.0
+/** Raw gain pass-through: no gate, no color, no isolation — just scale and forward. */
+private class MicrophoneProcessor {
     var level: Float = 0f
         private set
 
-    fun process(
-        samples: ShortArray,
-        count: Int,
-        gain: Float,
-        gateThreshold: Float,
-        preset: MicrophoneVoicePreset,
-        ambientNoiseLevel: Float = 0f
-    ): ShortArray {
+    fun process(samples: ShortArray, count: Int, gain: Float): ShortArray {
         val output = ShortArray(count)
         var energy = 0.0
-        val gateScale = when (preset) {
-            MicrophoneVoicePreset.SUPER_AUDITION -> .12f
-            MicrophoneVoicePreset.SURFACE_MIC -> .42f
-            else -> 1f
-        }
-        val ambientScale = when (preset) {
-            MicrophoneVoicePreset.SUPER_AUDITION -> .10f
-            MicrophoneVoicePreset.SURFACE_MIC -> .34f
-            else -> .62f
-        }
-        val adaptiveGate = maxOf(gateThreshold * gateScale, ambientNoiseLevel * ambientScale)
-        val threshold = adaptiveGate * Short.MAX_VALUE
         for (index in 0 until count) {
             val dry = samples[index].toFloat()
             energy += dry * dry
-
-            detectorEnvelope = maxOf(abs(dry), detectorEnvelope * .9992f)
-            val targetGate = if (detectorEnvelope >= threshold) 1f else 0f
-            val gateSpeed = if (targetGate > gateEnvelope) .08f else .001f
-            gateEnvelope += (targetGate - gateEnvelope) * gateSpeed
-
-            lowPass += (dry - lowPass) * .12f
-            subBass += (dry - subBass) * .018f
-            val highPass = dry - lowPass
-            val pitchFactor = when (preset) {
-                MicrophoneVoicePreset.BABY -> 1.38f
-                MicrophoneVoicePreset.ARENA_ANNOUNCER -> .72f
-                MicrophoneVoicePreset.DEEP -> .82f
-                else -> 1f
-            }
-            val shifted = pitchShift(dry, pitchFactor)
-            val colored = when (preset) {
-                MicrophoneVoicePreset.CLEAN -> dry
-                MicrophoneVoicePreset.SURFACE_MIC -> {
-                    // Contact-style voicing: discard slow room/handling rumble,
-                    // emphasize the resonant body band, and preserve impact edges.
-                    val bodyBand = lowPass - subBass
-                    val transient = dry - previousDry
-                    bodyBand * 1.85f + transient * .42f
-                }
-                MicrophoneVoicePreset.SUPER_AUDITION -> {
-                    // Lift genuinely quiet detail without allowing loud events to
-                    // explode. The high shelf restores articulation after compression.
-                    auditionEnvelope = maxOf(abs(dry), auditionEnvelope * .9985f)
-                    val detailGain = (13_000f / auditionEnvelope.coerceAtLeast(900f)).coerceIn(1f, 5.2f)
-                    dry * detailGain + highPass * .58f
-                }
-                MicrophoneVoicePreset.RICH -> dry * .82f + lowPass * .28f + highPass * .10f
-                MicrophoneVoicePreset.WARM -> dry * .72f + lowPass * .42f
-                MicrophoneVoicePreset.DEEP -> shifted * .82f + lowPass * .38f
-                MicrophoneVoicePreset.BRIGHT -> dry + highPass * .48f
-                MicrophoneVoicePreset.RADIO -> highPass * 1.45f
-                MicrophoneVoicePreset.ROBOT -> {
-                    robotPhase += 2.0 * Math.PI * 46.0 / sampleRate
-                    if (robotPhase > Math.PI * 2.0) robotPhase -= Math.PI * 2.0
-                    dry * (0.35f + 0.65f * sin(robotPhase).toFloat())
-                }
-                MicrophoneVoicePreset.BABY -> shifted * .9f + highPass * .18f
-                MicrophoneVoicePreset.ARENA_ANNOUNCER -> shifted * .86f + lowPass * .52f
-            }
-            val driven = when (preset) {
-                MicrophoneVoicePreset.SURFACE_MIC -> tanh(colored / 14_000f) * 22_000f
-                MicrophoneVoicePreset.SUPER_AUDITION -> tanh(colored / 16_000f) * 24_000f
-                MicrophoneVoicePreset.RADIO -> tanh(colored / 9_000f) * 18_000f
-                MicrophoneVoicePreset.ROBOT -> (colored / 900f).roundToInt() * 900f
-                MicrophoneVoicePreset.RICH -> tanh(colored / 20_000f) * 22_000f
-                MicrophoneVoicePreset.ARENA_ANNOUNCER -> tanh(colored / 12_000f) * 21_000f
-                else -> colored
-            }
-            previousDry = dry
-            output[index] = (driven * gain * gateEnvelope).roundToInt()
+            output[index] = (dry * gain).roundToInt()
                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         level = (sqrt(energy / count.coerceAtLeast(1)) / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
         return output
-    }
-
-    private fun pitchShift(input: Float, factor: Float): Float {
-        pitchBuffer[pitchWriteIndex] = input
-        if (factor == 1f) {
-            pitchWriteIndex = (pitchWriteIndex + 1) % pitchBuffer.size
-            return input
-        }
-        val delayRange = 2_048f
-        val minimumDelay = 192f
-        val maximumDelay = minimumDelay + delayRange
-        pitchPhase = (pitchPhase + abs(factor - 1f) / delayRange) % 1.0
-
-        fun head(phase: Double): Float {
-            val delay = if (factor > 1f) maximumDelay - phase.toFloat() * delayRange
-            else minimumDelay + phase.toFloat() * delayRange
-            var position = pitchWriteIndex - delay
-            while (position < 0f) position += pitchBuffer.size
-            val first = position.toInt() % pitchBuffer.size
-            val next = (first + 1) % pitchBuffer.size
-            val fraction = position - position.toInt()
-            return pitchBuffer[first] * (1f - fraction) + pitchBuffer[next] * fraction
-        }
-
-        val secondPhase = (pitchPhase + .5) % 1.0
-        val firstWeight = (.5 - .5 * cos(2.0 * Math.PI * pitchPhase)).toFloat()
-        val secondWeight = (.5 - .5 * cos(2.0 * Math.PI * secondPhase)).toFloat()
-        val result = head(pitchPhase) * firstWeight + head(secondPhase) * secondWeight
-        pitchWriteIndex = (pitchWriteIndex + 1) % pitchBuffer.size
-        return result
     }
 }
 

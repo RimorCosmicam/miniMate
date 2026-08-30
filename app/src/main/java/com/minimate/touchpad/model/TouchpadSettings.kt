@@ -367,20 +367,6 @@ enum class AudioTransport(val label: String) {
     BLUETOOTH("Bluetooth")
 }
 
-enum class MicrophoneVoicePreset(val label: String) {
-    CLEAN("Clean"),
-    SURFACE_MIC("Surface Mic"),
-    SUPER_AUDITION("Super Audition"),
-    RICH("Rich"),
-    WARM("Warm"),
-    DEEP("Deep"),
-    BRIGHT("Bright"),
-    RADIO("Radio"),
-    ROBOT("Robot"),
-    BABY("Baby"),
-    ARENA_ANNOUNCER("Mortal Kombat")
-}
-
 enum class AudioOutputPreset(val label: String, val gains: List<Float>) {
     FLAT("Flat", List(9) { 0f }),
     IEM("IEM", listOf(1f, 1f, .5f, 0f, 0f, .5f, 1f, .5f, -1f)),
@@ -471,9 +457,6 @@ data class TouchpadSettings(
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
     val audioInputDeviceKey: String = "phone",
-    val audioVoiceIsolation: Boolean = true,
-    val audioMicrophoneNoiseGate: Float = .015f,
-    val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioTransport: AudioTransport = AudioTransport.WIFI,
 
     // MiniMate Camera. Frames use the companion's active Wi-Fi link; the Mac

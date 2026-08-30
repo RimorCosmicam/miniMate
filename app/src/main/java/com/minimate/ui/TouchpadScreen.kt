@@ -111,10 +111,7 @@ fun TouchpadScreen(
         settings.audioOutputDeviceKey,
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
-        settings.audioInputDeviceKey,
-        settings.audioVoiceIsolation,
-        settings.audioMicrophoneNoiseGate,
-        settings.audioMicrophonePreset
+        settings.audioInputDeviceKey
     ) {
         audioBridge.configure(
             settings.audioOutputEnabled,
@@ -123,10 +120,7 @@ fun TouchpadScreen(
             settings.audioOutputDeviceKey,
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
-            settings.audioInputDeviceKey,
-            settings.audioVoiceIsolation,
-            settings.audioMicrophoneNoiseGate,
-            settings.audioMicrophonePreset
+            settings.audioInputDeviceKey
         )
     }
 
@@ -466,9 +460,6 @@ fun TouchpadScreen(
                 onInputDeviceSelected = { key ->
                     touchpadEngine.updateSettings(settings.copy(audioInputDeviceKey = key))
                 },
-                onVoiceIsolation = { enabled ->
-                    touchpadEngine.updateSettings(settings.copy(audioVoiceIsolation = enabled))
-                },
                 onOutputVolume = { volume ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputVolume = volume))
                 },
@@ -505,12 +496,6 @@ fun TouchpadScreen(
                 },
                 onMicrophoneGain = { gain ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
-                },
-                onMicrophoneNoiseGate = { threshold ->
-                    touchpadEngine.updateSettings(settings.copy(audioMicrophoneNoiseGate = threshold))
-                },
-                onMicrophonePreset = { preset ->
-                    touchpadEngine.updateSettings(settings.copy(audioMicrophonePreset = preset))
                 }
             )
         }

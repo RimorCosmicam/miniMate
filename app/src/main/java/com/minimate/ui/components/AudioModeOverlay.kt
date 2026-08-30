@@ -41,18 +41,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.AudioDeviceSummary
-import com.minimate.bluetooth.PHONE_DEVICE_KEY
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
-import com.minimate.touchpad.model.MicrophoneVoicePreset
 
 private enum class AudioEditorTab(val label: String) {
-    OUTPUT("Output"), INPUT("Input"), TOOLS("Tools")
+    OUTPUT("Output"), INPUT("Input")
 }
 
 @Composable
@@ -62,13 +59,10 @@ fun AudioModeOverlay(
     onOutputDeviceSelected: (String) -> Unit,
     onMicrophoneEnabled: (Boolean) -> Unit,
     onInputDeviceSelected: (String) -> Unit,
-    onVoiceIsolation: (Boolean) -> Unit,
     onOutputVolume: (Float) -> Unit,
     onOutputPreset: (AudioOutputPreset) -> Unit,
     onOutputEqBand: (Int, Float) -> Unit,
     onMicrophoneGain: (Float) -> Unit,
-    onMicrophoneNoiseGate: (Float) -> Unit,
-    onMicrophonePreset: (MicrophoneVoicePreset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
@@ -94,12 +88,7 @@ fun AudioModeOverlay(
                     onOutputPreset, onOutputEqBand
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
-                    state, onMicrophoneEnabled, onInputDeviceSelected, onMicrophoneGain,
-                    onMicrophoneNoiseGate, onMicrophonePreset, onVoiceIsolation
-                )
-                AudioEditorTab.TOOLS -> AudioToolsControls(
-                    state = state,
-                    onPreset = onMicrophonePreset
+                    state, onMicrophoneEnabled, onInputDeviceSelected, onMicrophoneGain
                 )
             }
             state.error?.let {
@@ -266,10 +255,7 @@ private fun MicrophoneControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
     onDeviceSelected: (String) -> Unit,
-    onGain: (Float) -> Unit,
-    onNoiseGate: (Float) -> Unit,
-    onPreset: (MicrophoneVoicePreset) -> Unit,
-    onVoiceIsolation: (Boolean) -> Unit
+    onGain: (Float) -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
@@ -285,7 +271,7 @@ private fun MicrophoneControls(
             Spacer(Modifier.size(7.dp))
             Column(Modifier.weight(1f)) {
                 Text("Microphone", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text("Live processing", color = Color.White.copy(.48f), fontSize = 7.5.sp)
+                Text("Raw input", color = Color.White.copy(.48f), fontSize = 7.5.sp)
             }
             Switch(
                 checked = state.microphoneEnabled,
@@ -305,95 +291,11 @@ private fun MicrophoneControls(
             color = Color.White,
             trackColor = Color.White.copy(.10f)
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CompactAudioSlider(
-                label = "GAIN", value = state.microphoneGain, range = 0f..2f,
-                valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
-                onValue = onGain, modifier = Modifier.weight(1f)
-            )
-            CompactAudioSlider(
-                label = "CUTOFF", value = state.microphoneNoiseGate, range = 0f..0.15f,
-                valueLabel = "${(state.microphoneNoiseGate * 100).toInt()}%", enabled = state.microphoneEnabled,
-                onValue = onNoiseGate, modifier = Modifier.weight(1f)
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("ANC", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    when {
-                        state.ambientReferenceActive -> "Phone array is filtering ambient noise"
-                        state.selectedInputKey != PHONE_DEVICE_KEY -> "Uses the phone mics as an ambient reference"
-                        else -> "Phone array noise and echo suppression"
-                    },
-                    color = Color.White.copy(.42f), fontSize = 7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            }
-            Switch(
-                checked = state.voiceIsolation,
-                onCheckedChange = onVoiceIsolation,
-                enabled = state.microphoneEnabled,
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
-            )
-        }
-        Text("VOICE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            listOf(
-                MicrophoneVoicePreset.CLEAN, MicrophoneVoicePreset.RICH, MicrophoneVoicePreset.WARM,
-                MicrophoneVoicePreset.BRIGHT
-            ).forEach { preset ->
-                CompactChoice(preset.label, preset == state.microphonePreset, state.microphoneEnabled) { onPreset(preset) }
-            }
-        }
-        Text("VOICE TOYS", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            listOf(
-                MicrophoneVoicePreset.DEEP, MicrophoneVoicePreset.RADIO, MicrophoneVoicePreset.ROBOT,
-                MicrophoneVoicePreset.BABY, MicrophoneVoicePreset.ARENA_ANNOUNCER
-            ).forEach { preset ->
-                CompactChoice(preset.label, preset == state.microphonePreset, state.microphoneEnabled) { onPreset(preset) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AudioToolsControls(
-    state: AudioBridgeState,
-    onPreset: (MicrophoneVoicePreset) -> Unit
-) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-            .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(.18f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 13.dp, vertical = 11.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
-        Text("CAPTURE TOOLS", color = Color.White.copy(.46f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        listOf(MicrophoneVoicePreset.SURFACE_MIC, MicrophoneVoicePreset.SUPER_AUDITION).forEach { preset ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(preset.label.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        if (preset == MicrophoneVoicePreset.SURFACE_MIC)
-                            "Close-contact detail and impact pickup"
-                        else "Raises distant and near-silent detail safely",
-                        color = Color.White.copy(.42f), fontSize = 7.5.sp
-                    )
-                }
-                CompactChoice(
-                    if (state.microphonePreset == preset) "ON" else "USE",
-                    state.microphonePreset == preset,
-                    state.microphoneEnabled
-                ) { onPreset(if (state.microphonePreset == preset) MicrophoneVoicePreset.CLEAN else preset) }
-            }
-        }
+        CompactAudioSlider(
+            label = "GAIN", value = state.microphoneGain, range = 0f..2f,
+            valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
+            onValue = onGain
+        )
     }
 }
 

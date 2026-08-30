@@ -97,9 +97,6 @@ class TouchpadPreferences(context: Context) {
                 })
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
                 put("audioInputDeviceKey", settings.audioInputDeviceKey)
-                put("audioVoiceIsolation", settings.audioVoiceIsolation)
-                put("audioMicrophoneNoiseGate", settings.audioMicrophoneNoiseGate.toDouble())
-                put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
                 put("audioTransport", settings.audioTransport.name)
                 put("webcamEnabled", settings.webcamEnabled)
                 put("webcamResolution", settings.webcamResolution.name)
@@ -287,11 +284,6 @@ class TouchpadPreferences(context: Context) {
                 } ?: emptyList(),
                 audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 2f),
                 audioInputDeviceKey = json.optString("audioInputDeviceKey", "phone"),
-                audioVoiceIsolation = json.optBoolean("audioVoiceIsolation", true),
-                audioMicrophoneNoiseGate = json.optDouble("audioMicrophoneNoiseGate", .015).toFloat().coerceIn(0f, .15f),
-                audioMicrophonePreset = runCatching {
-                    MicrophoneVoicePreset.valueOf(json.optString("audioMicrophonePreset", "CLEAN"))
-                }.getOrDefault(MicrophoneVoicePreset.CLEAN),
                 audioTransport = runCatching {
                     AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))
                 }.getOrDefault(AudioTransport.WIFI),
