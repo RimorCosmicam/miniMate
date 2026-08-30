@@ -14,38 +14,44 @@ import kotlin.math.tanh
  * Noise reduction is the platform NoiseSuppressor effect on the capture session, not anything
  * reimplemented here.
  *
- * Calibrated against measured capture from the actual hardware rather than assumed levels. With
- * the AudioSource the device probe selects, speech blocks measure RMS 150-290 with peaks reaching
- * 12000-plus, while the gaps between words sit at RMS 5-30. That order-of-magnitude separation is
- * what every threshold below is derived from, and it is the separation that did not exist while
- * capture ran on a source delivering 25x less signal — which is why earlier attempts at level
- * control either gated speech off entirely or amplified silence.
+ * Calibrated against measured capture from the actual hardware rather than assumed levels. On the
+ * AudioSource the device probe selects, speech measures RMS 400-1136 while the gaps between words
+ * measure 1-26. Every threshold below derives from that separation, which simply did not exist
+ * while capture ran on a source delivering 25x less signal.
  *
- * The immediately preceding version applied maximum gain unconditionally. Measurement showed the
- * consequence plainly: output peak pinned at 100% of full scale on every single block, with gain
- * swinging between 9x and 637x as it chased room tone during pauses. Permanent limiter saturation
- * is heard as noise and as a flat, lifeless voice, which is why "louder" made it worse.
+ * Two failure modes have been measured here, and both were caused by chasing loudness directly:
+ * applying maximum gain unconditionally, and later aiming peaks above full scale. Each pinned the
+ * output at 100% of full scale on essentially every block with gain swinging by more than an order
+ * of magnitude between blocks. Permanent limiter saturation is heard as noise and as a flat,
+ * lifeless voice, so both attempts made the result audibly worse rather than louder.
+ *
+ * Loudness therefore comes from a stable RMS target with slow time constants, never from letting
+ * the limiter run continuously.
  */
 class MicrophoneEngine(private val sampleRate: Int) {
     private companion object {
-        /** Where speech should land, ≈ -18 dBFS RMS. */
-        const val TARGET_RMS = 4_000f
-        const val MAX_TARGET_RMS = 14_000f
+        /** Where speech should land, ≈ -21 dBFS RMS. */
+        const val TARGET_RMS = 3_000f
+        const val MAX_TARGET_RMS = 9_000f
         /**
-         * Peaks are allowed past full scale before limiting. This capsule's measured crest
-         * factor is extreme — isolated impulses of 5000-18000 sit beside speech whose RMS is
-         * 5-30 — so constraining the absolute peak below full scale lets one cable knock set
-         * the gain for the next half second and holds real speech far too quiet. Transients
-         * are the soft limiter's job; the RMS target is what should govern loudness.
+         * Amplified peaks aim just under full scale. Pushing this above 1.0 to chase loudness
+         * put every block into the limiter permanently, measured as output peak at 100% of full
+         * scale on essentially every window; that saturation is heard as distortion, not volume.
+         * The smoothed peak envelope below is what stops a single impulse dictating the gain.
          */
-        const val PEAK_CEILING = 1.5f
+        const val PEAK_CEILING = .90f
         /** The estimated noise floor may never be amplified past ≈ -35 dBFS. */
         const val MAX_NOISE_RMS_OUT = 550f
         const val MAX_GAIN = 400f
         /** Speech must exceed the noise floor by this factor. */
         const val SPEECH_SNR = 3.0f
-        /** Rejects digital silence only; far below any usable capsule. */
-        const val SPEECH_ABSOLUTE_FLOOR = 4f
+        /**
+         * Measured speech on this capsule sits at RMS 400-1136 while room tone measures 1-26,
+         * so this sits an order of magnitude below speech and well above noise. With the noise
+         * floor estimate collapsing to ~1, the ratio test alone treated room tone as speech and
+         * the gate never closed, which is why suppression was inaudible.
+         */
+        const val SPEECH_ABSOLUTE_FLOOR = 50f
         const val SPEECH_HANGOVER_SECONDS = .25f
         /** Level held during pauses. Attenuating rather than passing room tone at unity is what
          *  makes isolation audible between words. */
@@ -95,7 +101,10 @@ class MicrophoneEngine(private val sampleRate: Int) {
         for (index in 0 until recentCount) if (recentRms[index] < minimum) minimum = recentRms[index]
         val noiseRms = (minimum * 1.5f).coerceAtLeast(.5f)
 
-        val envelopeTau = if (blockRms > smoothedRms) .012f else .160f
+        // Deliberately slow. A fast envelope tracks syllable-to-syllable variation, so gain
+        // moves within every word and the result pumps. Measured RMS swings 100x between
+        // consecutive blocks; loudness must be judged across a phrase, not a syllable.
+        val envelopeTau = if (blockRms > smoothedRms) .080f else .400f
         smoothedRms += (blockRms - smoothedRms) * (1f - exp(-dt / envelopeTau))
         // Attack is smoothed rather than instantaneous so a single-block impulse cannot slam the
         // envelope to its own height and starve the following speech of gain.
@@ -125,7 +134,8 @@ class MicrophoneEngine(private val sampleRate: Int) {
             NON_VOICE_LEVEL
         }
 
-        val tau = if (targetGain < currentGain) .025f else .250f
+        // Both directions are slow enough that gain is effectively constant across a phrase.
+        val tau = if (targetGain < currentGain) .080f else .350f
         val previousGain = currentGain
         currentGain += (targetGain - currentGain) * (1f - exp(-dt / tau))
 
