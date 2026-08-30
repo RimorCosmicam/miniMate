@@ -246,6 +246,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     }
 
     private fun runLink(link: Link) {
+        Log.i(TAG, "runLink: connected via ${link.transport} to ${link.hostName}")
         synchronized(linkLock) { activeLink?.close?.invoke(); activeLink = link }
         _state.update {
             it.copy(
@@ -584,10 +585,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         windowOutPeak = 0
                         windowStart = now
                     }
-                    val codec = if (link.transport == AudioTransport.WIFI) AudioBridgeProtocol.CODEC_PCM16 else AudioBridgeProtocol.CODEC_IMA_ADPCM
-                    val payload = if (codec == AudioBridgeProtocol.CODEC_PCM16) adjusted.toByteArrayLittleEndian() else ImaAdpcm.encode(adjusted, 1)
+                    // Mono mic audio at this sample rate is ~64 kbps either way — trivial for
+                    // even classic Bluetooth RFCOMM. There's no bandwidth reason to lossy-compress
+                    // it with IMA-ADPCM on the Bluetooth path; both companions already decode
+                    // PCM16 mic frames regardless of transport, so always send it raw.
+                    val payload = adjusted.toByteArrayLittleEndian()
                     writeFrame(link.output, AudioBridgeProtocol.Frame(
-                        AudioBridgeProtocol.TYPE_MICROPHONE, codec, 1, sampleRate,
+                        AudioBridgeProtocol.TYPE_MICROPHONE, AudioBridgeProtocol.CODEC_PCM16, 1, sampleRate,
                         sequence.getAndIncrement(), payload
                     ))
                     _state.update { it.copy(sentPackets = it.sentPackets + 1, microphoneLevel = processor.level) }
