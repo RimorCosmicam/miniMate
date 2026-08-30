@@ -134,18 +134,33 @@ struct CompanionView: View {
 
                 Spacer()
 
-                HStack(spacing: 8) {
-                    Button(controller.streaming ? "Stop audio" : "Start audio") {
-                        controller.streaming ? controller.stopStreaming() : controller.startStreaming()
+                VStack(spacing: 8) {
+                    if controller.monitoringMicrophone {
+                        Button("Stop listening to mic") { controller.setMicrophoneMonitoring(false) }
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.glassProminent)
+                            .help("Plays the phone microphone through this Mac exactly as apps receive it. Use headphones.")
+                    } else {
+                        Button("Listen to mic") { controller.setMicrophoneMonitoring(true) }
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.glass)
+                            .disabled(!controller.connected)
+                            .help("Plays the phone microphone through this Mac exactly as apps receive it. Use headphones.")
                     }
-                    .frame(maxWidth: .infinity)
-                    .buttonStyle(.glass)
-                    .disabled(!controller.connected)
 
-                    Button("Disconnect") { controller.disconnect() }
+                    HStack(spacing: 8) {
+                        Button(controller.streaming ? "Stop audio" : "Start audio") {
+                            controller.streaming ? controller.stopStreaming() : controller.startStreaming()
+                        }
                         .frame(maxWidth: .infinity)
                         .buttonStyle(.glass)
                         .disabled(!controller.connected)
+
+                        Button("Disconnect") { controller.disconnect() }
+                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.glass)
+                            .disabled(!controller.connected)
+                    }
                 }
             }
             .padding(.horizontal, 20)

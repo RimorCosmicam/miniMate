@@ -13,9 +13,13 @@ final class BridgeController: ObservableObject {
     @Published var cameraDeviceName = "MiniMate Camera"
     @Published var connected = false
     @Published var streaming = false
+    /// Plays the incoming microphone straight to the Mac's output, so the pipeline can be judged
+    /// without a conferencing app's own gain control and noise suppression in the way.
+    @Published var monitoringMicrophone = false
 
     private let discovery = MiniMateDiscovery()
     private let endpoints = CoreAudioEndpointBridge()
+    private let microphoneMonitor = MicrophoneMonitor()
     private let parser = MMAudioProtocol.Parser()
     private let webcam = WebcamPipeline()
     private var transport: BridgeTransport?
@@ -114,9 +118,31 @@ final class BridgeController: ObservableObject {
 
     func disconnect() {
         stopStreaming()
+        setMicrophoneMonitoring(false)
         transport?.close()
         transport = nil
         connected = false
+    }
+
+    /// Routes the incoming microphone to this Mac's current output device so it can be heard
+    /// directly. Use headphones: the phone's microphone will otherwise pick the speakers back up.
+    func setMicrophoneMonitoring(_ enabled: Bool) {
+        guard let microphoneMonitor else {
+            status = "Monitoring is unavailable on this system"
+            return
+        }
+        if enabled {
+            do {
+                try microphoneMonitor.start()
+                monitoringMicrophone = true
+            } catch {
+                monitoringMicrophone = false
+                status = "Could not start monitoring: \(error.localizedDescription)"
+            }
+        } else {
+            microphoneMonitor.stop()
+            monitoringMicrophone = false
+        }
     }
 
     private nonisolated func sendAudio(_ pcm24: Data) {
@@ -147,6 +173,9 @@ final class BridgeController: ObservableObject {
             for frame in frames where frame.type == MMAudioProtocol.typeMicrophone {
                 if let pcm = CoreAudioEndpointBridge.microphonePCM16(frame: frame) {
                     endpoints.sendMicrophonePCM16(pcm)
+                    // Identical samples at the identical point in the chain as the virtual
+                    // microphone receives, with nothing added.
+                    microphoneMonitor?.enqueue(pcm16: pcm)
                 }
             }
             for frame in frames where frame.type == MMAudioProtocol.typeWebcamConfig {
