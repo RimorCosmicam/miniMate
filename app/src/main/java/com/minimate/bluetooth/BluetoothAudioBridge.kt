@@ -540,7 +540,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 Log.i(TAG, "startMicrophone: recording started, actual routed device=${recorder.routedDevice?.type}/${recorder.routedDevice?.id}/${recorder.routedDevice?.productName}")
                 var consecutiveEmptyReads = 0
                 var readsLogged = 0
-                while (running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
+                // isActive must be checked here: AudioRecord.read(READ_BLOCKING) is a plain
+                // blocking call, not a suspend function, so cancelling this job from
+                // stopMicrophone() has zero effect unless this loop itself observes it. Without
+                // this, switching input devices leaves the OLD capture loop running forever
+                // alongside the new one — two AudioRecord sessions fighting over the same
+                // physical route, which is why the newly selected device reads silence.
+                while (isActive && running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
                     if (readsLogged < 20 || readsLogged % 100 == 0) {
                         val peak = (0 until count.coerceAtLeast(0)).maxOfOrNull { kotlin.math.abs(samples[it].toInt()) } ?: -1
