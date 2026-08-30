@@ -557,7 +557,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_EXTERNAL)
                 }
             }
-            val noiseSuppressor = if (initialState.voiceIsolation && isPhoneMic && NoiseSuppressor.isAvailable()) {
+            // Unlike the array-specific beamforming hints above, NoiseSuppressor works on a
+            // single mono channel's spectral content — it doesn't need a multi-mic array, so
+            // it stays available for external mics too.
+            val noiseSuppressor = if (initialState.voiceIsolation && NoiseSuppressor.isAvailable()) {
                 runCatching { NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true } }.getOrNull()
             } else null
             val echoCanceler = if (initialState.voiceIsolation && isPhoneMic && AcousticEchoCanceler.isAvailable()) {

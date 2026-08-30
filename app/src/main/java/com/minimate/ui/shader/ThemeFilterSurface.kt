@@ -12,19 +12,18 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import com.minimate.touchpad.model.ThemeFilter
 import kotlin.math.sin
 
@@ -235,20 +234,29 @@ private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, conte
     }
     val transition = rememberInfiniteTransition(label = "FilterClock")
     val time by transition.animateFloat(0f, 100f, infiniteRepeatable(tween(100_000, easing = LinearEasing)), label = "FilterTime")
-    var width by remember { mutableFloatStateOf(1f) }
-    var height by remember { mutableFloatStateOf(1f) }
-    SideEffect {
-        runCatching {
-            shader.setFloatUniform("uTime", time)
-            shader.setFloatUniform("uResolution", width, height)
+    // BoxWithConstraints' size is known synchronously during composition — unlike onSizeChanged,
+    // which reports asynchronously after layout and left uResolution at its (1,1) default for
+    // at least the first frame. Every filter whose math divides by uResolution (CRT, kaleidoscope,
+    // fisheye, mirror prism, liquid glass, night vision) turned fully black from that: dividing
+    // real pixel coordinates by (1,1) sends the sampled/vignetted UV wildly out of range, and
+    // content.eval() on out-of-range coordinates — or a vignette term collapsing through
+    // smoothstep saturation — returns black.
+    BoxWithConstraints(modifier = modifier) {
+        val density = LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+        val heightPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
+        SideEffect {
+            runCatching {
+                shader.setFloatUniform("uTime", time)
+                shader.setFloatUniform("uResolution", widthPx, heightPx)
+            }
         }
+        Box(Modifier.fillMaxSize()
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                renderEffect = effect
+            }) { content() }
     }
-    Box(modifier = modifier
-        .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f); height = it.height.toFloat().coerceAtLeast(1f) }
-        .graphicsLayer {
-            compositingStrategy = CompositingStrategy.Offscreen
-            renderEffect = effect
-        }) { content() }
 }
 
 @Composable
