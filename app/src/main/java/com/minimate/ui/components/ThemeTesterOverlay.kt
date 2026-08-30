@@ -89,6 +89,11 @@ fun ThemeTesterOverlay(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                // The cover display's camera housing measures ~84dp tall in its bottom-right
+                // corner (220px at 2.625x density). Clearing the whole bottom edge by more than
+                // that — not just the right side — keeps the sheet's rounded box and everything
+                // in it off the housing entirely, regardless of horizontal position.
+                .padding(bottom = 96.dp)
                 .fillMaxHeight(.66f)
                 .shadow(24.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), spotColor = Color.Black)
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))

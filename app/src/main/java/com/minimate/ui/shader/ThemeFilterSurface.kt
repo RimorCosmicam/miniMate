@@ -28,22 +28,33 @@ import androidx.compose.ui.layout.onSizeChanged
 import com.minimate.touchpad.model.ThemeFilter
 import kotlin.math.sin
 
-private const val FILTER_SHADER = """
+/**
+ * Each filter compiles its own small, independent AGSL pass instead of sharing one
+ * branching mega-shader driven by a mutable "uMode" uniform. Two reasons: a bug in one
+ * filter's math can no longer affect the other sixteen, and — the actual cause filters
+ * were doing nothing — mutating a single shared RuntimeShader's uniform in place does not
+ * reliably invalidate a graphicsLayer's cached render; a genuinely new shader/RenderEffect
+ * object per filter selection does.
+ */
+private const val COMMON_UNIFORMS = """
     uniform shader content;
-    uniform float uMode;
     uniform float uTime;
     uniform float2 uResolution;
+"""
 
-    half4 main(float2 p) {
-        if (uMode < 0.5) return content.eval(p);
-        if (uMode < 1.5) {
+private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
+    ThemeFilter.NONE -> "half4 main(float2 p) { return content.eval(p); }"
+    ThemeFilter.CHROMATIC -> """
+        half4 main(float2 p) {
             float wobble = sin(p.y * 0.018 + uTime * 1.7) * 1.4;
             half r = content.eval(p + float2(3.5 + wobble, 0.0)).r;
             half g = content.eval(p).g;
             half b = content.eval(p - float2(3.5 + wobble, 0.0)).b;
             return half4(r, g, b, 1.0);
         }
-        if (uMode < 2.5) {
+    """
+    ThemeFilter.CRT -> """
+        half4 main(float2 p) {
             float2 uv=p/uResolution,q=uv-.5;float r2=dot(q,q);float2 curved=(.5+q*(1.0+r2*.22))*uResolution;
             half4 c=content.eval(curved);float scan=.74+.26*sin(p.y*3.14159);float stripe=mod(floor(p.x),3.0);
             half3 mask=stripe<1.0?half3(1.0,.66,.58):(stripe<2.0?half3(.58,1.0,.66):half3(.66,.58,1.0));
@@ -51,45 +62,105 @@ private const val FILTER_SHADER = """
             half3 bloom=content.eval(curved+float2(2.0,0.0)).rgb+content.eval(curved-float2(2.0,0.0)).rgb;
             return half4(c.rgb*mask*half(scan*vignette)+bloom*.055,c.a);
         }
-        if (uMode < 3.5) {
+    """
+    ThemeFilter.VHS -> """
+        half4 main(float2 p) {
             float tear = step(0.965, fract(p.y * 0.003 + uTime * 0.21));
             float jitter = sin(p.y * 0.035 + uTime * 8.0) * 2.2 + tear * 13.0;
             half4 c = content.eval(p + float2(jitter, 0.0));
             c.r = content.eval(p + float2(jitter + 2.5, 0.0)).r;
             return half4(c.rgb * (0.88 + 0.12 * sin(p.y * 0.72)), c.a);
         }
-        if (uMode < 4.5) {
+    """
+    ThemeFilter.PIXELATE -> """
+        half4 main(float2 p) {
             float block = 7.0;
             return content.eval(floor(p / block) * block + block * 0.5);
         }
-        if (uMode < 5.5) {
+    """
+    ThemeFilter.DREAM_BLOOM -> """
+        half4 main(float2 p) {
             half4 c = content.eval(p);
             half3 halo = content.eval(p + float2(5.0, 0.0)).rgb + content.eval(p - float2(5.0, 0.0)).rgb
                        + content.eval(p + float2(0.0, 5.0)).rgb + content.eval(p - float2(0.0, 5.0)).rgb;
             return half4(c.rgb * 0.78 + halo * 0.095, c.a);
         }
-        if (uMode < 6.5) {
+    """
+    ThemeFilter.MONO_INK -> """
+        half4 main(float2 p) {
             half4 c = content.eval(p); half luma = dot(c.rgb, half3(0.299, 0.587, 0.114));
             luma = smoothstep(0.12, 0.88, luma); return half4(half3(luma), c.a);
         }
-        float2 uv=p/uResolution;float2 sampleP=p;bool warped=false;
-        if(uMode<7.5){float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);float r=length(q),a=atan(q.y,q.x);a=abs(fract(a/6.283185*8.0+.5)-.5)*6.283185/8.0;sampleP=(.5+float2(cos(a),sin(a))*r/float2(uResolution.x/uResolution.y,1.0))*uResolution;warped=true;}
-        else if(uMode<8.5){float2 q=uv-.5;float r2=dot(q,q);sampleP=(.5+q*(1.0+r2*1.4+r2*r2))*uResolution;warped=true;}
-        else if(uMode<14.5&&uMode>=13.5){float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);float a=atan(q.y,q.x),r=length(q);a=abs(fract(a/6.283185*6.0+.5)-.5)*6.283185/6.0;sampleP=(.5+float2(cos(a),sin(a))*abs(fract(r*3.0)-.5)*.62/float2(uResolution.x/uResolution.y,1.0))*uResolution;warped=true;}
-        else if(uMode<15.5&&uMode>=14.5){float n=sin(uv.y*31.0+uTime)*cos(uv.x*27.0-uTime*.8);sampleP=p+float2(n,sin(n*4.0))*8.0;warped=true;}
-        half4 c=content.eval(sampleP);half luma=dot(c.rgb,half3(.299,.587,.114));
-        // Kaleidoscope/fisheye/mirror-prism/liquid-glass are pure UV warps: return the
-        // warped sample as-is instead of falling into the unrelated buckets below, which
-        // used to catch any uMode under their threshold rather than a mutually exclusive range.
-        if(warped)return c;
-        if(uMode<9.5){float2 cell=fract(p/6.0)-.5;float dots=1.0-smoothstep(sqrt(float(luma))*.48,sqrt(float(luma))*.48+.08,length(cell));return half4(mix(half3(.01),c.rgb,half(dots)),c.a);}
-        if(uMode<10.5){half3 cold=half3(.02,0,.25),mid=half3(.95,.03,0),hot=half3(1,.9,.08);half3 thermal=luma<.5?mix(cold,mid,luma*2):mix(mid,hot,(luma-.5)*2);return half4(thermal,c.a);}
-        if(uMode<11.5)return half4(half3(1)-c.rgb,c.a);
-        if(uMode<12.5)return half4(floor(c.rgb*5+half3(.5))/5,c.a);
-        if(uMode<13.5){float grain=fract(sin(dot(p+floor(uTime*24),float2(12.9898,78.233)))*43758.5453)-.5;float vig=1.0-smoothstep(.3,.75,length(uv-.5));return half4(c.rgb*half(.7+.3*vig)+half3(grain*.13)+half3(.04,.015,-.01),c.a);}
-        float noise=fract(sin(dot(p+floor(uTime*20),float2(12.9898,78.233)))*43758.5453)-.5;float vig=1.0-smoothstep(.28,.72,length(uv-.5));return half4(half3(.03,luma*1.35+.12,.05)*half(vig)+half3(noise*.05),c.a);
-    }
-"""
+    """
+    ThemeFilter.KALEIDOSCOPE -> """
+        half4 main(float2 p) {
+            float2 uv=p/uResolution;float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);
+            float r=length(q),a=atan(q.y,q.x);a=abs(fract(a/6.283185*8.0+.5)-.5)*6.283185/8.0;
+            float2 sampleP=(.5+float2(cos(a),sin(a))*r/float2(uResolution.x/uResolution.y,1.0))*uResolution;
+            return content.eval(sampleP);
+        }
+    """
+    ThemeFilter.FISHEYE -> """
+        half4 main(float2 p) {
+            float2 uv=p/uResolution;float2 q=uv-.5;float r2=dot(q,q);
+            float2 sampleP=(.5+q*(1.0+r2*1.4+r2*r2))*uResolution;
+            return content.eval(sampleP);
+        }
+    """
+    ThemeFilter.HALFTONE -> """
+        half4 main(float2 p) {
+            half4 c=content.eval(p);half luma=dot(c.rgb,half3(.299,.587,.114));
+            float2 cell=fract(p/6.0)-.5;
+            float dots=1.0-smoothstep(sqrt(float(luma))*.48,sqrt(float(luma))*.48+.08,length(cell));
+            return half4(mix(half3(.01),c.rgb,half(dots)),c.a);
+        }
+    """
+    ThemeFilter.THERMAL -> """
+        half4 main(float2 p) {
+            half4 c=content.eval(p);half luma=dot(c.rgb,half3(.299,.587,.114));
+            half3 cold=half3(.02,0,.25),mid=half3(.95,.03,0),hot=half3(1,.9,.08);
+            half3 thermal=luma<.5?mix(cold,mid,luma*2):mix(mid,hot,(luma-.5)*2);
+            return half4(thermal,c.a);
+        }
+    """
+    ThemeFilter.NEGATIVE -> """
+        half4 main(float2 p) { half4 c=content.eval(p); return half4(half3(1)-c.rgb,c.a); }
+    """
+    ThemeFilter.POSTERIZE -> """
+        half4 main(float2 p) { half4 c=content.eval(p); return half4(floor(c.rgb*5+half3(.5))/5,c.a); }
+    """
+    ThemeFilter.FILM_GRAIN -> """
+        half4 main(float2 p) {
+            half4 c=content.eval(p);float2 uv=p/uResolution;
+            float grain=fract(sin(dot(p+floor(uTime*24),float2(12.9898,78.233)))*43758.5453)-.5;
+            float vig=1.0-smoothstep(.3,.75,length(uv-.5));
+            return half4(c.rgb*half(.7+.3*vig)+half3(grain*.13)+half3(.04,.015,-.01),c.a);
+        }
+    """
+    ThemeFilter.MIRROR_PRISM -> """
+        half4 main(float2 p) {
+            float2 uv=p/uResolution;float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);
+            float a=atan(q.y,q.x),r=length(q);a=abs(fract(a/6.283185*6.0+.5)-.5)*6.283185/6.0;
+            float2 sampleP=(.5+float2(cos(a),sin(a))*abs(fract(r*3.0)-.5)*.62/float2(uResolution.x/uResolution.y,1.0))*uResolution;
+            return content.eval(sampleP);
+        }
+    """
+    ThemeFilter.LIQUID_GLASS -> """
+        half4 main(float2 p) {
+            float2 uv=p/uResolution;
+            float n=sin(uv.y*31.0+uTime)*cos(uv.x*27.0-uTime*.8);
+            return content.eval(p+float2(n,sin(n*4.0))*8.0);
+        }
+    """
+    ThemeFilter.NIGHT_VISION -> """
+        half4 main(float2 p) {
+            half4 c=content.eval(p);float2 uv=p/uResolution;half luma=dot(c.rgb,half3(.299,.587,.114));
+            float noise=fract(sin(dot(p+floor(uTime*20),float2(12.9898,78.233)))*43758.5453)-.5;
+            float vig=1.0-smoothstep(.28,.72,length(uv-.5));
+            return half4(half3(.03,luma*1.35+.12,.05)*half(vig)+half3(noise*.05),c.a);
+        }
+    """
+}
 
 @Composable
 internal fun ThemeFilterSurface(
@@ -138,9 +209,9 @@ private fun StackedFilterLayers(filters: List<ThemeFilter>, index: Int, content:
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, content: @Composable () -> Unit) {
-    val shader = remember {
-        runCatching { RuntimeShader(FILTER_SHADER) }
-            .onFailure { Log.e("MiniMateFilter", "Filter shader failed to compile, falling back to overlay", it) }
+    val shader = remember(filter) {
+        runCatching { RuntimeShader(COMMON_UNIFORMS + shaderBodyFor(filter)) }
+            .onFailure { Log.e("MiniMateFilter", "Shader for $filter failed to compile, falling back to overlay", it) }
             .getOrNull()
     }
     if (shader == null) {
@@ -152,7 +223,7 @@ private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, conte
     }
     val effect = remember(shader) {
         runCatching { RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect() }
-            .onFailure { Log.e("MiniMateFilter", "Filter RenderEffect failed to create, falling back to overlay", it) }
+            .onFailure { Log.e("MiniMateFilter", "RenderEffect for $filter failed to create, falling back to overlay", it) }
             .getOrNull()
     }
     if (effect == null) {
@@ -168,7 +239,6 @@ private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, conte
     var height by remember { mutableFloatStateOf(1f) }
     SideEffect {
         runCatching {
-            shader.setFloatUniform("uMode", filter.ordinal.toFloat())
             shader.setFloatUniform("uTime", time)
             shader.setFloatUniform("uResolution", width, height)
         }
