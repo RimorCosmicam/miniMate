@@ -540,7 +540,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
                 Log.i(TAG, "startMicrophone: recording started, actual routed device=${recorder.routedDevice?.type}/${recorder.routedDevice?.id}/${recorder.routedDevice?.productName}")
                 var consecutiveEmptyReads = 0
-                var readsLogged = 0
+                // Rolling 1-second window of the LOUDEST moment, not a random snapshot — a
+                // sparse per-N-reads sample mostly lands between words and looks falsely quiet.
+                var windowRawPeak = 0
+                var windowOutPeak = 0
+                var windowStart = System.nanoTime()
                 // isActive must be checked here: AudioRecord.read(READ_BLOCKING) is a plain
                 // blocking call, not a suspend function, so cancelling this job from
                 // stopMicrophone() has zero effect unless this loop itself observes it. Without
@@ -549,11 +553,6 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 // physical route, which is why the newly selected device reads silence.
                 while (isActive && running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
-                    if (readsLogged < 20 || readsLogged % 100 == 0) {
-                        val peak = (0 until count.coerceAtLeast(0)).maxOfOrNull { kotlin.math.abs(samples[it].toInt()) } ?: -1
-                        Log.i(TAG, "startMicrophone: read #$readsLogged count=$count peak=$peak routedDevice=${recorder.routedDevice?.id}")
-                    }
-                    readsLogged++
                     if (count <= 0) {
                         // A misrouted device (e.g. Bluetooth audio that never actually connected)
                         // reads 0/negative forever. Without a bound this loop never exits, the
@@ -563,7 +562,21 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         continue
                     }
                     consecutiveEmptyReads = 0
-                    val adjusted = processor.process(samples, count, _state.value.microphoneGain)
+                    val gain = _state.value.microphoneGain
+                    val adjusted = processor.process(samples, count, gain)
+                    for (index in 0 until count) {
+                        val rawAbs = kotlin.math.abs(samples[index].toInt())
+                        if (rawAbs > windowRawPeak) windowRawPeak = rawAbs
+                        val outAbs = kotlin.math.abs(adjusted[index].toInt())
+                        if (outAbs > windowOutPeak) windowOutPeak = outAbs
+                    }
+                    val now = System.nanoTime()
+                    if (now - windowStart > 1_000_000_000L) {
+                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) gain=$gain outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
+                        windowRawPeak = 0
+                        windowOutPeak = 0
+                        windowStart = now
+                    }
                     val codec = if (link.transport == AudioTransport.WIFI) AudioBridgeProtocol.CODEC_PCM16 else AudioBridgeProtocol.CODEC_IMA_ADPCM
                     val payload = if (codec == AudioBridgeProtocol.CODEC_PCM16) adjusted.toByteArrayLittleEndian() else ImaAdpcm.encode(adjusted, 1)
                     writeFrame(link.output, AudioBridgeProtocol.Frame(
