@@ -169,7 +169,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
                 outputEqGains = profile?.gains?.takeIf { gains -> gains.size == 9 }?.map { gain -> gain.coerceIn(-12f, 12f) }
                     ?: AudioOutputPreset.FLAT.gains,
-                microphoneGain = microphoneGain.coerceIn(0f, 12f),
+                microphoneGain = microphoneGain.coerceIn(0f, 3f),
                 selectedInputKey = inputDeviceKey,
                 error = null
             )
@@ -572,7 +572,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     val now = System.nanoTime()
                     if (now - windowStart > 1_000_000_000L) {
-                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) gain=$gain outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
+                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) trim=$gain autoGain=${"%.1f".format(processor.lastAutoGain)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
                         windowRawPeak = 0
                         windowOutPeak = 0
                         windowStart = now
@@ -725,18 +725,38 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
 }
 
 /** Raw gain pass-through: no gate, no color, no isolation — just scale and forward. */
+/**
+ * Automatic gain + limiter, not a flat multiplier: measured raw capture on the USB-C DAC mic
+ * sits around 0.3-0.6% of full scale during normal speech, but a stray tap/knock on the mic
+ * spikes to 100% FS. A single fixed gain can't serve both — turned up enough to make speech
+ * audible, every touch/knock instantly hard-clips. The envelope follower tracks the current
+ * loudness and continuously derives a gain that pulls quiet audio up toward a target level;
+ * the tanh stage then soft-limits the top of the range so a sudden loud transient compresses
+ * instead of flat-topping into harsh digital clipping.
+ */
 private class MicrophoneProcessor {
+    private var envelope = 1_200f
     var level: Float = 0f
         private set
+    var lastAutoGain: Float = 1f
+        private set
 
-    fun process(samples: ShortArray, count: Int, gain: Float): ShortArray {
+    fun process(samples: ShortArray, count: Int, trim: Float): ShortArray {
         val output = ShortArray(count)
         var energy = 0.0
+        val target = 9_000f
         for (index in 0 until count) {
             val dry = samples[index].toFloat()
             energy += dry * dry
-            output[index] = (dry * gain).roundToInt()
-                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            val absDry = kotlin.math.abs(dry)
+            // Fast attack so a sudden loud transient pulls gain down before it clips; slow
+            // decay so gain doesn't hunt/pump during normal pauses between words.
+            envelope += (absDry - envelope) * (if (absDry > envelope) .05f else .0006f)
+            val autoGain = (target / envelope.coerceAtLeast(80f)).coerceIn(1f, 80f)
+            lastAutoGain = autoGain
+            val driven = dry * autoGain * trim
+            val limited = 32_000f * kotlin.math.tanh(driven / 32_000f)
+            output[index] = limited.roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         level = (sqrt(energy / count.coerceAtLeast(1)) / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
         return output

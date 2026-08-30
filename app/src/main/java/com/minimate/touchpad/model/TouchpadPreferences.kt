@@ -282,7 +282,7 @@ class TouchpadPreferences(context: Context) {
                         }
                     }
                 } ?: emptyList(),
-                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 12f),
+                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 3f),
                 audioInputDeviceKey = json.optString("audioInputDeviceKey", "phone"),
                 audioTransport = runCatching {
                     AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))

@@ -292,7 +292,7 @@ private fun MicrophoneControls(
             trackColor = Color.White.copy(.10f)
         )
         CompactAudioSlider(
-            label = "GAIN", value = state.microphoneGain, range = 0f..12f,
+            label = "GAIN", value = state.microphoneGain, range = 0f..3f,
             valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
             onValue = onGain
         )
