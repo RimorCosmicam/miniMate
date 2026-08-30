@@ -616,7 +616,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     val now = System.nanoTime()
                     if (now - windowStart > 1_000_000_000L) {
-                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) noiseRms=${"%.0f".format(engine.lastStats?.noiseRms ?: 0f)} fRms=${"%.0f".format(engine.lastStats?.filteredRms ?: 0f)} fPeak=${"%.0f".format(engine.lastStats?.filteredPeak ?: 0f)} speech=${engine.lastStats?.voiceActive} trim=$gain autoGain=${"%.1f".format(engine.lastStats?.gain ?: 0f)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
+                        Log.i(TAG, "startMicrophone: 1s window rawPeak=$windowRawPeak (${"%.1f".format(windowRawPeak * 100f / Short.MAX_VALUE)}% FS) rms=${"%.0f".format(engine.lastStats?.rawRms ?: 0f)} trim=$gain gain=${"%.1f".format(engine.lastStats?.gain ?: 0f)} outPeak=$windowOutPeak (${"%.1f".format(windowOutPeak * 100f / Short.MAX_VALUE)}% FS) routedDevice=${recorder.routedDevice?.id}")
                         windowRawPeak = 0
                         windowOutPeak = 0
                         windowStart = now
