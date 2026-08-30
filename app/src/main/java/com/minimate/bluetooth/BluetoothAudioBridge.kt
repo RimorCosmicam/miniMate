@@ -508,6 +508,68 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         scoReceiver = null
     }
 
+    /**
+     * Opens the selected input on every available AudioSource in turn, measures how much signal
+     * each one actually delivers, and returns the best. Sources are distinct HAL capture profiles
+     * with different preamp gain — on a USB dongle the difference between them can be one to two
+     * orders of magnitude, and which one wins is a property of that specific hardware. Ambient
+     * room sound is a sufficient stimulus because only the ratio between sources matters.
+     */
+    private fun probeLoudestSource(device: AudioDeviceInfo?, sampleRate: Int, frames: Int): Int {
+        val candidates = buildList {
+            add(MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION")
+            add(MediaRecorder.AudioSource.MIC to "MIC")
+            add(MediaRecorder.AudioSource.CAMCORDER to "CAMCORDER")
+            add(MediaRecorder.AudioSource.DEFAULT to "DEFAULT")
+            add(MediaRecorder.AudioSource.VOICE_COMMUNICATION to "VOICE_COMMUNICATION")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                add(MediaRecorder.AudioSource.UNPROCESSED to "UNPROCESSED")
+            }
+        }
+        val minimum = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val buffer = ShortArray(frames)
+        var best = MediaRecorder.AudioSource.VOICE_RECOGNITION
+        var bestRms = -1f
+        val report = StringBuilder()
+
+        for ((source, name) in candidates) {
+            val rms = runCatching {
+                val probe = AudioRecord(
+                    source, sampleRate, AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum, frames * 2 * 4)
+                )
+                if (probe.state != AudioRecord.STATE_INITIALIZED) {
+                    probe.release()
+                    return@runCatching -1f
+                }
+                probe.setPreferredDevice(device)
+                probe.startRecording()
+                var energy = 0.0
+                var counted = 0
+                // Discard the first blocks: a freshly started capture emits a burst of zeros
+                // while the route settles, which would score every source as silent.
+                repeat(8) { attempt ->
+                    val read = probe.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
+                    if (attempt >= 3 && read > 0) {
+                        for (index in 0 until read) {
+                            val sample = buffer[index].toDouble()
+                            energy += sample * sample
+                        }
+                        counted += read
+                    }
+                }
+                runCatching { probe.stop() }
+                probe.release()
+                if (counted > 0) kotlin.math.sqrt(energy / counted).toFloat() else -1f
+            }.getOrDefault(-1f)
+
+            report.append(name).append('=').append(if (rms < 0) "n/a" else "%.1f".format(rms)).append(' ')
+            if (rms > bestRms) { bestRms = rms; best = source }
+        }
+        Log.i(TAG, "probeLoudestSource: $report-> chose ${candidates.firstOrNull { it.first == best }?.second} (rms ${"%.1f".format(bestRms)})")
+        return best
+    }
+
     private fun startMicrophone(explicitLink: Link? = null) {
         if (microphoneJob?.isActive == true) {
             Log.i(TAG, "startMicrophone: already running, ignoring")
@@ -537,14 +599,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            // VOICE_RECOGNITION is what the last known-working version of this bridge used, and
-            // swapping it for MIC during a cleanup pass was never tested as its own variable.
-            // The two are different capture tunings in the HAL, not aliases: VOICE_RECOGNITION
-            // is the speech-capture path and is documented as applying neither AGC nor noise
-            // suppression, whereas MIC carries the vendor's general-recording processing. It is
-            // also still full-bandwidth, unlike VOICE_COMMUNICATION's telephony path.
+            // Each AudioSource maps to a different HAL input profile with its own preamp gain,
+            // and which one a given USB dongle actually feeds properly is a device fact, not
+            // something that can be reasoned out. Measure all of them against this exact device
+            // and take whichever delivers the most signal, instead of hardcoding a guess.
+            val chosenSource = probeLoudestSource(targetDevice, sampleRate, frames)
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                chosenSource,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
@@ -582,7 +643,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             try {
                 recorder.startRecording()
                 check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
-                Log.i(TAG, "startMicrophone: recording started, actual routed device=${recorder.routedDevice?.type}/${recorder.routedDevice?.id}/${recorder.routedDevice?.productName}")
+                Log.i(TAG, "startMicrophone: source=$chosenSource recording started, actual routed device=${recorder.routedDevice?.type}/${recorder.routedDevice?.id}/${recorder.routedDevice?.productName}")
                 var consecutiveEmptyReads = 0
                 // Rolling 1-second window of the LOUDEST moment, not a random snapshot — a
                 // sparse per-N-reads sample mostly lands between words and looks falsely quiet.
