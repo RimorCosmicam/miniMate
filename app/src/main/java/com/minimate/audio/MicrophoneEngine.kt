@@ -30,9 +30,15 @@ import kotlin.math.tanh
  */
 class MicrophoneEngine(private val sampleRate: Int) {
     private companion object {
-        /** Where speech should land, ≈ -21 dBFS RMS. */
-        const val TARGET_RMS = 3_000f
-        const val MAX_TARGET_RMS = 9_000f
+        /**
+         * Where speech should land at trim 1.0, ≈ -19 dBFS RMS. The trim slider is a fine
+         * adjustment either side of this, not something that should need to be maxed: a default
+         * requiring 3x to be audible means the calibration point itself is wrong. The ceiling is
+         * kept close because pushing the RMS target hotter than about -14 dBFS puts speech peaks
+         * into the limiter continuously, which sounds worse rather than louder.
+         */
+        const val TARGET_RMS = 3_600f
+        const val MAX_TARGET_RMS = 6_500f
         /**
          * Amplified peaks aim just under full scale. Pushing this above 1.0 to chase loudness
          * put every block into the limiter permanently, measured as output peak at 100% of full
