@@ -21,9 +21,10 @@ struct MonitorOutput: Identifiable, Hashable {
 }
 
 final class MicrophoneMonitor {
-    /// Every output device except MiniMate's own virtual speaker. That one is excluded on
-    /// purpose: audio sent there is streamed to the phone and played through the very headset
-    /// whose microphone is being captured, which closes an acoustic loop and howls.
+    /// Every output device, MiniMate's own virtual speaker included. Routing there sends the
+    /// monitor back to the phone and out the same earphones being captured, which is exactly how
+    /// you check the microphone while wearing them. It can feed back — the earphone driver sits
+    /// close to the cable microphone — so it is offered rather than imposed, not withheld.
     static func availableOutputs() -> [MonitorOutput] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -61,7 +62,6 @@ final class MicrophoneMonitor {
 
         return ids.compactMap { device in
             guard outputChannelCount(device) > 0 else { return nil }
-            guard stringProperty(device, kAudioDevicePropertyDeviceUID) != "com.minimate.audio.speaker" else { return nil }
             let name = stringProperty(device, kAudioObjectPropertyName)
             return name.isEmpty ? nil : MonitorOutput(id: device, name: name)
         }
