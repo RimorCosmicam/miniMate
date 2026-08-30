@@ -26,10 +26,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.platform.LocalContext
@@ -294,8 +298,26 @@ private fun AbstractAgsl(
 ) {
     val motion = rememberDeviceMotion()
     val sceneIndex = subthemeIndex.coerceIn(0, 9)
-    val runtime = remember(theme) {
-        runCatching {
+
+    // Building the RuntimeShader and its glyph atlas is expensive, and the GPU program is
+    // compiled and linked on the render thread at the first draw that uses it. On a cold shader
+    // cache — which is exactly the state of a freshly installed app — that link blocks the main
+    // thread inside syncAndDrawFrame for long enough to trip the 10 s ANR watchdog, so the very
+    // first launch after install can present a black screen and an "isn't responding" dialog.
+    //
+    // Draw the cheap fallback for the first couple of frames instead. The window is then up,
+    // focused and dispatching input before any of that work starts, so a slow first compile
+    // costs a brief hitch rather than an unresponsive app.
+    var shaderReady by remember(theme) { mutableStateOf(false) }
+    LaunchedEffect(theme) {
+        withFrameNanos { }
+        withFrameNanos { }
+        delay(120)
+        shaderReady = true
+    }
+
+    val runtime = remember(theme, shaderReady) {
+        if (!shaderReady) null else runCatching {
             RuntimeShader(SOURCED_SHADER).apply {
                 val atlas = createGlyphAtlas()
                 setInputShader("glyphAtlas", BitmapShader(atlas, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP))
