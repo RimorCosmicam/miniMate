@@ -18,6 +18,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.DynamicsProcessing
 import android.net.ConnectivityManager
 import android.net.Network
@@ -545,6 +546,18 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             }
             val preferSet = recorder.setPreferredDevice(targetDevice)
             Log.i(TAG, "startMicrophone: setPreferredDevice($targetDevice) returned $preferSet, routedDevice=${recorder.preferredDevice?.type}/${recorder.preferredDevice?.id}")
+            // Platform AGC pre-processor. This is the piece that was missing: it runs inside the
+            // capture chain, so it raises a low-sensitivity capsule's signal before we ever see
+            // it, which post-hoc digital gain fundamentally cannot do (amplifying afterwards
+            // amplifies the quantisation/self noise by exactly the same factor). Unlike the
+            // VOICE_COMMUNICATION source, this is a targeted effect and does not drag the
+            // capture through the telephony narrowband path.
+            val automaticGain = if (AutomaticGainControl.isAvailable()) {
+                runCatching {
+                    AutomaticGainControl.create(recorder.audioSessionId)?.apply { enabled = true }
+                }.onFailure { Log.w(TAG, "startMicrophone: AGC effect failed", it) }.getOrNull()
+            } else null
+            Log.i(TAG, "startMicrophone: platform AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}")
             val samples = ShortArray(frames)
             val processor = MicrophoneProcessor(sampleRate)
             try {
@@ -605,6 +618,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 if (running && link === activeLink) _state.update { it.copy(error = e.message ?: "Microphone stream failed") }
             } finally {
                 runCatching { recorder.stop() }
+                runCatching { automaticGain?.release() }
                 recorder.release()
                 // Only the most recent session releases routing: if a newer one has already
                 // started (e.g. the user switched devices while this one was still tearing
@@ -770,7 +784,9 @@ private class MicrophoneProcessor(private val sampleRate: Int) {
         const val TARGET_RMS = 3_500f
         /** ≈ -35 dBFS RMS: the loudest the noise floor is ever allowed to become. */
         const val MAX_NOISE_RMS_OUT = 550f
-        const val MAX_GAIN = 60f
+        // Deliberately high: the noise ceiling below is the principled limit on how much gain a
+        // given microphone earns, so this only exists to stop a pathological divide-by-tiny.
+        const val MAX_GAIN = 200f
         /** ≈ 10 dB above the noise floor before a block counts as speech. */
         const val SPEECH_SNR = 3.2f
         const val SPEECH_HANGOVER_SECONDS = .35f
