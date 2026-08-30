@@ -757,7 +757,12 @@ private class MicrophoneProcessor {
     fun process(samples: ShortArray, count: Int, trim: Float): ShortArray {
         val output = ShortArray(count)
         var energy = 0.0
-        val target = 9_000f
+        // trim adjusts how loud the AGC aims for. It must NOT be a second multiplier applied
+        // after autoGain: autoGain is already solved to land the envelope on `target`, so
+        // `autoGain * trim` overshoots that target by exactly `trim`x — which is why output
+        // was measured pinned at 80-97% of full scale regardless of input level. Folding trim
+        // into the target itself keeps everything bounded to one gain calculation.
+        val target = (9_000f * trim.coerceIn(0.25f, 3f)).coerceIn(2_000f, 24_000f)
         for (index in 0 until count) {
             val dry = samples[index].toFloat()
             energy += dry * dry
@@ -776,7 +781,7 @@ private class MicrophoneProcessor {
             val targetGain = (target / envelope.coerceAtLeast(80f)).coerceIn(1f, 80f)
             val autoGain = 1f + (targetGain - 1f) * confidence
             lastAutoGain = autoGain
-            val driven = dry * autoGain * trim
+            val driven = dry * autoGain
             val limited = 32_000f * kotlin.math.tanh(driven / 32_000f)
             output[index] = limited.roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
