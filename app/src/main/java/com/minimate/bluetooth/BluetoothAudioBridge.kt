@@ -528,12 +528,14 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            // Plain MIC, not VOICE_COMMUNICATION: the latter routes through Android's telephony
-            // call-audio path, which applies its own narrowband compression/AGC tuned for
-            // intelligibility over a phone line, not fidelity — directly at odds with this
-            // being a lossless audio link. MIC is the full-bandwidth, unprocessed source.
+            // VOICE_RECOGNITION is what the last known-working version of this bridge used, and
+            // swapping it for MIC during a cleanup pass was never tested as its own variable.
+            // The two are different capture tunings in the HAL, not aliases: VOICE_RECOGNITION
+            // is the speech-capture path and is documented as applying neither AGC nor noise
+            // suppression, whereas MIC carries the vendor's general-recording processing. It is
+            // also still full-bandwidth, unlike VOICE_COMMUNICATION's telephony path.
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
