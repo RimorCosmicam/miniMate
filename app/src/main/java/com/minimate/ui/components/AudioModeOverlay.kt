@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
@@ -94,11 +95,10 @@ fun AudioModeOverlay(
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
                     state, onMicrophoneEnabled, onInputDeviceSelected, onMicrophoneGain,
-                    onMicrophoneNoiseGate, onMicrophonePreset
+                    onMicrophoneNoiseGate, onMicrophonePreset, onVoiceIsolation
                 )
                 AudioEditorTab.TOOLS -> AudioToolsControls(
                     state = state,
-                    onVoiceIsolation = onVoiceIsolation,
                     onPreset = onMicrophonePreset
                 )
             }
@@ -268,7 +268,8 @@ private fun MicrophoneControls(
     onDeviceSelected: (String) -> Unit,
     onGain: (Float) -> Unit,
     onNoiseGate: (Float) -> Unit,
-    onPreset: (MicrophoneVoicePreset) -> Unit
+    onPreset: (MicrophoneVoicePreset) -> Unit,
+    onVoiceIsolation: (Boolean) -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
@@ -316,6 +317,25 @@ private fun MicrophoneControls(
                 onValue = onNoiseGate, modifier = Modifier.weight(1f)
             )
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("ANC", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    when {
+                        state.ambientReferenceActive -> "Phone array is filtering ambient noise"
+                        state.selectedInputKey != PHONE_DEVICE_KEY -> "Uses the phone mics as an ambient reference"
+                        else -> "Phone array noise and echo suppression"
+                    },
+                    color = Color.White.copy(.42f), fontSize = 7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
+            Switch(
+                checked = state.voiceIsolation,
+                onCheckedChange = onVoiceIsolation,
+                enabled = state.microphoneEnabled,
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
+            )
+        }
         Text("VOICE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -346,7 +366,6 @@ private fun MicrophoneControls(
 @Composable
 private fun AudioToolsControls(
     state: AudioBridgeState,
-    onVoiceIsolation: (Boolean) -> Unit,
     onPreset: (MicrophoneVoicePreset) -> Unit
 ) {
     Column(
@@ -374,26 +393,6 @@ private fun AudioToolsControls(
                     state.microphoneEnabled
                 ) { onPreset(if (state.microphonePreset == preset) MicrophoneVoicePreset.CLEAN else preset) }
             }
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(.08f)))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("ANC", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    when {
-                        state.ambientReferenceActive -> "Phone microphone array is filtering ambient noise"
-                        state.selectedInputKey != PHONE_DEVICE_KEY -> "Uses the phone microphones as an ambient reference"
-                        else -> "Phone array noise and echo suppression"
-                    },
-                    color = Color.White.copy(.42f), fontSize = 7.5.sp
-                )
-            }
-            Switch(
-                checked = state.voiceIsolation,
-                onCheckedChange = onVoiceIsolation,
-                enabled = state.microphoneEnabled,
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
-            )
         }
     }
 }

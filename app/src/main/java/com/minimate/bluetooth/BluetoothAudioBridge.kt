@@ -138,6 +138,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     private var bluetoothServer: BluetoothServerSocket? = null
     private var wifiServer: ServerSocket? = null
     private var microphoneJob: Job? = null
+    @Volatile private var micGeneration = 0
     private var audioTrack: AudioTrack? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var audioTrackRate = 0
@@ -515,6 +516,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             _state.update { it.copy(error = "Microphone permission is required") }
             return
         }
+        val myGeneration = ++micGeneration
         microphoneJob = scope.launch {
             val initialState = _state.value
             val isPhoneMic = initialState.selectedInputKey == PHONE_DEVICE_KEY
@@ -523,6 +525,9 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             if (!isPhoneMic && !routed) {
                 _state.update { it.copy(error = "Couldn't connect to the selected microphone") }
             }
+            // Communication-device routing takes a moment to actually apply; starting the
+            // recorder before it does silently captures nothing from the intended device.
+            if (!isPhoneMic && routed) delay(200)
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -533,6 +538,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, maxOf(min, frames * 2 * 4)
             )
+            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                _state.update { it.copy(error = "Microphone failed to initialize") }
+                recorder.release()
+                releaseInputRouting()
+                return@launch
+            }
             recorder.setPreferredDevice(targetDevice)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 recorder.setPreferredMicrophoneDirection(
@@ -553,6 +564,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             var ambientReference: AmbientReferenceCapture? = null
             try {
                 recorder.startRecording()
+                check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
                 if (initialState.voiceIsolation && !isPhoneMic) {
                     ambientReference = AmbientReferenceCapture.create(
                         sampleRate = sampleRate,
@@ -561,9 +573,18 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     )?.takeIf { it.start() }
                     _state.update { it.copy(ambientReferenceActive = ambientReference != null) }
                 }
+                var consecutiveEmptyReads = 0
                 while (running && link === activeLink && link.isOpen() && _state.value.microphoneEnabled) {
                     val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
-                    if (count <= 0) continue
+                    if (count <= 0) {
+                        // A misrouted device (e.g. Bluetooth audio that never actually connected)
+                        // reads 0/negative forever. Without a bound this loop never exits, the
+                        // job stays "active" forever, and every later attempt — including
+                        // switching back to the phone mic — silently no-ops against that guard.
+                        check(++consecutiveEmptyReads < 200) { "Microphone stopped producing audio" }
+                        continue
+                    }
+                    consecutiveEmptyReads = 0
                     val current = _state.value
                     val adjusted = processor.process(
                         samples = samples,
@@ -589,7 +610,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 noiseSuppressor?.release()
                 echoCanceler?.release()
                 recorder.release()
-                releaseInputRouting()
+                // Only the most recent session releases routing: if a newer one has already
+                // started (e.g. the user switched devices while this one was still tearing
+                // down), it owns cleanup now, and releasing here would stomp its routing instead.
+                if (myGeneration == micGeneration) releaseInputRouting()
                 _state.update { it.copy(ambientReferenceActive = false) }
             }
         }
