@@ -1,4 +1,5 @@
 import Combine
+import CoreAudio
 import Foundation
 import IOBluetooth
 import ModernCameraBridge
@@ -16,6 +17,8 @@ final class BridgeController: ObservableObject {
     /// Plays the incoming microphone straight to the Mac's output, so the pipeline can be judged
     /// without a conferencing app's own gain control and noise suppression in the way.
     @Published var monitoringMicrophone = false
+    @Published var monitorOutputs: [MonitorOutput] = MicrophoneMonitor.availableOutputs()
+    @Published var monitorOutputID: AudioDeviceID? = MicrophoneMonitor.availableOutputs().first?.id
 
     private let discovery = MiniMateDiscovery()
     private let endpoints = CoreAudioEndpointBridge()
@@ -132,8 +135,12 @@ final class BridgeController: ObservableObject {
             return
         }
         if enabled {
+            monitorOutputs = MicrophoneMonitor.availableOutputs()
+            if monitorOutputID == nil || !monitorOutputs.contains(where: { $0.id == monitorOutputID }) {
+                monitorOutputID = monitorOutputs.first?.id
+            }
             do {
-                try microphoneMonitor.start()
+                try microphoneMonitor.start(deviceID: monitorOutputID)
                 monitoringMicrophone = true
             } catch {
                 monitoringMicrophone = false

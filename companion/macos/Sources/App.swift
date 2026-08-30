@@ -135,6 +135,19 @@ struct CompanionView: View {
                 Spacer()
 
                 VStack(spacing: 8) {
+                    if !controller.monitorOutputs.isEmpty {
+                        Picker("Listen on", selection: Binding(
+                            get: { controller.monitorOutputID ?? controller.monitorOutputs[0].id },
+                            set: { controller.monitorOutputID = $0 }
+                        )) {
+                            ForEach(controller.monitorOutputs) { output in
+                                Text(output.name).tag(output.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .disabled(controller.monitoringMicrophone)
+                    }
+
                     if controller.monitoringMicrophone {
                         Button("Stop listening to mic") { controller.setMicrophoneMonitoring(false) }
                             .frame(maxWidth: .infinity)

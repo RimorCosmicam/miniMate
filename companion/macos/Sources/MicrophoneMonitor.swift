@@ -14,7 +14,59 @@ import Foundation
  same point in the chain, no additional processing. If it sounds correct here and wrong in the
  consuming application, the fault is downstream of this project.
  */
+/// One selectable destination for monitoring.
+struct MonitorOutput: Identifiable, Hashable {
+    let id: AudioDeviceID
+    let name: String
+}
+
 final class MicrophoneMonitor {
+    /// Every output device except MiniMate's own virtual speaker. That one is excluded on
+    /// purpose: audio sent there is streamed to the phone and played through the very headset
+    /// whose microphone is being captured, which closes an acoustic loop and howls.
+    static func availableOutputs() -> [MonitorOutput] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr else {
+            return []
+        }
+        var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr else {
+            return []
+        }
+
+        func stringProperty(_ device: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String {
+            var addr = AudioObjectPropertyAddress(mSelector: selector,
+                mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            var value: CFString? = nil
+            var valueSize = UInt32(MemoryLayout<CFString?>.size)
+            guard AudioObjectGetPropertyData(device, &addr, 0, nil, &valueSize, &value) == noErr else { return "" }
+            return (value as String?) ?? ""
+        }
+
+        func outputChannelCount(_ device: AudioDeviceID) -> Int {
+            var addr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreamConfiguration,
+                mScope: kAudioObjectPropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+            var listSize: UInt32 = 0
+            guard AudioObjectGetPropertyDataSize(device, &addr, 0, nil, &listSize) == noErr, listSize > 0 else { return 0 }
+            let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(listSize), alignment: 16)
+            defer { raw.deallocate() }
+            guard AudioObjectGetPropertyData(device, &addr, 0, nil, &listSize, raw) == noErr else { return 0 }
+            let buffers = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+            return buffers.reduce(0) { $0 + Int($1.mNumberChannels) }
+        }
+
+        return ids.compactMap { device in
+            guard outputChannelCount(device) > 0 else { return nil }
+            guard stringProperty(device, kAudioDevicePropertyDeviceUID) != "com.minimate.audio.speaker" else { return nil }
+            let name = stringProperty(device, kAudioObjectPropertyName)
+            return name.isEmpty ? nil : MonitorOutput(id: device, name: name)
+        }
+    }
+
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private let format: AVAudioFormat
@@ -35,8 +87,13 @@ final class MicrophoneMonitor {
 
     var isRunning: Bool { running }
 
-    func start() throws {
+    /// Binds playback to a specific output device for this process only, leaving the system
+    /// default untouched. Passing nil uses whatever the system default currently is.
+    func start(deviceID: AudioDeviceID?) throws {
         guard !running else { return }
+        if let deviceID {
+            try engine.outputNode.auAudioUnit.setDeviceID(deviceID)
+        }
         engine.prepare()
         try engine.start()
         player.play()
