@@ -546,14 +546,18 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             }
             recorder.setPreferredDevice(targetDevice)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                recorder.setPreferredMicrophoneDirection(
-                    if (isPhoneMic) {
-                        MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER
-                    } else MicrophoneDirection.MIC_DIRECTION_EXTERNAL
-                )
-                recorder.setPreferredMicrophoneFieldDimension(if (initialState.voiceIsolation) .75f else 0f)
+                // Direction/field-dimension beamforming hints describe the phone's OWN
+                // multi-capsule mic array. Applying them to an external mic's single-capsule
+                // mono signal (wired or Bluetooth) has no array to shape and was producing
+                // garbled/warbling audio there — restrict both to the phone mic.
+                if (isPhoneMic) {
+                    recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+                    recorder.setPreferredMicrophoneFieldDimension(if (initialState.voiceIsolation) .75f else 0f)
+                } else {
+                    recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_EXTERNAL)
+                }
             }
-            val noiseSuppressor = if (initialState.voiceIsolation && NoiseSuppressor.isAvailable()) {
+            val noiseSuppressor = if (initialState.voiceIsolation && isPhoneMic && NoiseSuppressor.isAvailable()) {
                 runCatching { NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true } }.getOrNull()
             } else null
             val echoCanceler = if (initialState.voiceIsolation && isPhoneMic && AcousticEchoCanceler.isAvailable()) {
