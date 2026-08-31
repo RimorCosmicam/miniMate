@@ -38,6 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -60,10 +64,12 @@ private val Mustard = Color(0xFFD8A628)
 /**
  * The welcome's ground: interleaved diagonal bands, mustard and black.
  *
- * [split] sends the whole ground away along the diagonal the bands are drawn on — both colours
- * together, in the direction they already point, thinning as they run until nothing is left. The
- * ground is drawn on nothing rather than over a black fill, so what shows through the widening
- * gaps is whatever is behind it. [invert] exchanges the two colours.
+ * Everything is drawn in a frame turned to the bands' own slope, so within it they are simply
+ * horizontal rows and the whole thing is easy to reason about. Rows scroll for as long as the
+ * welcome is up. [split] then cuts the sheet down the middle and pulls the two halves apart along
+ * the bands' own axis — each side leaving the way it points, both colours going with it. The
+ * ground is drawn on nothing rather than over a black fill, so what opens up between the halves is
+ * whatever is behind it. [invert] exchanges the two colours.
  */
 @Composable
 private fun MustardDiagonals(
@@ -76,32 +82,29 @@ private fun MustardDiagonals(
         val spacing = 34.dp.toPx()
         val band = spacing * 0.5f
         val drift = travel * spacing
+        // Enough overhang that the turned frame still covers the corners, and enough travel that
+        // both halves are gone by the end.
+        val reach = size.width + size.height
+        val pull = split * reach
+        val mustard = lerp(Mustard, Color.Black, invert)
+        val black = lerp(Color.Black, Mustard, invert)
+        val middle = size.width / 2f
 
-        // The bands run down and to the right, so that is the way they leave: one direction, both
-        // colours, along the line they were already drawn on. The stroke thins as they run, which
-        // is what actually opens the ground up — a sheet of parallel lines sliding along its own
-        // axis looks perfectly still no matter how fast it is going.
-        val run = split * (size.width + size.height)
-        val away = Offset(run * 0.894f, run * 0.447f)
-        val stroke = band * (1f - split).coerceIn(0f, 1f)
-
-        if (stroke <= 0f) return@Canvas
-
-        fun bands(color: Color, offset: Float) {
-            var y = -size.width - spacing * 2f
-            while (y < size.height + size.width + spacing * 2f) {
-                drawLine(
-                    color,
-                    Offset(-size.width + away.x, y + offset + away.y),
-                    Offset(size.width * 2f + away.x, y + offset + size.width * 1.5f + away.y),
-                    stroke
-                )
-                y += spacing
+        rotate(degrees = 26.565f) {
+            fun sheet(shift: Float) {
+                translate(left = shift) {
+                    var y = -reach
+                    while (y < size.height + reach) {
+                        drawRect(mustard, Offset(-reach, y + drift), Size(reach * 3f, band))
+                        drawRect(black, Offset(-reach, y + drift + band), Size(reach * 3f, band))
+                        y += spacing
+                    }
+                }
             }
-        }
 
-        bands(lerp(Mustard, Color.Black, invert), drift)
-        bands(lerp(Color.Black, Mustard, invert), drift + band)
+            clipRect(-reach, -reach, middle, size.height + reach) { sheet(-pull) }
+            clipRect(middle, -reach, size.width + reach, size.height + reach) { sheet(pull) }
+        }
     }
 }
 
