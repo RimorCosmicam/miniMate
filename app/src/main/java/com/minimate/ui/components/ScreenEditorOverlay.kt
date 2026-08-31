@@ -44,11 +44,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.TouchpadSettings
-import com.minimate.ui.theme.AccentCyan
-import com.minimate.ui.theme.AccentEmerald
-import com.minimate.ui.theme.AccentPink
-import com.minimate.ui.theme.TextPrimary
-import com.minimate.ui.theme.TextSecondary
 import kotlin.math.roundToInt
 
 @Composable
@@ -76,7 +71,7 @@ fun ScreenEditorOverlay(
             modifier = Modifier
                 .offset { IntOffset(clockX.roundToInt(), clockY.roundToInt()) }
                 .size(width = (140f * settings.clockScale).dp, height = (38f * settings.clockScale).dp)
-                .border(2.dp, AccentCyan, RoundedCornerShape(16.dp))
+                .border(2.dp, Color.White.copy(.85f), RoundedCornerShape(16.dp))
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDrag = { change, dragAmount ->
@@ -95,87 +90,51 @@ fun ScreenEditorOverlay(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                "Drag Clock",
-                color = AccentCyan,
-                fontSize = 11.sp,
+                "Drag",
+                color = Color.White.copy(.85f),
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        // Bottom Screen Editor Control Panel
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(12.dp)
-                .shadow(16.dp, RoundedCornerShape(20.dp), spotColor = AccentCyan)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xF0141624))
-                .border(1.5.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
-                .padding(14.dp)
+        // The camera cutout occupies the bottom-right corner of the cover display, so a
+        // bottom-anchored panel sat directly underneath it. Anchored top-left instead, using the
+        // same glass chrome as every other studio rather than a bespoke navy-and-cyan card.
+        StudioPanel(
+            title = "Pill Layout",
+            subtitle = "Drag the pill, then set its size",
+            onCancel = onClose,
+            onDone = onClose,
+            modifier = Modifier.align(Alignment.TopStart)
         ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Screen Layout Editor",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // Reset layout button
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0x33FFFFFF))
-                                .clickable {
-                                    onSettingsChange(
-                                        settings.copy(
-                                            clockPositionX = 0.248f,
-                                            clockPositionY = 0.882f,
-                                            clockScale = 1.18f
-                                        )
-                                    )
-                                }
-                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                        ) {
-                            Text("Reset", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Done button
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(AccentEmerald)
-                                .clickable { onClose() }
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text("Done", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(String.format("Scale (%.2fx)", settings.clockScale), color = TextPrimary, fontSize = 11.sp)
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth().height(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    String.format("Size %.2fx", settings.clockScale),
+                    color = Color.White.copy(.7f),
+                    fontSize = 8.sp,
+                    modifier = Modifier.width(58.dp)
+                )
                 Slider(
                     value = settings.clockScale,
                     onValueChange = { onSettingsChange(settings.copy(clockScale = it)) },
                     valueRange = 0.65f..1.60f,
+                    modifier = Modifier.weight(1f).height(22.dp),
                     colors = SliderDefaults.colors(
-                        thumbColor = AccentCyan,
-                        activeTrackColor = AccentCyan,
-                        inactiveTrackColor = Color(0x33FFFFFF)
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.White,
+                        inactiveTrackColor = Color.White.copy(.14f)
+                    )
+                )
+            }
+            StudioChip("Reset position", false) {
+                onSettingsChange(
+                    settings.copy(
+                        clockPositionX = 0.248f,
+                        clockPositionY = 0.882f,
+                        clockScale = 1.18f
                     )
                 )
             }
