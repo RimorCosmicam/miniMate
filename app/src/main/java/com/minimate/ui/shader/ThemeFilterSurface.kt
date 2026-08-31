@@ -93,6 +93,7 @@ private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     """
     ThemeFilter.VHS -> """
         half4 main(float2 p) {
+            if (sizeUnknown()) return content.eval(p);
             float2 uv = p / uResolution;
 
             // Tracking error: a band drifting up the frame where the head is misaligned, inside

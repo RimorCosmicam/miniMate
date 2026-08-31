@@ -72,9 +72,7 @@ class MainActivity : ComponentActivity() {
 
         // Immersive edge-to-edge fullscreen
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
-        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        enterImmersive()
 
         hidManager = BluetoothHidManager(this)
         audioBridge = (application as MinimateApp).audioBridge
@@ -195,6 +193,29 @@ class MainActivity : ComponentActivity() {
         // Samsung may recreate or move the Activity when the FlexWindow state changes.
         // Reassert the strongest sensor-independent lock on every foreground transition.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        enterImmersive()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Anything that takes focus away — the shade, a permission dialog, the recents switcher —
+        // brings the bars back with it, and nothing was asking for them to leave again.
+        if (hasFocus) enterImmersive()
+    }
+
+    /**
+     * Hides the system bars, and asks for them back only transiently.
+     *
+     * Under BEHAVIOR_DEFAULT a swipe restores the bars permanently, so the first time the
+     * navigation bar was summoned it simply stayed for the rest of the session and the app
+     * stopped being fullscreen. Transient is the behaviour this wants: swipe to see them, and
+     * they withdraw on their own.
+     */
+    private fun enterImmersive() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     override fun onStop() {

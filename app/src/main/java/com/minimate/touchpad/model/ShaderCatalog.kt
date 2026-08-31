@@ -33,7 +33,8 @@ enum class ShaderFamily(val label: String) {
     FRACTAL("Fractals"),
     MOTION("Motion"),
     CIRCUIT("Circuits"),
-    DEPTH("Depth")
+    DEPTH("Depth"),
+    STARS("Stars")
 }
 
 data class ShaderScene(
@@ -80,6 +81,13 @@ private val COOL = listOf(ICE, TEAL, LAVENDER, VIOLET, PARADISE, MONO)
 private val ORGANIC = listOf(MOSS, TEAL, EMBER, ICE, SAKURA, MONO)
 private val VIOLETS = listOf(VIOLET, LAVENDER, ICE, SAKURA, PARADISE, MONO)
 private val MONOS = listOf(MONO, OPERATOR, AMBER, ICE, SAKURA, PARADISE)
+
+// Night palettes. The ground stop is never pure black — a real dark sky has airglow in it, and a
+// starfield on absolute black looks like a printing error rather than a sky.
+private val MIDNIGHT = p("Midnight", 0xFF01030A, 0xFF0B1B3A, 0xFF8FB6E8, 0xFFFFFFFF)
+private val SEPIA_SKY = p("Old Plate", 0xFF060503, 0xFF2C2418, 0xFFB39A6B, 0xFFFFF6E2)
+private val HYDROGEN = p("Hydrogen", 0xFF06010A, 0xFF3A0E33, 0xFFD9527E, 0xFFFFE8F2)
+private val NIGHT = listOf(MIDNIGHT, SEPIA_SKY, HYDROGEN, VIOLET, ICE, TEAL, MONO)
 
 private fun param(key: String, label: String, min: Float, max: Float, default: Float) =
     ShaderParam(key, label, min, max, default)
@@ -1367,6 +1375,319 @@ val shaderScenes: List<ShaderScene> = listOf(
                         c += tint * smoothstep(wide, 0.0, d) * lit * split;
                         c += mix(tint, uC3, 0.5) * (wide * 2.4 / (wide * 2.4 + d)) * lit * uP3 * 0.09;
                     }
+                }
+            }
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    // ---------------------------------------------------------------- Stars
+    //
+    // Six different pictures of the sky rather than one field in six colours: what separates them
+    // is what is actually being looked at — nearby stars with depth, the galactic band, galaxies
+    // instead of stars, a long exposure, a cloud lit from inside, and a cluster.
+
+    ShaderScene(
+        "parallax_sky", "Parallax Sky", ShaderFamily.STARS,
+        "Layered stars with real depth, drifting.",
+        listOf(
+            param("density", "Density", 3f, 16f, 7f),
+            param("drift", "Drift", 0f, 2f, .7f),
+            param("spikes", "Diffraction", 0f, 2f, .8f),
+            param("twinkle", "Scintillation", 0f, 1f, .55f)
+        ),
+        NIGHT,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            // Unresolved light between the stars. A sky is never empty where it is not bright.
+            float3 c = uC0 + uC1 * fbm(p * 2.6 + 11.0) * 0.06;
+
+            for (int layer = 0; layer < 4; layer++){
+                float fl = float(layer);
+                // Near layers sweep further than far ones for the same motion, and that difference
+                // is the only thing that makes a flat field of dots read as depth.
+                float near = 1.0 - fl * 0.22;
+                float2 q = p * (uP0 * (1.0 + fl * 1.7))
+                         + float2(t * uP1 * 0.06, t * uP1 * 0.014) * near
+                         + fl * 37.0;
+                float2 cell = floor(q);
+                float2 f = fract(q) - 0.5;
+
+                // The eight neighbours as well, so a star sitting near an edge is not cut by it.
+                for (int j = 0; j < 9; j++){
+                    float fj = float(j);
+                    float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
+                    float2 id = cell + o;
+                    float2 jitter = hash2(id);
+                    // Steep power law. Most stars are faint and a handful carry the picture; a
+                    // uniform brightness distribution reads as noise, not as a sky.
+                    float mag = pow(hash(id + 0.37), 7.0) * (0.30 + near * 0.95);
+                    if (mag > 0.0025){
+                        float2 d = f - o + (jitter - 0.5) * 0.82;
+                        float dist = length(d);
+                        float shimmer = 1.0 - uP3 * 0.45
+                            + uP3 * 0.45 * sin(t * (2.0 + jitter.x * 7.0) + jitter.y * 30.0);
+                        float core = (0.010 + mag * 0.028) * (2.3 - near);
+                        float3 tint = starColor(hash(id + 5.1));
+                        c += tint * psf(dist, core) * mag * shimmer;
+                        // Only the bright ones spike. On everything, it looks like a filter.
+                        if (mag > 0.30){
+                            float spike = exp(-abs(d.x) * 190.0) + exp(-abs(d.y) * 190.0);
+                            c += tint * spike * exp(-dist * 11.0) * mag * uP2 * 0.5;
+                        }
+                    }
+                }
+            }
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "galactic_band", "Galactic Band", ShaderFamily.STARS,
+        "The Milky Way, dust lanes and all.",
+        listOf(
+            param("width", "Band width", .4f, 3f, 1.1f),
+            param("bright", "Brightness", .2f, 2f, .9f),
+            param("dust", "Dust lanes", 0f, 1.4f, .8f),
+            param("tilt", "Tilt", -1.4f, 1.4f, .35f)
+        ),
+        NIGHT,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float2 q = rot(p, uP3);
+
+            // The band is billions of stars too faint to separate, so its light is grainy at every
+            // scale rather than smooth. Two octaves at different aspect ratios give it the stretch.
+            float band = exp(-abs(q.y) * (6.0 / uP0));
+            float grain = fbm(q * float2(3.5, 20.0) + t * 0.008) * 0.62
+                        + fbm(q * float2(8.0, 44.0) + 7.0) * 0.38;
+            float3 glow = mix(uC1, uC3, grain * grain) * band * (0.30 + grain * 1.0) * uP1;
+
+            // Dust lanes are cold clouds in front of the band. They subtract light rather than
+            // adding it, which is why the Milky Way looks split rather than mottled.
+            float dust = smoothstep(0.42, 0.78, fbm(q * float2(2.6, 6.0) + 21.0));
+            glow *= 1.0 - dust * band * uP2;
+
+            float3 c = uC0 + glow;
+
+            // Resolved foreground stars, thickening toward the band where there are simply more.
+            float2 g = p * 9.0;
+            float2 cell = floor(g);
+            float2 f = fract(g) - 0.5;
+            for (int j = 0; j < 9; j++){
+                float fj = float(j);
+                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
+                float2 id = cell + o;
+                float2 jitter = hash2(id);
+                float mag = pow(hash(id + 3.1), 6.5) * (0.45 + band * 0.75);
+                if (mag > 0.004){
+                    float2 d = f - o + (jitter - 0.5) * 0.8;
+                    c += starColor(hash(id + 9.7)) * psf(length(d), 0.011 + mag * 0.02) * mag;
+                }
+            }
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "deep_field", "Deep Field", ShaderFamily.STARS,
+        "Galaxies, not stars. Every smudge is a hundred billion suns.",
+        listOf(
+            param("count", "Density", 1.5f, 7f, 3.2f),
+            param("size", "Size", .3f, 1.6f, .8f),
+            param("redshift", "Redshift", 0f, 1.5f, .9f),
+            param("spirals", "Spiral fraction", 0f, 1f, .55f)
+        ),
+        NIGHT,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float3 c = uC0 + uC1 * fbm(p * 4.0) * 0.035;
+
+            float2 g = p * uP0 + t * 0.004;
+            float2 cell = floor(g);
+            float2 f = fract(g) - 0.5;
+
+            for (int j = 0; j < 9; j++){
+                float fj = float(j);
+                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
+                float2 id = cell + o;
+                float2 jitter = hash2(id);
+                float kind = hash(id + 1.7);
+                float distance = hash(id + 4.3);
+
+                float2 d = f - o + (jitter - 0.5) * 0.85;
+                // Inclination: most galaxies are not face on, so squash and rotate each one.
+                float2 e = rot(d, hash(id + 2.9) * 6.2831);
+                e.y /= mix(0.28, 1.0, hash(id + 6.1));
+                float radius = length(e) / (uP1 * (0.06 + pow(hash(id + 8.2), 2.0) * 0.16));
+
+                // The further away, the redder and fainter — the two things that make a deep field
+                // read as depth rather than as scattered confetti.
+                float3 tint = mix(mix(uC3, uC2, distance), float3(1.0, 0.42, 0.28), distance * uP2);
+                float faint = mix(1.0, 0.25, distance);
+
+                if (kind < uP3){
+                    // Disc with logarithmic arms, and an old yellow bulge in the middle.
+                    float arms = 0.55 + 0.45 * sin(atan(e.y, e.x) * 2.0 - log(max(radius, 0.05)) * 3.4);
+                    float disc = exp(-radius * 1.9) * (0.35 + arms * 0.85);
+                    float bulge = exp(-radius * radius * 9.0);
+                    c += tint * disc * faint * 0.5;
+                    c += mix(tint, float3(1.0, 0.86, 0.6), 0.6) * bulge * faint * 0.7;
+                } else {
+                    // Ellipticals have no structure at all: a smooth, steeply-peaked ball of old
+                    // stars. The quarter-power falloff is what gives them their soft wide skirt.
+                    float ell = exp(-pow(max(radius, 0.002), 0.25) * 3.4);
+                    c += mix(tint, float3(1.0, 0.83, 0.58), 0.45) * ell * faint * 0.8;
+                }
+            }
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "star_trails", "Star Trails", ShaderFamily.STARS,
+        "A long exposure. The sky turns, the camera does not.",
+        listOf(
+            param("rings", "Star count", 20f, 120f, 60f),
+            param("arc", "Exposure", .15f, 3.2f, 1.3f),
+            param("turn", "Rotation", 0f, 2f, .5f),
+            param("poleY", "Pole height", -.6f, .6f, .18f)
+        ),
+        listOf(SEPIA_SKY, MIDNIGHT, EMBER, VIOLET, MONO),
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float2 pole = float2(0.0, uP3);
+            float2 d = p - pole;
+            float radius = length(d);
+            float angle = atan(d.y, d.x);
+
+            float3 c = uC0 + uC1 * fbm(p * 3.0) * 0.05;
+
+            // Each star keeps its distance from the pole all night, so a trail is an arc at fixed
+            // radius. Working in rings means a pixel only has to ask which stars share its radius.
+            float scaled = radius * uP0;
+            float ring = floor(scaled);
+            float across = fract(scaled) - 0.5;
+
+            for (int k = 0; k < 3; k++){
+                float2 seed = float2(ring, float(k) * 17.0 + 3.0);
+                float present = hash(seed + 0.9);
+                if (present > 0.45){
+                    float mag = pow(hash(seed + 2.3), 3.0);
+                    float start = hash(seed) * 6.2831 + t * uP2 * 0.06;
+                    // How far round from the head of the trail this pixel sits.
+                    float along = mod(angle - start, 6.2831);
+                    // The head is where the star is now, and the tail fades back along the arc —
+                    // an even streak looks drawn rather than exposed.
+                    float body = along < uP1 ? pow(1.0 - along / uP1, 1.6) : 0.0;
+                    float head = smoothstep(0.06, 0.0, along) * 2.2;
+                    float width = exp(-abs(across) * (26.0 + mag * 40.0));
+                    c += starColor(hash(seed + 5.5)) * (body + head) * width * (0.20 + mag * 0.85);
+                }
+            }
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "nursery", "Star Nursery", ShaderFamily.STARS,
+        "A cloud lit from inside by the stars it just made.",
+        listOf(
+            param("scale", "Cloud scale", .8f, 5f, 2.2f),
+            param("glow", "Emission", .2f, 2.5f, 1.1f),
+            param("extinction", "Extinction", 0f, 2f, 1f),
+            param("drift", "Drift", 0f, 1.5f, .35f)
+        ),
+        listOf(HYDROGEN, MIDNIGHT, EMBER, TEAL, VIOLET, MONO),
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float3 c = uC0;
+
+            // Three young stars buried in the cloud do all the lighting.
+            float3 light = float3(0.0);
+            for (int i = 0; i < 3; i++){
+                float fi = float(i);
+                float2 at = float2(sin(fi * 2.1 + t * uP3 * 0.09) * 0.34,
+                                   cos(fi * 1.7 + t * uP3 * 0.07) * 0.26);
+                float dist = length(p - at);
+                float3 tint = starColor(0.75 + fi * 0.08);
+                // Inverse square, and the star itself on top of its own glow.
+                light += tint * (0.020 / (dist * dist + 0.004));
+                c += tint * psf(dist, 0.006) * 0.9;
+            }
+
+            // Walking a few steps into the cloud rather than sampling one slice: the nearer layers
+            // shadow the further ones, which is what gives it body instead of looking painted on.
+            float density = 0.0;
+            float3 emission = float3(0.0);
+            for (int s = 0; s < 12; s++){
+                float z = float(s) * 0.085;
+                float d = fbm(p * uP0 + float2(z * 1.9, -z * 1.3) + t * uP3 * 0.03);
+                d = pow(clamp(d - 0.28, 0.0, 1.0), 1.7);
+                // Light reaching this depth has already been absorbed by everything in front.
+                float reach = exp(-density * uP2 * 2.4);
+                emission += mix(uC1, uC2, d) * d * reach * 0.085;
+                density += d * 0.12;
+            }
+
+            c += emission * light * uP1;
+            c += mix(uC2, uC3, 0.5) * emission * 0.35;
+            // The cloud also blocks what is behind it, so the sky is darkest where it is thickest.
+            c *= 1.0 - clamp(density * uP2 * 0.30, 0.0, 0.75);
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "globular", "Globular Cluster", ShaderFamily.STARS,
+        "A million old stars falling around each other.",
+        listOf(
+            param("coreRadius", "Core radius", .06f, .5f, .17f),
+            param("richness", "Richness", .3f, 2.5f, 1.1f),
+            param("resolve", "Resolution", 6f, 26f, 15f),
+            param("turn", "Rotation", 0f, 1.5f, .25f)
+        ),
+        NIGHT,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float2 q = rot(p, t * uP3 * 0.04);
+            float radius = length(q);
+
+            // Density falls off from the centre on a King-like profile. The core is so crowded that
+            // its stars cannot be told apart, so it is drawn as glow; further out they separate.
+            float profile = 1.0 / pow(1.0 + (radius * radius) / (uP0 * uP0), 1.5);
+            float3 c = uC0 + mix(uC2, uC3, 0.65) * profile * uP1 * 0.42;
+
+            float2 g = q * uP2;
+            float2 cell = floor(g);
+            float2 f = fract(g) - 0.5;
+            for (int j = 0; j < 9; j++){
+                float fj = float(j);
+                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
+                float2 id = cell + o;
+                float2 jitter = hash2(id);
+                // A star exists here only as often as the profile says it should, so the swarm
+                // thins outward instead of ending at a hard edge.
+                float lives = step(1.0 - profile * uP1 * 1.15, hash(id + 1.3));
+                float mag = pow(hash(id + 4.7), 3.2) * lives;
+                if (mag > 0.006){
+                    float2 d = f - o + (jitter - 0.5) * 0.86;
+                    // Globulars are old: hot blue stars burned out long ago, so the population
+                    // sits toward the red end with only a few blue stragglers.
+                    float temp = hash(id + 7.9) * 0.55 + (hash(id + 2.2) > 0.94 ? 0.42 : 0.0);
+                    c += starColor(temp) * psf(length(d), 0.012 + mag * 0.018) * mag * 0.85;
                 }
             }
             return c;

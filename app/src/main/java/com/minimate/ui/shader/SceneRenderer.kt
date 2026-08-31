@@ -126,6 +126,26 @@ float3 aces(float3 x){
     return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
 
+/**
+ * Point spread function: a tight core inside a soft halo.
+ *
+ * A star drawn as a hard disc reads as a dot of paint. Real ones arrive through an aperture and
+ * land as a bright core with a wide faint skirt, and it is the skirt that makes a bright star feel
+ * bright rather than just large.
+ */
+float psf(float d, float core){
+    float k = max(core, 0.0002);
+    return exp(-d / k) + 0.16 / (1.0 + (d * d) / (k * k * 9.0));
+}
+
+/** Rough blackbody ramp: cool orange, through white, to hot blue. */
+float3 starColor(float temp){
+    temp = clamp(temp, 0.0, 1.0);
+    return temp < 0.5
+        ? mix(float3(1.00, 0.71, 0.46), float3(1.00, 0.97, 0.93), temp * 2.0)
+        : mix(float3(1.00, 0.97, 0.93), float3(0.70, 0.82, 1.00), (temp - 0.5) * 2.0);
+}
+
 /** Touch displacement, shared by every scene so interaction feels consistent across the set. */
 float2 touchWarp(float2 q){
     for(int i=0;i<8;i++){
