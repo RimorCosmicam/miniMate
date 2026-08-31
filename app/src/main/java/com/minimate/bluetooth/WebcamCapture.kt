@@ -16,6 +16,8 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Build
 import android.util.Range
+import android.os.PowerManager
+import android.util.Log
 import android.util.Size
 import androidx.core.content.ContextCompat
 import com.minimate.touchpad.model.WebcamResolution
@@ -28,6 +30,8 @@ import kotlin.math.abs
 data class WebcamCaptureState(
     val running: Boolean = false,
     val framesCaptured: Long = 0,
+    /** Set while the device is hot enough that capture has been reduced to shed load. */
+    val thermalThrottled: Boolean = false,
     val minimumZoom: Float = .5f,
     val maximumZoom: Float = 3f,
     val flashAvailable: Boolean = false,
@@ -60,6 +64,34 @@ class WebcamCapture(
     private var flashEnabled = false
     private var flashIntensity = .5f
     private var generation = 0
+    private var requestedFps = 30
+    @Volatile private var thermalScale = 1f
+    private val power = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+
+    /**
+     * Sheds capture load when the device reports thermal pressure.
+     *
+     * Sustained JPEG encode plus continuous Wi-Fi transmission is a real thermal load on its own,
+     * with no filtering involved, and left alone the platform's response is to throttle the whole
+     * SoC — which degrades everything else running. Dropping frame rate first is far cheaper than
+     * letting it get that far, and it is reversible the moment the device cools.
+     */
+    private val thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
+        val scale = when {
+            status >= PowerManager.THERMAL_STATUS_SEVERE -> .34f
+            status >= PowerManager.THERMAL_STATUS_MODERATE -> .5f
+            status >= PowerManager.THERMAL_STATUS_LIGHT -> .75f
+            else -> 1f
+        }
+        if (scale != thermalScale) {
+            thermalScale = scale
+            Log.i("MiniMateWebcam", "thermal status $status -> capture scale $scale")
+            _state.update { it.copy(thermalThrottled = scale < 1f) }
+            // Re-apply the frame rate on the live session rather than restarting the camera:
+            // tearing the session down and back up is itself expensive when already hot.
+            runCatching { applyFrameRate() }
+        }
+    }
 
     @SuppressLint("MissingPermission")
     fun start(
@@ -78,7 +110,8 @@ class WebcamCapture(
         }
         val characteristics = cameraManager.getCameraCharacteristics(cameraId)
         this.characteristics = characteristics
-        this.fps = fps
+        this.requestedFps = fps
+        this.fps = effectiveFps()
         val zoomRange = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             characteristics[CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE]
         } else null
@@ -172,6 +205,14 @@ class WebcamCapture(
         handler.post { applyRepeatingRequest() }
     }
 
+    /** Requested rate after any thermal reduction, never below a usable floor. */
+    private fun effectiveFps(): Int = (requestedFps * thermalScale).toInt().coerceAtLeast(10)
+
+    private fun applyFrameRate() {
+        fps = effectiveFps()
+        applyRepeatingRequest()
+    }
+
     private fun applyRepeatingRequest() {
         val device = camera ?: return
         val captureSession = session ?: return
@@ -198,10 +239,13 @@ class WebcamCapture(
 
                 set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
                 set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
-                set(CaptureRequest.JPEG_QUALITY, 91.toByte())
+                // 91 sat well past the point of visible return while costing encode time and
+                // sustained radio throughput, both of which end up as heat.
+                set(CaptureRequest.JPEG_QUALITY, 78.toByte())
                 set(CaptureRequest.JPEG_ORIENTATION, info[CameraCharacteristics.SENSOR_ORIENTATION] ?: 0)
             }.build()
             captureSession.setRepeatingRequest(request, null, handler)
+            runCatching { power.addThermalStatusListener(thermalListener) }
         }.onFailure { failure ->
             _state.update { it.copy(error = failure.message ?: "Unable to update camera controls") }
         }
@@ -237,6 +281,7 @@ class WebcamCapture(
 
     fun stop() {
         generation++
+        runCatching { power.removeThermalStatusListener(thermalListener) }
         runCatching { session?.stopRepeating() }
         session?.close(); session = null
         camera?.close(); camera = null

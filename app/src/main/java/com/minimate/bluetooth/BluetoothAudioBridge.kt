@@ -619,18 +619,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         }.onFailure { Log.w(TAG, "Unable to send webcam frame", it) }
     }
 
-    fun sendWebcamConfiguration(
-        enabled: Boolean,
-        mirror: Boolean,
-        intensity: Float,
-        filters: List<ThemeFilter>
-    ) {
+    fun sendWebcamConfiguration(enabled: Boolean, mirror: Boolean) {
         val link = activeLink ?: return
         val payload = JSONObject().apply {
             put("enabled", enabled)
             put("mirror", mirror)
-            put("intensity", intensity.coerceIn(0f, 1f).toDouble())
-            put("filters", JSONArray(filters.filter { it != ThemeFilter.NONE }.map { it.name }))
         }.toString().toByteArray(Charsets.UTF_8)
         runCatching {
             writeFrame(link.output, AudioBridgeProtocol.Frame(

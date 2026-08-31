@@ -158,16 +158,9 @@ fun TouchpadScreen(
     LaunchedEffect(
         settings.webcamEnabled,
         settings.webcamMirror,
-        settings.webcamFilterIntensity,
-        settings.webcamFilters,
         audioState.connected
     ) {
-        audioBridge.sendWebcamConfiguration(
-            settings.webcamEnabled,
-            settings.webcamMirror,
-            settings.webcamFilterIntensity,
-            settings.webcamFilters
-        )
+        audioBridge.sendWebcamConfiguration(settings.webcamEnabled, settings.webcamMirror)
     }
 
     val dimRatio by animateFloatAsState(
@@ -499,8 +492,6 @@ fun TouchpadScreen(
                 exposure = settings.webcamExposure,
                 flashEnabled = settings.webcamFlashEnabled,
                 flashIntensity = settings.webcamFlashIntensity,
-                intensity = settings.webcamFilterIntensity,
-                filters = settings.webcamFilters,
                 onEnabled = { touchpadEngine.updateSettings(settings.copy(webcamEnabled = it)) },
                 onResolution = { touchpadEngine.updateSettings(settings.copy(webcamResolution = it)) },
                 onFps = { touchpadEngine.updateSettings(settings.copy(webcamFps = it)) },
@@ -509,11 +500,6 @@ fun TouchpadScreen(
                 onExposure = { touchpadEngine.updateSettings(settings.copy(webcamExposure = it)) },
                 onFlashEnabled = { touchpadEngine.updateSettings(settings.copy(webcamFlashEnabled = it)) },
                 onFlashIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFlashIntensity = it)) },
-                onIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFilterIntensity = it)) },
-                onToggleFilter = { filter ->
-                    val next = if (filter in settings.webcamFilters) settings.webcamFilters - filter else settings.webcamFilters + filter
-                    touchpadEngine.updateSettings(settings.copy(webcamFilters = next))
-                }
             )
         }
 

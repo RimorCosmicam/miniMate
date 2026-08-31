@@ -102,8 +102,6 @@ class TouchpadPreferences(context: Context) {
                 put("webcamExposure", settings.webcamExposure.toDouble())
                 put("webcamFlashEnabled", settings.webcamFlashEnabled)
                 put("webcamFlashIntensity", settings.webcamFlashIntensity.toDouble())
-                put("webcamFilterIntensity", settings.webcamFilterIntensity.toDouble())
-                put("webcamFilters", JSONArray(settings.webcamFilters.map { it.name }))
 
                 // Screen Editor layout
                 put("clockPositionX", settings.clockPositionX.toDouble())
@@ -265,8 +263,6 @@ class TouchpadPreferences(context: Context) {
                 webcamExposure = json.optDouble("webcamExposure", 0.0).toFloat().coerceIn(-1f, 1f),
                 webcamFlashEnabled = json.optBoolean("webcamFlashEnabled", false),
                 webcamFlashIntensity = json.optDouble("webcamFlashIntensity", .5).toFloat().coerceIn(0f, 1f),
-                webcamFilterIntensity = json.optDouble("webcamFilterIntensity", 1.0).toFloat().coerceIn(0f, 1f),
-                webcamFilters = json.optJSONArray("webcamFilters")?.let { values ->
                     buildList {
                         for (index in 0 until values.length()) {
                             runCatching { ThemeFilter.valueOf(values.getString(index)) }.getOrNull()

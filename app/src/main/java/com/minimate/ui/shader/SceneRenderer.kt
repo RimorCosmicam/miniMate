@@ -29,6 +29,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import com.minimate.touchpad.model.ShaderScene
 import com.minimate.touchpad.engine.TouchPoint
 import kotlinx.coroutines.delay

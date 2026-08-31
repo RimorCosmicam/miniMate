@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.WebcamCaptureState
-import com.minimate.touchpad.model.ThemeFilter
 import com.minimate.touchpad.model.WebcamResolution
 import kotlin.math.min
 
@@ -49,8 +48,6 @@ fun WebcamModeOverlay(
     exposure: Float,
     flashEnabled: Boolean,
     flashIntensity: Float,
-    intensity: Float,
-    filters: List<ThemeFilter>,
     onEnabled: (Boolean) -> Unit,
     onResolution: (WebcamResolution) -> Unit,
     onFps: (Int) -> Unit,
@@ -59,8 +56,6 @@ fun WebcamModeOverlay(
     onExposure: (Float) -> Unit,
     onFlashEnabled: (Boolean) -> Unit,
     onFlashIntensity: (Float) -> Unit,
-    onIntensity: (Float) -> Unit,
-    onToggleFilter: (ThemeFilter) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier.fillMaxSize()) {
@@ -87,7 +82,7 @@ fun WebcamModeOverlay(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("MiniMate Camera", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text("No phone preview · filters render on Mac", color = Color.White.copy(.47f), fontSize = 8.5.sp)
+                    Text("No phone preview · sent straight to the Mac", color = Color.White.copy(.47f), fontSize = 8.5.sp)
                 }
                 Switch(
                     checked = enabled,
@@ -101,26 +96,30 @@ fun WebcamModeOverlay(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Choice(resolution.label, resolution == WebcamResolution.FULL_HD, Modifier.weight(1f)) {
-                    onResolution(if (resolution == WebcamResolution.FULL_HD) WebcamResolution.HD else WebcamResolution.FULL_HD)
+            // Every size is selectable rather than toggling between the two heaviest. Capture
+            // cost roughly doubles per step, and that cost lands on the thermal budget.
+            Text("SIZE", color = Color.White.copy(.42f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                WebcamResolution.values().forEach { option ->
+                    Choice(option.label, option == resolution, Modifier.weight(1f)) { onResolution(option) }
                 }
-                Choice("$fps fps", fps == 30, Modifier.weight(1f)) {
-                    onFps(when (fps) { 15 -> 24; 24 -> 30; else -> 15 })
+            }
+            Text("FRAME RATE", color = Color.White.copy(.42f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf(15, 20, 24, 30).forEach { option ->
+                    Choice("$option", option == fps, Modifier.weight(1f)) { onFps(option) }
                 }
+            }
+            if (captureState.thermalThrottled) {
+                Text(
+                    "Device is warm — frame rate reduced automatically.",
+                    color = Color(0xFFFFD08A), fontSize = 8.sp
+                )
             }
 
             LabeledSlider("ZOOM", "%.1f×".format(zoom), zoom, .5f..min(captureState.maximumZoom, 3f).coerceAtLeast(1f), onZoom)
             LabeledSlider("EXPOSURE", "%+.1f".format(exposure), exposure, -1f..1f, onExposure)
             Choice(if (mirror) "Mirrored" else "Natural", mirror, Modifier.width(82.dp)) { onMirror(!mirror) }
-            LabeledSlider("FILTER MIX", "${(intensity * 100).toInt()}%", intensity, 0f..1f, onIntensity)
-
-            Text("STACKED FILTERS", color = Color.White.copy(.42f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                ThemeFilter.values().filter { it != ThemeFilter.NONE }.forEach { filter ->
-                    Choice(filter.label, filter in filters) { onToggleFilter(filter) }
-                }
-            }
             captureState.error?.let { Text(it, color = Color(0xFFFFB4AB), fontSize = 8.5.sp) }
         }
     }

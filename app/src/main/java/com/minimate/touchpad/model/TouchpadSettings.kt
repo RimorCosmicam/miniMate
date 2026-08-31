@@ -252,7 +252,14 @@ enum class ThemeFilter(val label: String, val description: String) {
     NIGHT_VISION("Night Vision", "Green phosphor response, bloom, noise, and edge falloff")
 }
 
+/**
+ * Capture sizes, lowest first. Each step up roughly doubles the JPEG encode cost and the
+ * sustained Wi-Fi throughput, and both land on the same thermal budget — 1080p30 was enough to
+ * heat the phone with no filters running at all.
+ */
 enum class WebcamResolution(val label: String, val width: Int, val height: Int) {
+    VGA("480p", 640, 480),
+    QHD("540p", 960, 540),
     HD("720p", 1280, 720),
     FULL_HD("1080p", 1920, 1080)
 }
@@ -453,15 +460,13 @@ data class TouchpadSettings(
     // MiniMate Camera. Frames use the companion's active Wi-Fi link; the Mac
     // applies this same stack of scene filters before publishing the camera.
     val webcamEnabled: Boolean = false,
-    val webcamResolution: WebcamResolution = WebcamResolution.FULL_HD,
-    val webcamFps: Int = 30,
+    val webcamResolution: WebcamResolution = WebcamResolution.HD,
+    val webcamFps: Int = 20,
     val webcamMirror: Boolean = false,
     val webcamZoom: Float = 1f,
     val webcamExposure: Float = 0f,
     val webcamFlashEnabled: Boolean = false,
     val webcamFlashIntensity: Float = .5f,
-    val webcamFilterIntensity: Float = 1f,
-    val webcamFilters: List<ThemeFilter> = emptyList(),
     
     // Screen Editor: Freeform Positions & Sizes
     
