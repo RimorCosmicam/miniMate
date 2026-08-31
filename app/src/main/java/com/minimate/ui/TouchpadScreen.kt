@@ -61,7 +61,9 @@ import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.SettingsSheet
 import com.minimate.ui.components.ThemeTesterOverlay
 import com.minimate.ui.components.WebcamModeOverlay
-import com.minimate.ui.shader.BackgroundShaderCanvas
+import com.minimate.touchpad.model.sceneById
+import com.minimate.ui.shader.SceneShaderCanvas
+import com.minimate.ui.shader.ThemeFilterStack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -278,20 +280,29 @@ fun TouchpadScreen(
             cornerMaterial = settings.edgeCornerMaterial,
             modifier = Modifier.fillMaxSize()
         ) {
-            BackgroundShaderCanvas(
-                theme = settings.backgroundTheme,
-                variantIndex = settings.themeVariantIndex,
-                touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
-                customImageUri = settings.customImageUri,
-                dimRatio = dimRatio,
-                animationSpeed = settings.backgroundAnimation.speed,
-                themeFilters = settings.themeFilters,
-                shaderTheme = settings.abstractShaderTheme,
-                shaderSubthemeIndex = settings.abstractSubthemeIndex,
-                shaderRecolor = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor),
-                customShaderColors = settings.customShaderColors,
+            val activeScene = sceneById(settings.shaderSceneId)
+            val activePalette = activeScene.palettes
+                .getOrElse(settings.shaderPaletteIndex) { activeScene.palettes.first() }
+            ThemeFilterStack(
+                filters = settings.themeFilters,
                 modifier = Modifier.fillMaxSize()
-            )
+            ) {
+                SceneShaderCanvas(
+                    scene = activeScene,
+                    params = settings.shaderParams.takeIf { it.size == activeScene.params.size }
+                        ?: activeScene.defaults,
+                    palette = activePalette.stops,
+                    touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
+                    animationSpeed = settings.backgroundAnimation.speed,
+                    touchStrength = settings.shaderTouchStrength,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            // AMOLED dim rides above the scene so it darkens the filtered result rather than
+            // being amplified by whatever filter stack is active.
+            if (dimRatio > 0f) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dimRatio)))
+            }
         }
 
         // Layer 2: Fullscreen Trackpad Touch Surface

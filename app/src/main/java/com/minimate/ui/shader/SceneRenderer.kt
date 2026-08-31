@@ -1,0 +1,279 @@
+package com.minimate.ui.shader
+
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Paint
+import android.graphics.RuntimeShader
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.os.Build
+import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.minimate.touchpad.model.ShaderScene
+import com.minimate.touchpad.engine.TouchPoint
+import kotlinx.coroutines.delay
+
+/**
+ * Shared prelude for every scene.
+ *
+ * Scenes only declare a scene() body; everything reusable lives here so each one stays readable.
+ * Parameters arrive as uP0..uP3 in the order the scene declared them, so a scene's controls and
+ * its uniforms cannot drift apart.
+ */
+private const val HEADER = """
+uniform float2 uResolution;
+uniform float uTime;
+uniform float uNow;
+uniform float uP0;
+uniform float uP1;
+uniform float uP2;
+uniform float uP3;
+uniform float3 uC0;
+uniform float3 uC1;
+uniform float3 uC2;
+uniform float3 uC3;
+uniform float2 uTouches[8];
+uniform float uTouchStarts[8];
+uniform float uTouchActive[8];
+uniform float uTouchCount;
+uniform float uTouchStrength;
+uniform shader glyphAtlas;
+
+float hash(float2 p){return fract(sin(dot(p,float2(127.1,311.7)))*43758.5453123);}
+float2 hash2(float2 p){return fract(sin(float2(dot(p,float2(127.1,311.7)),dot(p,float2(269.5,183.3))))*43758.5453);}
+float noise(float2 p){float2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+float2(1,0)),f.x),mix(hash(i+float2(0,1)),hash(i+1.0),f.x),f.y);}
+float fbm(float2 p){float v=0.0;v+=noise(p)*.5;p=p*2.03+17.1;v+=noise(p)*.25;p=p*2.01+9.7;v+=noise(p)*.125;p=p*2.04+5.3;return v+noise(p)*.0625;}
+float2 rot(float2 p,float a){float c=cos(a),s=sin(a);return float2(c*p.x-s*p.y,s*p.x+c*p.y);}
+
+/** Four-stop ramp through the scene palette. */
+float3 pal(float v){
+    v=clamp(v,0.0,1.0);
+    if(v<.3333) return mix(uC0,uC1,v*3.0);
+    if(v<.6666) return mix(uC1,uC2,(v-.3333)*3.0);
+    return mix(uC2,uC3,(v-.6666)*3.0);
+}
+
+/**
+ * One glyph from the atlas. The atlas is 16 columns by 4 rows of 32 px cells: katakana first,
+ * then binary, hexadecimal and a row of words. Ids wrap, so any id is valid.
+ */
+float glyph(float id, float2 g){
+    float col = mod(id, 16.0);
+    float row = mod(floor(id / 16.0), 4.0);
+    float2 c = float2(col * 32.0 + clamp(g.x, 0.0, 1.0) * 32.0,
+                      row * 32.0 + clamp(g.y, 0.0, 1.0) * 32.0);
+    return glyphAtlas.eval(c).r;
+}
+
+/** Touch displacement, shared by every scene so interaction feels consistent across the set. */
+float2 touchWarp(float2 q){
+    for(int i=0;i<8;i++){
+        if(float(i) < uTouchCount){
+            float age = max(0.0, uNow - uTouchStarts[i]);
+            float2 d = q - uTouches[i];
+            float l = max(length(d), 0.008);
+            float life = max(uTouchActive[i], exp(-age * 1.5));
+            float wave = sin(l * 42.0 - age * 7.0) * exp(-l * 7.0) * life;
+            q += d / l * wave * 0.012 * uTouchStrength;
+        }
+    }
+    return q;
+}
+
+float touchGlow(float2 q){
+    float m = 0.0;
+    for(int i=0;i<8;i++){
+        if(float(i) < uTouchCount){
+            float age = max(0.0, uNow - uTouchStarts[i]);
+            float life = max(uTouchActive[i], exp(-age * 1.2));
+            m += exp(-distance(q, uTouches[i]) * 9.0) * life;
+        }
+    }
+    return clamp(m, 0.0, 1.5) * uTouchStrength;
+}
+"""
+
+private const val FOOTER = """
+half4 main(float2 fragCoord){
+    float2 res = uResolution;
+    float2 uv = fragCoord / res;
+    float2 p = (fragCoord - 0.5 * res) / min(res.x, res.y);
+    float2 wp = touchWarp(p);
+    float2 wuv = uv + (wp - p);
+    float3 c = scene(wp, wuv, uTime);
+    c += uC3 * touchGlow(p) * 0.30;
+    // Gentle corner falloff. Keeps the cover display's rounded corners from looking cropped.
+    float r = length(p);
+    c *= 1.0 - 0.22 * r * r;
+    return half4(clamp(c, 0.0, 1.0), 1.0);
+}
+"""
+
+internal fun sceneShaderSource(scene: ShaderScene): String = HEADER + scene.body + FOOTER
+
+/**
+ * The atlas the Matrix scenes read from. Katakana leads because that is what makes the rain read
+ * as itself rather than as generic falling characters; the remaining rows give the other scenes
+ * something less literal to work with.
+ */
+private fun createGlyphAtlas(): Bitmap {
+    val cell = 32
+    val rows = listOf(
+        "アイウエオカキクケコサシスセソン",
+        "ヤユヨラリルレロワヲタチツテトナ",
+        "0123456789ABCDEF",
+        "0101101001011010"
+    )
+    return Bitmap.createBitmap(cell * 16, cell * rows.size, Bitmap.Config.ARGB_8888).also { bitmap ->
+        val canvas = AndroidCanvas(bitmap)
+        canvas.drawColor(AndroidColor.BLACK)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            textSize = 24f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }
+        rows.forEachIndexed { r, chars ->
+            chars.take(16).forEachIndexed { c, ch ->
+                canvas.drawText(ch.toString(), c * cell + cell * .5f, r * cell + cell * .76f, paint)
+            }
+        }
+    }
+}
+
+private fun rgb(color: Long) = floatArrayOf(
+    ((color shr 16) and 255).toFloat() / 255f,
+    ((color shr 8) and 255).toFloat() / 255f,
+    (color and 255).toFloat() / 255f
+)
+
+@Composable
+fun SceneShaderCanvas(
+    scene: ShaderScene,
+    params: List<Float>,
+    palette: List<Long>,
+    touchPoints: List<TouchPoint>,
+    animationSpeed: Float,
+    touchStrength: Float,
+    modifier: Modifier = Modifier
+) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        SceneFallback(palette, modifier)
+        return
+    }
+    SceneAgsl(scene, params, palette, touchPoints, animationSpeed, touchStrength, modifier)
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun SceneAgsl(
+    scene: ShaderScene,
+    params: List<Float>,
+    palette: List<Long>,
+    touchPoints: List<TouchPoint>,
+    animationSpeed: Float,
+    touchStrength: Float,
+    modifier: Modifier
+) {
+    // Building and linking the GPU program blocks the render thread on a cold shader cache, long
+    // enough on a fresh install to trip the ANR watchdog. Present the cheap fallback for the
+    // first frames so the window is up and dispatching input before that work begins.
+    var ready by remember(scene.id) { mutableStateOf(false) }
+    LaunchedEffect(scene.id) {
+        withFrameNanos { }
+        withFrameNanos { }
+        delay(90)
+        ready = true
+    }
+
+    val runtime = remember(scene.id, ready) {
+        if (!ready) null else runCatching {
+            RuntimeShader(sceneShaderSource(scene)).apply {
+                setInputShader(
+                    "glyphAtlas",
+                    BitmapShader(createGlyphAtlas(), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+                )
+            }
+        }.onFailure {
+            Log.e("MiniMateShader", "scene ${scene.id} failed to compile", it)
+        }.getOrNull()
+    }
+
+    if (runtime == null) {
+        SceneFallback(palette, modifier)
+        return
+    }
+
+    val transition = rememberInfiniteTransition(label = "sceneTime")
+    val time by transition.animateFloat(
+        0f, 1000f, infiniteRepeatable(tween(1_000_000, easing = LinearEasing)), label = "t"
+    )
+
+    Canvas(modifier.fillMaxSize()) {
+        val stops = if (palette.size >= 4) palette else listOf(0xFF000000L, 0xFF202020L, 0xFF808080L, 0xFFFFFFFFL)
+        runtime.setFloatUniform("uResolution", size.width, size.height)
+        runtime.setFloatUniform("uTime", time * animationSpeed)
+        runtime.setFloatUniform("uNow", time)
+        runtime.setFloatUniform("uTouchStrength", touchStrength)
+        // Uniform slots follow the scene's declared order, and unused slots are held at their
+        // defaults rather than left undefined.
+        for (i in 0 until 4) {
+            val value = params.getOrNull(i) ?: scene.params.getOrNull(i)?.default ?: 0f
+            runtime.setFloatUniform("uP$i", value)
+        }
+        for (i in 0 until 4) {
+            val c = rgb(stops[i])
+            runtime.setFloatUniform("uC$i", c[0], c[1], c[2])
+        }
+
+        val points = touchPoints.takeLast(8)
+        val positions = FloatArray(16) { -10f }
+        val starts = FloatArray(8)
+        val active = FloatArray(8)
+        points.forEachIndexed { index, point ->
+            positions[index * 2] = (point.x / size.width - 0.5f) * (size.width / minOf(size.width, size.height))
+            positions[index * 2 + 1] = (point.y / size.height - 0.5f) * (size.height / minOf(size.width, size.height))
+            starts[index] = point.startedAtSeconds
+            active[index] = if (point.active) 1f else 0f
+        }
+        runtime.setFloatUniform("uTouches", positions)
+        runtime.setFloatUniform("uTouchStarts", starts)
+        runtime.setFloatUniform("uTouchActive", active)
+        runtime.setFloatUniform("uTouchCount", points.size.toFloat())
+
+        drawContext.canvas.nativeCanvas.drawPaint(
+            Paint().apply { shader = runtime }
+        )
+    }
+}
+
+/** Static gradient for pre-Tiramisu devices and for the frames before a scene is compiled. */
+@Composable
+private fun SceneFallback(palette: List<Long>, modifier: Modifier) {
+    val stops = if (palette.size >= 4) palette else listOf(0xFF000000L, 0xFF202020L, 0xFF808080L, 0xFFFFFFFFL)
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(stops.map { Color(it) }))
+    )
+}

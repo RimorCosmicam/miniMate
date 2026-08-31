@@ -408,6 +408,11 @@ data class TouchpadSettings(
     val backgroundAnimation: BackgroundAnimation = BackgroundAnimation.FLOW,
     val themeFilters: List<ThemeFilter> = emptyList(),
     val abstractShaderTheme: AbstractShaderTheme = AbstractShaderTheme.OCEANIC,
+    /** Selected scene from the shader catalog, its per-scene control values, and its palette. */
+    val shaderSceneId: String = "paradise",
+    val shaderParams: List<Float> = emptyList(),
+    val shaderPaletteIndex: Int = 0,
+    val shaderTouchStrength: Float = 1f,
     val abstractSubthemeIndex: Int = 0,
     val shaderRecolor: ShaderRecolor = ShaderRecolor.AUTHORED,
     val customShaderColors: List<Long> = DEFAULT_CUSTOM_SHADER_COLORS,

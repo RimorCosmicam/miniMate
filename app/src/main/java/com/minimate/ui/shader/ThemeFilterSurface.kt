@@ -181,7 +181,7 @@ internal fun ThemeFilterSurface(
 
 /** Applies each selected filter as a real render pass, preserving the user's stack order. */
 @Composable
-internal fun ThemeFilterStack(
+fun ThemeFilterStack(
     filters: List<ThemeFilter>,
     modifier: Modifier,
     content: @Composable () -> Unit
