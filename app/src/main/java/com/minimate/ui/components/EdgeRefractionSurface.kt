@@ -4,6 +4,7 @@ import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -106,6 +107,41 @@ private const val EDGE_REFRACTION_SHADER = """
     }
 """
 
+/** Building the effect needs API 33, which is also the only place the shader itself exists. */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private fun edgeEffect(
+    shader: RuntimeShader,
+    width: Float,
+    height: Float,
+    railSide: EdgeControlSide,
+    railWidth: Float,
+    cornerRadius: Float,
+    railEnabled: Boolean,
+    cornerEnabled: Boolean,
+    railMaterial: EdgeControlMaterial,
+    cornerMaterial: EdgeControlMaterial
+): androidx.compose.ui.graphics.RenderEffect {
+    shader.setFloatUniform("uResolution", width.coerceAtLeast(1f), height.coerceAtLeast(1f))
+    shader.setFloatUniform("uRailSide", if (railSide == EdgeControlSide.LEFT) 0f else 1f)
+    shader.setFloatUniform("uRailWidth", railWidth)
+    shader.setFloatUniform("uCornerRadius", cornerRadius)
+    shader.setFloatUniform("uRailEnabled", if (railEnabled) 1f else 0f)
+    shader.setFloatUniform("uCornerEnabled", if (cornerEnabled) 1f else 0f)
+    shader.setFloatUniform("uRailStyle", railMaterial.ordinal.toFloat())
+    shader.setFloatUniform("uCornerStyle", cornerMaterial.ordinal.toFloat())
+    return RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
+}
+
+/**
+ * Wraps the screen in the edge glass.
+ *
+ * [content] is emitted from exactly one place, whatever the rail and corner are doing. It used to
+ * be emitted from one of three, and the rail is switched off whenever a page opens over the
+ * trackpad, so opening or leaving a page moved the whole background to a different position in the
+ * composition. Compose disposes a subtree that moves, so the scene shader was torn down and
+ * rebuilt on every transition — and while it rebuilt, the palette gradient fallback showed. That
+ * was the flash. Only the modifier varies now, so the scene is composed once and stays.
+ */
 @Composable
 fun EdgeRefractionSurface(
     railEnabled: Boolean,
@@ -118,36 +154,30 @@ fun EdgeRefractionSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || (!railEnabled && !cornerEnabled)) {
-        Box(modifier) { content() }
-        return
-    }
     val shader = remember {
-        runCatching { RuntimeShader(EDGE_REFRACTION_SHADER) }
-            .onFailure { Log.e("MiniMateGlass", "Liquid Glass shader compilation failed", it) }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) null
+        else runCatching { RuntimeShader(EDGE_REFRACTION_SHADER) }
+            .onFailure { Log.e("MiniMateGlass", "Edge glass shader compilation failed", it) }
             .getOrNull()
-    }
-    if (shader == null) {
-        Box(modifier) { content() }
-        return
     }
     val density = LocalDensity.current
     val railWidth = with(density) { (28.dp * railScale.coerceIn(.65f, 1.8f)).toPx() }
     val cornerRadius = with(density) { (94.dp * cornerScale.coerceIn(.65f, 1.8f)).toPx() }
+    val glass = if (railEnabled || cornerEnabled) shader else null
+
     Box(
-        modifier.graphicsLayer {
-            compositingStrategy = CompositingStrategy.Offscreen
-            renderEffect = runCatching {
-                shader.setFloatUniform("uResolution", size.width.coerceAtLeast(1f), size.height.coerceAtLeast(1f))
-                shader.setFloatUniform("uRailSide", if (railSide == EdgeControlSide.LEFT) 0f else 1f)
-                shader.setFloatUniform("uRailWidth", railWidth)
-                shader.setFloatUniform("uCornerRadius", cornerRadius)
-                shader.setFloatUniform("uRailEnabled", if (railEnabled) 1f else 0f)
-                shader.setFloatUniform("uCornerEnabled", if (cornerEnabled) 1f else 0f)
-                shader.setFloatUniform("uRailStyle", railMaterial.ordinal.toFloat())
-                shader.setFloatUniform("uCornerStyle", cornerMaterial.ordinal.toFloat())
-                RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
-            }.getOrNull()
-        }
+        modifier.then(
+            if (glass == null) Modifier else Modifier.graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                renderEffect = runCatching {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        edgeEffect(
+                            glass, size.width, size.height, railSide, railWidth, cornerRadius,
+                            railEnabled, cornerEnabled, railMaterial, cornerMaterial
+                        )
+                    } else null
+                }.getOrNull()
+            }
+        )
     ) { content() }
 }

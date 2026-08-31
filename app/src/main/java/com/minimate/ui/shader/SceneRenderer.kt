@@ -28,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -362,10 +361,9 @@ private fun SceneAgsl(
 /** Static gradient for pre-Tiramisu devices and for the frames before a scene is compiled. */
 @Composable
 private fun SceneFallback(palette: List<Long>, modifier: Modifier) {
-    val stops = if (palette.size >= 4) palette else listOf(0xFF000000L, 0xFF202020L, 0xFF808080L, 0xFFFFFFFFL)
-    androidx.compose.foundation.layout.Box(
-        modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(stops.map { Color(it) }))
-    )
+    // The scene's own ground colour, flat. This stands in for perhaps a hundred milliseconds while
+    // the GPU program links, so it needs to be the least noticeable thing possible — a gradient
+    // across the whole palette was a bright flash of colour announcing that a shader was loading.
+    val ground = palette.firstOrNull()?.let { Color(it) } ?: Color.Black
+    androidx.compose.foundation.layout.Box(modifier.fillMaxSize().background(ground))
 }
