@@ -420,6 +420,13 @@ data class TouchpadSettings(
     val shaderParams: List<Float> = emptyList(),
     val shaderPaletteIndex: Int = 0,
     val shaderTouchStrength: Float = 1f,
+    /**
+     * Lens and film character, applied to every scene after tone mapping. Aberration is on by
+     * default because the chromatic split is most of what made the original Paradise Matrix read
+     * as photographed rather than drawn.
+     */
+    val shaderAberration: Float = .6f,
+    val shaderGrain: Float = .3f,
     /** Shared look for the floating panels, plus per-panel placement. */
     val panelThemeIndex: Int = 0,
     val audioPanelX: Float = .5f,

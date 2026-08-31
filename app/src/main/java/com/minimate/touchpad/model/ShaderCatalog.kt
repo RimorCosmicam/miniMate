@@ -32,7 +32,8 @@ enum class ShaderFamily(val label: String) {
     GEOMETRY("Geometry"),
     FRACTAL("Fractals"),
     MOTION("Motion"),
-    CIRCUIT("Circuits")
+    CIRCUIT("Circuits"),
+    DEPTH("Depth")
 }
 
 data class ShaderScene(
@@ -42,7 +43,15 @@ data class ShaderScene(
     val blurb: String,
     val params: List<ShaderParam>,
     val palettes: List<SceneColorway>,
-    val body: String
+    val body: String,
+    /**
+     * True when the scene splits wavelengths itself — refracting per channel, or Doppler-shifting
+     * emission — rather than being sampled three times through the shared lens. Raymarched scenes
+     * set this: three full marches per pixel is a cost the cover display cannot pay, and a prism
+     * that disperses at the surface it refracts through looks right in a way a screen-space
+     * channel offset never does.
+     */
+    val dispersive: Boolean = false
 ) {
     val defaults: List<Float> get() = params.map { it.default }
 }
@@ -816,6 +825,545 @@ val shaderScenes: List<ShaderScene> = listOf(
                 float d = abs(p.y - y);
                 float trace = smoothstep(uP2, 0.0, d);
                 c += mix(uC2, uC3, fi / 2.0) * trace * 0.8;
+            }
+            return c;
+        }
+        """
+    ),
+
+    // ---------------------------------------------------------------- Depth
+    //
+    // These raymarch a lit surface rather than tint a pattern: distance fields, surface normals,
+    // reflection and refraction, volumetric accumulation. They cost more per pixel than the flat
+    // scenes, so each keeps its step count tight and handles its own dispersion.
+
+    ShaderScene(
+        "liquid_metal", "Liquid Metal", ShaderFamily.DEPTH,
+        "Molten blobs merging under a polished skin.",
+        listOf(
+            param("size", "Mass", .18f, .42f, .30f),
+            param("melt", "Melt", .05f, .55f, .28f),
+            param("split", "Dispersion", 0f, 2f, 1f),
+            param("tint", "Tint", 0f, 1f, .45f)
+        ),
+        COOL,
+        """
+        float mapBody(float3 q, float t){
+            float d = 100000.0;
+            for (int i = 0; i < 5; i++){
+                float fi = float(i);
+                float3 c = float3(
+                    sin(t * (0.60 + fi * 0.17) + fi * 2.1) * 0.60,
+                    cos(t * (0.51 + fi * 0.21) + fi * 1.3) * 0.44,
+                    sin(t * (0.43 + fi * 0.13) + fi * 3.7) * 0.46);
+                d = smin(d, sdSphere(q - c, uP0 * (0.8 + 0.25 * sin(t * 0.7 + fi))), uP1);
+            }
+            // A slow central mass, so the blobs read as one body pulling itself apart and back
+            // together rather than as five spheres that happen to overlap.
+            return smin(d, sdSphere(q, uP0 * 1.25), uP1 * 1.5);
+        }
+
+        float3 normBody(float3 q, float t){
+            float2 e = float2(0.0018, 0.0);
+            return normalize(float3(
+                mapBody(q + e.xyy, t) - mapBody(q - e.xyy, t),
+                mapBody(q + e.yxy, t) - mapBody(q - e.yxy, t),
+                mapBody(q + e.yyx, t) - mapBody(q - e.yyx, t)));
+        }
+
+        /**
+         * What the metal has to reflect. A polished surface with nothing around it reads as flat
+         * paint, so the environment carries a key light, a horizon and banding for highlights to
+         * slide across as the body turns.
+         */
+        float3 env(float3 rd){
+            float h = rd.y * 0.5 + 0.5;
+            float3 sky = mix(uC0, uC1, h);
+            sky = mix(sky, uC2, pow(h, 4.0) * 0.75);
+            float band = smoothstep(0.55, 1.0, sin(rd.y * 9.0 + rd.x * 2.2) * 0.5 + 0.5);
+            sky += uC3 * band * 0.10;
+            sky += uC3 * pow(max(dot(rd, normalize(float3(0.40, 0.78, -0.48))), 0.0), 30.0) * 1.5;
+            return sky;
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            float spin = t * 0.20;
+            float3 ro = rotY(float3(0.0, 0.10, 2.35), spin);
+            float3 rd = rotY(normalize(float3(p, -1.45)), spin);
+
+            float travelled = 0.0;
+            float hit = 0.0;
+            for (int i = 0; i < 56; i++){
+                float d = mapBody(ro + rd * travelled, t);
+                if (d < 0.0016) { hit = 1.0; break; }
+                // Understepping keeps the smooth-minimum surface from being overshot where two
+                // blobs are blending and the field is no longer a true distance.
+                travelled += d * 0.82;
+                if (travelled > 5.0) break;
+            }
+
+            float3 c;
+            if (hit < 0.5) {
+                c = env(rd) * 0.42;
+            } else {
+                float3 q = ro + rd * travelled;
+                float3 n = normBody(q, t);
+                float f = fresnel(n, rd, 3.0);
+
+                // Each channel leaves along a slightly different normal, so the rim of the body
+                // splits into colour exactly where a real polished surface separates wavelengths.
+                float spread = uAberration * uP2 * 0.05;
+                c.r = env(reflect(rd, normalize(n + spread))).r;
+                c.g = env(reflect(rd, n)).g;
+                c.b = env(reflect(rd, normalize(n - spread))).b;
+
+                c *= mix(uC1, uC3, uP3) * 1.25;
+                c += uC3 * pow(max(dot(reflect(rd, n), normalize(float3(0.40, 0.78, -0.48))), 0.0), 56.0) * 1.7;
+                c *= 0.30 + 0.90 * f + 0.45 * max(dot(n, normalize(float3(0.3, 0.85, 0.4))), 0.0);
+            }
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "event_horizon", "Event Horizon", ShaderFamily.DEPTH,
+        "Light bent around a black hole, disk and all.",
+        listOf(
+            param("mass", "Mass", .35f, .85f, .55f),
+            param("reach", "Disk reach", 2f, 6f, 3.6f),
+            param("swirl", "Swirl", 0f, 3f, 1.2f),
+            param("tilt", "Tilt", 0f, 1f, .42f)
+        ),
+        VIOLETS,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float spin = t * 0.06;
+            float3 pos = rotY(float3(0.0, 0.35 + uP3 * 0.85, -4.3), spin);
+            float3 vel = rotY(normalize(float3(p * 1.2, 1.0)), spin);
+
+            // Conserved angular momentum of the photon. The deflection term below is the standard
+            // null-geodesic approximation, which is what actually bends the disk up over the top
+            // of the hole — a radial pull alone only smears the image inward.
+            float3 h = cross(pos, vel);
+            float h2 = dot(h, h);
+            float rs = uP0;
+
+            float3 c = float3(0.0);
+            float escaped = 1.0;
+
+            for (int i = 0; i < 96; i++){
+                float3 prev = pos;
+                pos += vel * 0.062;
+                float rr2 = max(dot(pos, pos), 0.04);
+                vel += -1.5 * h2 * pos / (rr2 * rr2 * sqrt(rr2)) * 0.062;
+
+                float r = length(pos);
+                if (r < rs) { escaped = 0.0; break; }
+                if (r > 16.0) break;
+
+                // Emission is gathered where the ray crosses the equatorial plane, interpolated to
+                // the exact crossing so the disk stays a thin sheet instead of a fuzzy slab.
+                if (prev.y * pos.y < 0.0){
+                    float3 x = mix(prev, pos, prev.y / (prev.y - pos.y));
+                    float rad = length(x.xz);
+                    float band = smoothstep(rs * 1.9, rs * 2.5, rad) * smoothstep(uP1, uP1 * 0.68, rad);
+                    if (band > 0.001){
+                        float a = atan(x.z, x.x);
+                        // Inner material orbits faster, which shears the cloud into spiral arms.
+                        float swirl = a + t * uP2 * 1.6 / max(rad, 0.35);
+                        float dens = pow(clamp(fbm(float2(swirl * 1.7, rad * 2.6 - t * 0.35)), 0.0, 1.0), 1.7);
+                        float heat = smoothstep(uP1, rs * 2.0, rad);
+                        // The side of the disk rotating toward us is beamed and blue-shifted; the
+                        // receding side is dimmed. This asymmetry is the whole look.
+                        float doppler = 1.0 + 1.15 * sin(swirl);
+                        c += pal(0.20 + heat * 0.78) * (0.45 + heat * 2.4) * band * dens * max(doppler, 0.05) * 0.15;
+                    }
+                }
+            }
+
+            if (escaped > 0.5){
+                float3 d = normalize(vel);
+                float2 sp = float2(atan(d.z, d.x) * 0.55, d.y * 1.7);
+                c += uC3 * pow(hash(floor(sp * 110.0)), 44.0) * 2.2;
+                c += mix(uC0, uC1, d.y * 0.5 + 0.5) * 0.30;
+            }
+
+            // The photon ring: orbits that graze the hole pile light into a thin bright circle
+            // just outside the shadow.
+            float ring = length(p) / max(rs * 0.62, 0.05);
+            c += uC3 * smoothstep(0.14, 0.0, abs(ring - 1.0)) * 0.55;
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "gemstone", "Cut Stone", ShaderFamily.DEPTH,
+        "A brilliant cut throwing prismatic fire.",
+        listOf(
+            param("size", "Size", .35f, .8f, .58f),
+            param("spin", "Spin", 0f, 1.2f, .35f),
+            param("fire", "Fire", 0f, 2f, 1f),
+            param("facets", "Facets", 2f, 9f, 5f)
+        ),
+        LOFI,
+        """
+        /** Octahedron cut by a box and a girdle plane: flat facets, brilliant silhouette. */
+        float mapGem(float3 q){
+            float o = (abs(q.x) + abs(q.y) + abs(q.z) - uP0) * 0.5773;
+            float g = max(o, sdBox3(q, float3(uP0 * 0.66)));
+            return max(g, abs(q.y) - uP0 * 0.55);
+        }
+
+        float3 normGem(float3 q){
+            float2 e = float2(0.0012, 0.0);
+            return normalize(float3(
+                mapGem(q + e.xyy) - mapGem(q - e.xyy),
+                mapGem(q + e.yxy) - mapGem(q - e.yxy),
+                mapGem(q + e.yyx) - mapGem(q - e.yyx)));
+        }
+
+        /**
+         * Discrete bright sources, not a gradient. Facets sparkle because they sweep across small
+         * intense lights; a smooth environment makes even a perfect cut look like frosted plastic.
+         */
+        float3 gemEnv(float3 rd){
+            float3 sky = mix(uC0, uC1, rd.y * 0.5 + 0.5);
+            float2 sp = floor(float2(atan(rd.z, rd.x) * 1.7, rd.y * 3.2) * uP3 + 0.5);
+            sky += uC3 * pow(hash(sp), 24.0) * 7.0;
+            sky += uC2 * pow(max(rd.y, 0.0), 5.0) * 0.55;
+            return sky;
+        }
+
+        /** One wavelength through the stone: in one facet, across the interior, out another. */
+        float3 wavelength(float3 q, float3 n, float3 rd, float ior){
+            float3 inside = refract(rd, n, 1.0 / ior);
+            float march = 0.02;
+            for (int j = 0; j < 28; j++){
+                float d = -mapGem(q + inside * march);
+                if (d < 0.0015) break;
+                march += max(d, 0.005);
+                if (march > 4.0) break;
+            }
+            float3 exitPoint = q + inside * march;
+            float3 exitNormal = -normGem(exitPoint);
+            float3 escape = refract(inside, exitNormal, ior);
+            // Beyond the critical angle refract() gives nothing and the light stays trapped —
+            // total internal reflection, which is precisely what makes a cut stone bright.
+            if (dot(escape, escape) < 0.0001) escape = reflect(inside, exitNormal);
+            return gemEnv(normalize(escape));
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            float a = t * uP1;
+            float3 ro = rotX(rotY(float3(0.0, 0.0, 2.6), a), a * 0.55);
+            float3 rd = rotX(rotY(normalize(float3(p, -1.6)), a), a * 0.55);
+
+            float travelled = 0.0;
+            float hit = 0.0;
+            for (int i = 0; i < 46; i++){
+                float d = mapGem(ro + rd * travelled);
+                if (d < 0.0012) { hit = 1.0; break; }
+                travelled += d;
+                if (travelled > 6.0) break;
+            }
+            if (hit < 0.5) return gemEnv(rd) * 0.34;
+
+            float3 q = ro + rd * travelled;
+            float3 n = normGem(q);
+
+            // Diamond's index runs from about 2.41 at red to 2.45 at violet. Spreading the three
+            // samples around that is the dispersion — the fire is not a colour filter, it is red
+            // and blue leaving the stone through different exit facets.
+            float spread = 0.02 + uP2 * uAberration * 0.09;
+            float3 c = float3(
+                wavelength(q, n, rd, 2.42 - spread).r,
+                wavelength(q, n, rd, 2.42).g,
+                wavelength(q, n, rd, 2.42 + spread).b);
+
+            float f = fresnel(n, rd, 5.0);
+            c = mix(c, gemEnv(reflect(rd, n)), f * 0.75);
+            c += uC3 * pow(max(dot(reflect(rd, n), normalize(float3(0.35, 0.85, -0.4))), 0.0), 90.0) * 2.2;
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "rain_glass", "Rain on Glass", ShaderFamily.DEPTH,
+        "Beads on a window, lights fracturing behind.",
+        listOf(
+            param("scale", "Bead size", 2f, 9f, 4.5f),
+            param("run", "Run-off", 0f, 2f, .9f),
+            param("bend", "Refraction", 0f, 2f, 1f),
+            param("lights", "Lights", 0f, 1f, .6f)
+        ),
+        LOFI,
+        """
+        /** Out-of-focus sources behind the glass. Bokeh needs points to bloom from. */
+        float3 backdrop(float2 q, float t){
+            float3 c = mix(uC0, uC1, clamp(q.y * 0.55 + 0.5, 0.0, 1.0)) * 0.55;
+            for (int i = 0; i < 12; i++){
+                float fi = float(i);
+                float2 h = hash2(float2(fi, 3.0));
+                float2 at = float2((h.x - 0.5) * 2.6, (h.y - 0.5) * 2.2);
+                at.x += sin(t * 0.09 + fi) * 0.10;
+                float d = length(q - at);
+                float r = 0.045 + h.x * 0.085;
+                float3 tint = mix(uC2, uC3, h.y);
+                // A hard-edged disc plus a soft halo: a real defocused point is a flat circle of
+                // confusion, not a gaussian, and the flat edge is what makes it read as bokeh.
+                c += tint * smoothstep(r, r * 0.6, d) * (0.30 + h.y * 0.55) * uP3;
+                c += tint * exp(-d * 7.5) * 0.13 * uP3;
+            }
+            return c;
+        }
+
+        /** Height of the water film: static beads at three scales, plus a few running trails. */
+        float dropHeight(float2 q, float t){
+            float h = 0.0;
+            for (int i = 0; i < 3; i++){
+                float fi = float(i);
+                float sc = uP0 * (1.0 + fi * 1.65);
+                float2 g = q * sc;
+                float2 id = floor(g);
+                float2 f = fract(g) - 0.5;
+                float2 o = (hash2(id + fi * 31.0) - 0.5) * 0.66;
+                float r = 0.16 + hash(id + fi * 7.0) * 0.22;
+                h += smoothstep(1.0, 0.0, length(f - o) / r) * r * (1.2 - fi * 0.22);
+            }
+
+            // Trails. A bead that has broken loose runs down its own column and leaves a thinner
+            // wet track above it, which is why rain on a window is streaked rather than dotted.
+            float cols = uP0 * 0.7;
+            float col = floor(q.x * cols);
+            float seed = hash(float2(col, 11.0));
+            float lane = abs(fract(q.x * cols) - 0.5);
+            float head = 1.4 - fract(seed * 7.31 + t * uP1 * 0.13) * 2.8;
+            float along = q.y - head;
+            float track = along > 0.0 ? exp(-along * 2.6) : 0.0;
+            float width = smoothstep(0.30, 0.06, lane);
+            h += (smoothstep(0.09, 0.0, length(float2(lane * 1.4, along))) * 0.34 + track * width * 0.09)
+                 * step(0.45, seed) * uP1;
+            return h;
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            float e = 0.0035;
+            float h = dropHeight(p, t);
+            // Slope of the water surface. Where the film is thick and curved it acts as a lens.
+            float2 slope = float2(dropHeight(p + float2(e, 0.0), t) - h,
+                                  dropHeight(p + float2(0.0, e), t) - h) / e;
+
+            float2 bend = -slope * uP2 * 0.055;
+            // Thicker water bends more, and bends the short wavelengths hardest, so lights behind
+            // a bead fringe blue on one side and red on the other.
+            float split = uAberration * (0.18 + h * 1.6);
+            float3 c = float3(
+                backdrop(p + bend * (1.0 + split), t).r,
+                backdrop(p + bend, t).g,
+                backdrop(p + bend * (1.0 - split), t).b);
+
+            // Dry glass is hazy and slightly dimmed; the wet beads are clear, so they punch.
+            float wet = smoothstep(0.005, 0.055, h);
+            c = mix(c * 0.62 + uC1 * 0.05, c * 1.30, wet);
+            c += uC3 * pow(clamp(-slope.y * 0.06 + 0.5, 0.0, 1.0), 9.0) * wet * 0.42;
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "spotlight", "Velvet Spotlight", ShaderFamily.DEPTH,
+        "A sweeping beam, thick with dust.",
+        listOf(
+            param("cone", "Cone", .82f, .99f, .93f),
+            param("sweep", "Sweep", 0f, 2f, .7f),
+            param("dust", "Dust", 0f, 2f, 1f),
+            param("floorLift", "Floor", 0f, 1f, .55f)
+        ),
+        WARM,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float3 ro = float3(0.0, 0.12, 2.5);
+            float3 rd = normalize(float3(p, -1.5));
+
+            float sweep = sin(t * uP1 * 0.42);
+            float3 lamp = float3(sweep * 1.05, 1.45, -0.25);
+            float3 aim = normalize(float3(sweep * -0.30, -1.0, 0.18));
+
+            float3 c = uC0 * 0.22;
+            float beam = 0.0;
+            float motes = 0.0;
+
+            // Marching the beam rather than drawing a cone: the glow has to accumulate along the
+            // ray, because that is why a spotlight is brightest where you look furthest through it.
+            for (int i = 0; i < 40; i++){
+                float3 q = ro + rd * (0.05 + float(i) * 0.075);
+                float3 toLamp = q - lamp;
+                float dist = length(toLamp);
+                float inside = smoothstep(uP0, uP0 + 0.085, dot(toLamp / dist, aim));
+                float fall = 1.0 / (1.0 + dist * dist * 1.5);
+                beam += inside * fall * 0.062;
+                float m = smoothstep(0.56, 0.95, fbm(q.xy * 3.6 + float2(0.0, -t * 0.28) + q.z * 1.9));
+                motes += inside * fall * m * 0.34;
+            }
+
+            // The pool where the beam lands, and the floor falling away from it.
+            float ground = (-0.62 - ro.y) / min(rd.y, -0.0001);
+            if (rd.y < 0.0 && ground > 0.0){
+                float3 g = ro + rd * ground;
+                float3 toLamp = g - lamp;
+                float dist = length(toLamp);
+                float pool = smoothstep(uP0, uP0 + 0.05, dot(toLamp / dist, aim)) / (1.0 + dist * dist);
+                float grain = fbm(g.xz * 6.0) * 0.35 + 0.65;
+                c += mix(uC1, uC2, 0.4) * pool * grain * uP3 * 1.5 / (1.0 + ground * 0.35);
+            }
+
+            // The lamp's edge fringes: the cone boundary is a hard optical edge, and hard edges
+            // are where a lens shows colour.
+            float fringe = uAberration * 0.03;
+            c += float3(
+                mix(uC1, uC2, 0.35).r * (beam * (1.0 + fringe)),
+                mix(uC1, uC2, 0.5).g * beam,
+                mix(uC1, uC2, 0.65).b * (beam * (1.0 - fringe)));
+            c += uC3 * motes * uP2 * 0.5;
+            return c;
+        }
+        """,
+        dispersive = true
+    ),
+
+    ShaderScene(
+        "laser_grid", "Laser Labyrinth", ShaderFamily.DEPTH,
+        "Beams crossing in a smoky room.",
+        listOf(
+            param("count", "Beams", 3f, 9f, 7f),
+            param("drift", "Drift", 0f, 2f, .8f),
+            param("thickness", "Thickness", .002f, .04f, .012f),
+            param("haze", "Haze", 0f, 2f, .9f)
+        ),
+        VIOLETS,
+        """
+        /**
+         * Closest approach between the view ray and a beam, solved rather than sampled. Marching
+         * a beam this thin skips straight past it at most step sizes; the analytic distance keeps
+         * it a clean hairline no matter how far away it runs.
+         */
+        float beamDistance(float3 ro, float3 rd, float3 bo, float3 bd){
+            float3 w = ro - bo;
+            float b = dot(rd, bd);
+            float d = dot(rd, w);
+            float e = dot(bd, w);
+            float den = 1.0 - b * b;
+            if (den < 0.00001) return 1000.0;
+            float s = (b * e - d) / den;
+            if (s < 0.0) return 1000.0;
+            return length(w + rd * s - bd * ((e - b * d) / den));
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            float3 ro = float3(0.0, 0.0, 2.6);
+            float3 rd = normalize(float3(p, -1.55));
+
+            float3 c = uC0 * 0.35;
+            float haze = 0.0;
+
+            for (int i = 0; i < 9; i++){
+                float fi = float(i);
+                if (fi >= uP0) break;
+                float a = fi * 2.399 + t * uP1 * 0.23;
+                float3 origin = float3(sin(a * 1.3) * 0.75, cos(a * 0.9) * 0.55, sin(a * 0.7) * 0.5);
+                float3 dir = normalize(float3(sin(a * 2.1), cos(a * 1.7) * 0.6, cos(a * 0.5) * 0.9));
+                float d = beamDistance(ro, rd, origin, dir);
+                float core = uP2 / (uP2 + d);
+                // Core to the fourth reads as the beam itself; the plain falloff is the smoke it
+                // is lighting up, which is what makes crossings flare instead of simply adding.
+                float3 tint = pal(fract(fi * 0.191 + 0.15));
+                c += tint * pow(core, 4.0) * 1.9;
+                haze += core * 0.35;
+            }
+
+            c += mix(uC2, uC3, 0.4) * haze * uP3 * 0.35;
+            c += uC3 * pow(haze * 0.5, 3.0) * 0.6;
+            return c;
+        }
+        """
+    ),
+
+    ShaderScene(
+        "tesseract", "Tesseract", ShaderFamily.DEPTH,
+        "A hypercube turning through its fourth axis.",
+        listOf(
+            param("spin", "Spin", 0f, 1.5f, .45f),
+            param("depth", "Depth fade", 0f, 1f, .6f),
+            param("width", "Line width", .002f, .02f, .006f),
+            param("glow", "Glow", 0f, 2f, .9f)
+        ),
+        COOL,
+        """
+        /** Vertex i of the hypercube, read out of the index's four bits without bitwise ops. */
+        float4 corner(float i){
+            return float4(
+                mod(floor(i),        2.0) * 2.0 - 1.0,
+                mod(floor(i / 2.0),  2.0) * 2.0 - 1.0,
+                mod(floor(i / 4.0),  2.0) * 2.0 - 1.0,
+                mod(floor(i / 8.0),  2.0) * 2.0 - 1.0);
+        }
+
+        /**
+         * Two perspective divides, not one. The 4D point is projected to 3D by its w, then to 2D
+         * by its z, and it is the first divide that makes the inner cube swell and pass through
+         * the outer one instead of the whole thing simply rotating.
+         */
+        float3 project(float4 v, float a){
+            float ca = cos(a), sa = sin(a);
+            float4 r = float4(v.x * ca - v.w * sa, v.y, v.z, v.x * sa + v.w * ca);
+            float cb = cos(a * 0.63), sb = sin(a * 0.63);
+            r = float4(r.x, r.y * cb - r.z * sb, r.y * sb + r.z * cb, r.w);
+            float3 p3 = rotY(float3(r.x, r.y, r.z) / (2.6 - r.w), a * 0.7);
+            float k = 1.0 / (2.9 - p3.z);
+            return float3(p3.x * k * 1.9, p3.y * k * 1.9, p3.z);
+        }
+
+        float segment(float2 p, float2 a, float2 b){
+            float2 pa = p - a, ba = b - a;
+            return length(pa - ba * clamp(dot(pa, ba) / max(dot(ba, ba), 0.000001), 0.0, 1.0));
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            float a = t * uP0;
+            float3 c = uC0 * 0.5;
+
+            for (int i = 0; i < 16; i++){
+                float fi = float(i);
+                float4 v = corner(fi);
+                float3 pa = project(v, a);
+                for (int k = 0; k < 4; k++){
+                    // Only step a bit that is currently low, so every edge is drawn once.
+                    float bit = k == 0 ? v.x : (k == 1 ? v.y : (k == 2 ? v.z : v.w));
+                    if (bit < 0.0) {
+                        float4 w = v;
+                        if (k == 0) w.x = 1.0; else if (k == 1) w.y = 1.0;
+                        else if (k == 2) w.z = 1.0; else w.w = 1.0;
+                        float3 pb = project(w, a);
+
+                        float d = segment(p, pa.xy, pb.xy);
+                        float depth = clamp((pa.z + pb.z) * 0.5 * 0.6 + 0.5, 0.0, 1.0);
+                        // Far edges are thinner and dimmer. Without that the projection collapses
+                        // into a flat tangle of identical lines.
+                        float wide = uP2 * mix(0.55, 1.35, depth);
+                        float lit = mix(0.25, 1.0, pow(depth, mix(0.2, 2.2, uP1)));
+                        float3 tint = mix(uC1, uC2, depth);
+                        c += tint * smoothstep(wide, 0.0, d) * lit;
+                        c += mix(tint, uC3, 0.5) * (wide * 2.4 / (wide * 2.4 + d)) * lit * uP3 * 0.09;
+                    }
+                }
             }
             return c;
         }

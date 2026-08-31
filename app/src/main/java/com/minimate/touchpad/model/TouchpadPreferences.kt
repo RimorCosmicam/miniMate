@@ -45,6 +45,8 @@ class TouchpadPreferences(context: Context) {
                 put("shaderParams", JSONArray(settings.shaderParams))
                 put("shaderPaletteIndex", settings.shaderPaletteIndex)
                 put("shaderTouchStrength", settings.shaderTouchStrength.toDouble())
+                put("shaderAberration", settings.shaderAberration.toDouble())
+                put("shaderGrain", settings.shaderGrain.toDouble())
                 put("panelThemeIndex", settings.panelThemeIndex)
                 put("audioPanelX", settings.audioPanelX.toDouble())
                 put("audioPanelY", settings.audioPanelY.toDouble())
@@ -176,6 +178,16 @@ class TouchpadPreferences(context: Context) {
                     AbstractShaderTheme.valueOf(json.optString("abstractShaderTheme", "ARCADE"))
                 }.getOrDefault(AbstractShaderTheme.ARCADE),
                 abstractSubthemeIndex = json.optInt("abstractSubthemeIndex", 1).coerceIn(0, 9),
+                // These were being written but never read, so every restart quietly reset the
+                // scene to the default rather than restoring what was chosen.
+                shaderSceneId = json.optString("shaderSceneId", "paradise").ifEmpty { "paradise" },
+                shaderParams = json.optJSONArray("shaderParams")?.let { values ->
+                    List(values.length()) { values.optDouble(it, 0.0).toFloat() }
+                }.orEmpty(),
+                shaderPaletteIndex = json.optInt("shaderPaletteIndex", 0).coerceAtLeast(0),
+                shaderTouchStrength = json.optDouble("shaderTouchStrength", 1.0).toFloat().coerceIn(0f, 2f),
+                shaderAberration = json.optDouble("shaderAberration", 0.6).toFloat().coerceIn(0f, 2f),
+                shaderGrain = json.optDouble("shaderGrain", 0.3).toFloat().coerceIn(0f, 1f),
                 shaderRecolor = runCatching {
                     ShaderRecolor.valueOf(json.optString("shaderRecolor", "AUTHORED"))
                 }.getOrDefault(ShaderRecolor.AUTHORED),

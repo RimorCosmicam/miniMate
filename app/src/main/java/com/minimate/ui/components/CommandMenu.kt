@@ -90,6 +90,16 @@ fun buildCommandMenu(
                         )
                     }
                 }),
+                MenuBranch("Look", listOf(
+                    MenuSlider(
+                        "Aberration", settings.shaderAberration, 0f..2f,
+                        "%.1f".format(settings.shaderAberration)
+                    ) { onChange(settings.copy(shaderAberration = it)) },
+                    MenuSlider(
+                        "Grain", settings.shaderGrain, 0f..1f,
+                        "%.2f".format(settings.shaderGrain)
+                    ) { onChange(settings.copy(shaderGrain = it)) }
+                )),
                 MenuBranch("Motion", buildList {
                     BackgroundAnimation.entries.forEach { motion ->
                         add(MenuToggle(motion.label, settings.backgroundAnimation == motion) {

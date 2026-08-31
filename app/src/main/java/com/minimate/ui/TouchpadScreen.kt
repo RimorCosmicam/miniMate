@@ -298,6 +298,8 @@ fun TouchpadScreen(
                     touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
                     animationSpeed = settings.backgroundAnimation.speed,
                     touchStrength = settings.shaderTouchStrength,
+                    aberration = settings.shaderAberration,
+                    grain = settings.shaderGrain,
                     modifier = Modifier.fillMaxSize()
                 )
             }

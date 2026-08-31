@@ -58,6 +58,8 @@ uniform float uTouchAges[8];
 uniform float uTouchActive[8];
 uniform float uTouchCount;
 uniform float uTouchStrength;
+uniform float uAberration;
+uniform float uGrain;
 uniform shader glyphAtlas;
 
 float hash(float2 p){return fract(sin(dot(p,float2(127.1,311.7)))*43758.5453123);}
@@ -86,6 +88,42 @@ float glyph(float id, float2 g){
     return glyphAtlas.eval(c).r;
 }
 
+// ---------------------------------------------------------------- 3D toolkit
+//
+// Signed distance primitives, shading and tone mapping, so scenes can raymarch a lit surface
+// rather than tint a 2D pattern. AGSL has no function pointers, so each raymarching scene writes
+// its own map() and march loop; what is shared is everything around that.
+
+float sdSphere(float3 p, float r){ return length(p) - r; }
+float sdBox3(float3 p, float3 b){ float3 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0); }
+float sdTorus(float3 p, float2 t){ float2 q = float2(length(p.xz) - t.x, p.y); return length(q) - t.y; }
+float sdPlane(float3 p, float h){ return p.y - h; }
+
+/** Smooth union. The blend is what makes separate blobs read as one liquid body. */
+float smin(float a, float b, float k){
+    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+float3 rotY(float3 p, float a){ float c = cos(a), s = sin(a); return float3(c * p.x - s * p.z, p.y, s * p.x + c * p.z); }
+float3 rotX(float3 p, float a){ float c = cos(a), s = sin(a); return float3(p.x, c * p.y - s * p.z, s * p.y + c * p.z); }
+
+float3 hash33(float3 p){
+    p = fract(p * float3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yxz + 33.33);
+    return fract((p.xxy + p.yxx) * p.zyx);
+}
+
+/** Grazing angles reflect more. Without this, metal and glass read as flat coloured plastic. */
+float fresnel(float3 n, float3 v, float power){
+    return pow(1.0 - clamp(dot(n, -v), 0.0, 1.0), power);
+}
+
+/** Filmic tone curve. Linear output clips to white the moment anything is lit brightly. */
+float3 aces(float3 x){
+    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+
 /** Touch displacement, shared by every scene so interaction feels consistent across the set. */
 float2 touchWarp(float2 q){
     for(int i=0;i<8;i++){
@@ -104,22 +142,57 @@ float2 touchWarp(float2 q){
 
 """
 
-private const val FOOTER = """
+/** Shared closing pass: tone map, grain, vignette. [POST] is the scene sample. */
+private const val FOOTER_HEAD = """
 half4 main(float2 fragCoord){
     float2 res = uResolution;
     float2 uv = fragCoord / res;
     float2 p = (fragCoord - 0.5 * res) / min(res.x, res.y);
     float2 wp = touchWarp(p);
     float2 wuv = uv + (wp - p);
+"""
+
+/**
+ * Lens dispersion for flat scenes. A real lens focuses wavelengths at slightly different points
+ * and the separation grows toward the edges, so the offset is radial and scales with radius —
+ * a uniform shift just looks like three misregistered copies. Three evaluations is the cost.
+ */
+private const val FOOTER_LENS = """
+    float3 c;
+    float amount = uAberration * 0.0055;
+    if (amount > 0.00002) {
+        float2 dir = p / max(length(p), 0.001) * amount * (0.35 + length(p));
+        float3 cr = scene(wp + dir, wuv + dir, uTime);
+        float3 cg = scene(wp, wuv, uTime);
+        float3 cb = scene(wp - dir, wuv - dir, uTime);
+        c = float3(cr.r, cg.g, cb.b);
+    } else {
+        c = scene(wp, wuv, uTime);
+    }
+"""
+
+/** Raymarched scenes split wavelengths inside their own material and are sampled once. */
+private const val FOOTER_DIRECT = """
     float3 c = scene(wp, wuv, uTime);
-    // Gentle corner falloff. Keeps the cover display's rounded corners from looking cropped.
+"""
+
+private const val FOOTER_TAIL = """
+    c = aces(c);
+
+    // Grain goes on after tone mapping so it sits in the image rather than being crushed by it,
+    // and eases off in the highlights, where sensor noise genuinely is less visible.
+    float g = hash(fragCoord + fract(uTime) * 917.0) - 0.5;
+    c += g * uGrain * 0.055 * (1.0 - 0.6 * dot(c, float3(0.2126, 0.7152, 0.0722)));
+
     float r = length(p);
-    c *= 1.0 - 0.22 * r * r;
+    c *= 1.0 - 0.26 * r * r;
     return half4(clamp(c, 0.0, 1.0), 1.0);
 }
 """
 
-internal fun sceneShaderSource(scene: ShaderScene): String = HEADER + scene.body + FOOTER
+internal fun sceneShaderSource(scene: ShaderScene): String =
+    HEADER + scene.body + FOOTER_HEAD +
+        (if (scene.dispersive) FOOTER_DIRECT else FOOTER_LENS) + FOOTER_TAIL
 
 /**
  * The atlas the Matrix scenes read from. Katakana leads because that is what makes the rain read
@@ -165,13 +238,15 @@ fun SceneShaderCanvas(
     touchPoints: List<TouchPoint>,
     animationSpeed: Float,
     touchStrength: Float,
+    aberration: Float,
+    grain: Float,
     modifier: Modifier = Modifier
 ) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
         SceneFallback(palette, modifier)
         return
     }
-    SceneAgsl(scene, params, palette, touchPoints, animationSpeed, touchStrength, modifier)
+    SceneAgsl(scene, params, palette, touchPoints, animationSpeed, touchStrength, aberration, grain, modifier)
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -183,6 +258,8 @@ private fun SceneAgsl(
     touchPoints: List<TouchPoint>,
     animationSpeed: Float,
     touchStrength: Float,
+    aberration: Float,
+    grain: Float,
     modifier: Modifier
 ) {
     // Building and linking the GPU program blocks the render thread on a cold shader cache, long
@@ -225,6 +302,8 @@ private fun SceneAgsl(
         runtime.setFloatUniform("uTime", time * animationSpeed)
         runtime.setFloatUniform("uNow", time)
         runtime.setFloatUniform("uTouchStrength", touchStrength)
+        runtime.setFloatUniform("uAberration", aberration)
+        runtime.setFloatUniform("uGrain", grain)
         // Uniform slots follow the scene's declared order, and unused slots are held at their
         // defaults rather than left undefined.
         for (i in 0 until 4) {

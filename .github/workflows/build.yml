@@ -54,11 +54,23 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
 
+      # AGSL compiles on the GPU at runtime, so nothing above can catch a broken scene body.
+      # Shipping the instrumented APK lets the whole catalog be checked in one run on a device.
+      - name: Build Instrumented Test APK
+        run: ./gradlew assembleDebugAndroidTest --stacktrace
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: minimate-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+      - name: Upload Instrumented Test APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimate-androidtest-apk
+          path: app/build/outputs/apk/androidTest/debug/*.apk
           retention-days: 30
 
       - name: Upload Release APK Artifact
