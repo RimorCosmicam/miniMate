@@ -17,8 +17,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import com.minimate.ui.components.PermissionItem
 import com.minimate.ui.components.WelcomeScreen
 import androidx.compose.ui.Modifier
@@ -97,15 +95,18 @@ class MainActivity : ComponentActivity() {
                 val bluetoothState by hidManager.uiState.collectAsState()
                 val batteryPercentage by batteryReporter.batteryLevel.collectAsState()
 
-                // The welcome screen owns the first run. Firing the system dialogs from onCreate
-                // put them over a trackpad nobody had been introduced to yet.
-                var welcomed by rememberSaveable { mutableStateOf(!needsAnyPermission()) }
-                if (!welcomed) {
+                // The welcome screen owns the first run, and leaves when it is dismissed rather
+                // than the moment the last permission lands — granting one used to close the
+                // introduction out from under whoever was reading it.
+                val settings by touchpadEngine.settings.collectAsState()
+                if (!settings.onboardingSeen) {
                     WelcomeScreen(
                         permissions = permissionState(permissionTick),
                         onGrant = { checkAndRequestPermissions() },
                         onDone = {
-                            welcomed = true
+                            touchpadEngine.updateSettings(
+                                touchpadEngine.settings.value.copy(onboardingSeen = true)
+                            )
                             startBluetoothServicesIfAllowed()
                         },
                         modifier = Modifier.fillMaxSize()
@@ -191,8 +192,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun needsAnyPermission(): Boolean = permissionState(0).any { !it.granted }
-
     private fun checkAndRequestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val permissions = arrayOf(
@@ -241,6 +240,9 @@ class MainActivity : ComponentActivity() {
         // Reassert the strongest sensor-independent lock on every foreground transition.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
         enterImmersive()
+        // Permissions can be granted from outside the app entirely. Re-reading on resume means
+        // the welcome list is never showing a state that stopped being true while it was away.
+        permissionTick++
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

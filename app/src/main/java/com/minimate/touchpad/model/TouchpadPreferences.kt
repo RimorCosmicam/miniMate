@@ -36,6 +36,7 @@ class TouchpadPreferences(context: Context) {
                 put("hapticIntensity", settings.hapticIntensity.name)
                 put("keyboardHapticsEnabled", settings.keyboardHapticsEnabled)
                 put("pillTourSeen", settings.pillTourSeen)
+                put("onboardingSeen", settings.onboardingSeen)
 
                 // Active theme
                 put("backgroundTheme", settings.backgroundTheme.name)
@@ -156,6 +157,7 @@ class TouchpadPreferences(context: Context) {
                 },
                 keyboardHapticsEnabled = json.optBoolean("keyboardHapticsEnabled", true),
                 pillTourSeen = json.optBoolean("pillTourSeen", false),
+                onboardingSeen = json.optBoolean("onboardingSeen", false),
                 backgroundTheme = try {
                     BackgroundTheme.valueOf(json.optString("backgroundTheme", "CHROME_FLUID"))
                 } catch (_: Exception) {

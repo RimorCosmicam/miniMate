@@ -423,6 +423,12 @@ data class TouchpadSettings(
     val keyboardHapticsEnabled: Boolean = true,
     /** The pill's three gestures are explained once, because nothing on screen implies them. */
     val pillTourSeen: Boolean = false,
+    /**
+     * Whether the welcome has been dismissed. Deliberately not derived from whether a permission
+     * happens to be missing: that made granting one dismiss the introduction mid-read, and made
+     * the screen unreachable the moment everything was allowed.
+     */
+    val onboardingSeen: Boolean = false,
     
     // One active shader configuration. Theme Studio edits this directly.
     val backgroundTheme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,
