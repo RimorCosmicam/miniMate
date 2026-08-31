@@ -4,6 +4,7 @@ import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -79,6 +80,25 @@ private const val GLASS_SHADER = """
         return c;
     }
 """
+
+/** Uniforms are only settable from API 33, which is also the only place the shader is built. */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private fun glassEffect(
+    shader: RuntimeShader,
+    originX: Float,
+    originY: Float,
+    panelWidth: Float,
+    panelHeight: Float,
+    radiusPx: Float,
+    canvasWidth: Float,
+    canvasHeight: Float
+): AndroidRenderEffect {
+    shader.setFloatUniform("uOrigin", originX, originY)
+    shader.setFloatUniform("uSize", panelWidth, panelHeight)
+    shader.setFloatUniform("uRadius", radiusPx)
+    shader.setFloatUniform("uCanvas", canvasWidth, canvasHeight)
+    return AndroidRenderEffect.createRuntimeShaderEffect(shader, "content")
+}
 
 /**
  * A floating panel that can be moved, resized and restyled.
@@ -186,11 +206,10 @@ private fun androidx.compose.foundation.layout.BoxScope.PanelSurface(
                     .graphicsLayer {
                         renderEffect = runCatching {
                             if (glass != null) {
-                                glass.setFloatUniform("uOrigin", originX, originY)
-                                glass.setFloatUniform("uSize", size.width, size.height)
-                                glass.setFloatUniform("uRadius", theme.cornerRadius * density.density)
-                                glass.setFloatUniform("uCanvas", canvasWidth, canvasHeight)
-                                AndroidRenderEffect.createRuntimeShaderEffect(glass, "content")
+                                glassEffect(
+                                    glass, originX, originY, size.width, size.height,
+                                    theme.cornerRadius * density.density, canvasWidth, canvasHeight
+                                )
                             } else {
                                 AndroidRenderEffect.createBlurEffect(26f, 26f, Shader.TileMode.CLAMP)
                             }.asComposeRenderEffect()
