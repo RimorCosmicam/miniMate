@@ -5,6 +5,7 @@ import android.graphics.BitmapShader
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -29,6 +30,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import com.minimate.touchpad.model.ShaderScene
 import com.minimate.touchpad.engine.TouchPoint
@@ -142,42 +145,15 @@ float2 touchWarp(float2 q){
 
 """
 
-/** Shared closing pass: tone map, grain, vignette. [POST] is the scene sample. */
-private const val FOOTER_HEAD = """
+private const val FOOTER = """
 half4 main(float2 fragCoord){
     float2 res = uResolution;
     float2 uv = fragCoord / res;
     float2 p = (fragCoord - 0.5 * res) / min(res.x, res.y);
     float2 wp = touchWarp(p);
     float2 wuv = uv + (wp - p);
-"""
 
-/**
- * Lens dispersion for flat scenes. A real lens focuses wavelengths at slightly different points
- * and the separation grows toward the edges, so the offset is radial and scales with radius —
- * a uniform shift just looks like three misregistered copies. Three evaluations is the cost.
- */
-private const val FOOTER_LENS = """
-    float3 c;
-    float amount = uAberration * 0.0055;
-    if (amount > 0.00002) {
-        float2 dir = p / max(length(p), 0.001) * amount * (0.35 + length(p));
-        float3 cr = scene(wp + dir, wuv + dir, uTime);
-        float3 cg = scene(wp, wuv, uTime);
-        float3 cb = scene(wp - dir, wuv - dir, uTime);
-        c = float3(cr.r, cg.g, cb.b);
-    } else {
-        c = scene(wp, wuv, uTime);
-    }
-"""
-
-/** Raymarched scenes split wavelengths inside their own material and are sampled once. */
-private const val FOOTER_DIRECT = """
-    float3 c = scene(wp, wuv, uTime);
-"""
-
-private const val FOOTER_TAIL = """
-    c = aces(c);
+    float3 c = aces(scene(wp, wuv, uTime));
 
     // Grain goes on after tone mapping so it sits in the image rather than being crushed by it,
     // and eases off in the highlights, where sensor noise genuinely is less visible.
@@ -190,9 +166,39 @@ private const val FOOTER_TAIL = """
 }
 """
 
-internal fun sceneShaderSource(scene: ShaderScene): String =
-    HEADER + scene.body + FOOTER_HEAD +
-        (if (scene.dispersive) FOOTER_DIRECT else FOOTER_LENS) + FOOTER_TAIL
+/**
+ * The lens, as a pass over the finished frame rather than three more trips through the scene.
+ *
+ * Dispersion needs the image sampled at three slightly different points, and doing that inside the
+ * scene shader meant evaluating the whole scene three times for every pixel — tripling the cost of
+ * a full-screen shader that already runs continuously, which is heat. Here the scene is drawn once
+ * and the three samples are texture reads off the result, which costs almost nothing. The offset is
+ * radial and grows toward the edges, because that is what a lens does; a uniform shift just looks
+ * like three misregistered copies.
+ */
+private const val LENS_SHADER = """
+uniform shader content;
+uniform float2 uSize;
+uniform float uAmount;
+
+half4 main(float2 p){
+    float2 mid = uSize * 0.5;
+    float2 d = p - mid;
+    float radius = length(d) / max(length(mid), 1.0);
+    float2 dir = d / max(length(d), 0.001);
+    float2 offset = dir * uAmount * (0.35 + radius) * min(uSize.x, uSize.y) * 0.0055;
+    float2 low = float2(0.5);
+    float2 high = uSize - float2(0.5);
+    half4 mids = content.eval(p);
+    return half4(
+        content.eval(clamp(p + offset, low, high)).r,
+        mids.g,
+        content.eval(clamp(p - offset, low, high)).b,
+        mids.a);
+}
+"""
+
+internal fun sceneShaderSource(scene: ShaderScene): String = HEADER + scene.body + FOOTER
 
 /**
  * The atlas the Matrix scenes read from. Katakana leads because that is what makes the rain read
@@ -296,7 +302,21 @@ private fun SceneAgsl(
         0f, 1000f, infiniteRepeatable(tween(1_000_000, easing = LinearEasing)), label = "t"
     )
 
-    Canvas(modifier.fillMaxSize()) {
+    // Scenes that split wavelengths in their own material — a prism, a Doppler-shifted disk —
+    // have already done this where it physically happens, and a lens pass on top would only
+    // fringe them twice.
+    val lens = remember(scene.dispersive) {
+        if (scene.dispersive) null else runCatching { RuntimeShader(LENS_SHADER) }.getOrNull()
+    }
+    val lensModifier = if (lens == null || aberration <= 0.001f) Modifier else Modifier.graphicsLayer {
+        renderEffect = runCatching {
+            lens.setFloatUniform("uSize", size.width, size.height)
+            lens.setFloatUniform("uAmount", aberration)
+            RenderEffect.createRuntimeShaderEffect(lens, "content").asComposeRenderEffect()
+        }.getOrNull()
+    }
+
+    Canvas(modifier.fillMaxSize().then(lensModifier)) {
         val stops = if (palette.size >= 4) palette else listOf(0xFF000000L, 0xFF202020L, 0xFF808080L, 0xFFFFFFFFL)
         runtime.setFloatUniform("uResolution", size.width, size.height)
         runtime.setFloatUniform("uTime", time * animationSpeed)

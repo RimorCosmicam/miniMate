@@ -85,10 +85,7 @@ data class AudioBridgeState(
     val outputEqGains: List<Float> = AudioOutputPreset.FLAT.gains,
     val microphoneGain: Float = 1f,
     val microphoneLevel: Float = 0f,
-    val error: String? = null,
-    val receivedPackets: Long = 0,
-    val sentPackets: Long = 0,
-    val webcamFramesSent: Long = 0
+    val error: String? = null
 )
 
 @SuppressLint("MissingPermission")
@@ -291,7 +288,6 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     AudioBridgeProtocol.TYPE_PLAYBACK -> if (_state.value.outputEnabled) play(frame)
                     AudioBridgeProtocol.TYPE_PING -> writeFrame(link.output, frame.copy(sequence = sequence.getAndIncrement()))
                 }
-                _state.update { it.copy(receivedPackets = it.receivedPackets + 1) }
             }
         } finally {
             disconnectLink(link)
@@ -530,6 +526,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 var windowRawPeak = 0
                 var windowOutPeak = 0
                 var windowStart = System.nanoTime()
+                var lastLevelPublish = 0L
                 // isActive must be checked here: AudioRecord.read(READ_BLOCKING) is a plain
                 // blocking call, not a suspend function, so cancelling this job from
                 // stopMicrophone() has zero effect unless this loop itself observes it. Without
@@ -581,7 +578,14 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         AudioBridgeProtocol.TYPE_MICROPHONE, AudioBridgeProtocol.CODEC_PCM16, 1, sampleRate,
                         sequence.getAndIncrement(), payload
                     ))
-                    _state.update { it.copy(sentPackets = it.sentPackets + 1, microphoneLevel = engine.level) }
+                    // The level meter is the only thing here anyone looks at, and it is published
+                    // at about fifteen frames a second rather than one per 20 ms packet. The
+                    // screen collects this flow at its top level, so publishing per packet re-ran
+                    // the entire UI fifty times a second for a bar that cannot show the difference.
+                    if (now - lastLevelPublish > 66_000_000L) {
+                        lastLevelPublish = now
+                        _state.update { it.copy(microphoneLevel = engine.level) }
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "startMicrophone: capture loop ended", e)
@@ -615,7 +619,6 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 sequence.getAndIncrement(),
                 jpeg
             ))
-            _state.update { it.copy(webcamFramesSent = it.webcamFramesSent + 1) }
         }.onFailure { Log.w(TAG, "Unable to send webcam frame", it) }
     }
 
