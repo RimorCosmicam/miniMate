@@ -404,6 +404,10 @@ fun TouchpadScreen(
                     touchpadEngine.updateSettings(settings.copy(keyboardOpaque = opaque))
                 },
                 keyboardScale = settings.keyboardScale,
+                keyboardHeight = settings.keyboardHeight,
+                onKeyboardHeightChange = { height ->
+                    touchpadEngine.updateSettings(settings.copy(keyboardHeight = height))
+                },
                 onKeyboardScaleChange = { scale ->
                     touchpadEngine.updateSettings(settings.copy(keyboardScale = scale))
                 },

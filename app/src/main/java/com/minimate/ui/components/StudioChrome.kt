@@ -41,6 +41,15 @@ const val MONT_SURFACE_ALPHA = .92f
 
 internal val StudioBackground = Color.Black.copy(alpha = MONT_SURFACE_ALPHA)
 
+/**
+ * How far a top-anchored Mont surface holds off the top edge.
+ *
+ * The Flip's cover display is awkward to reach at the very top — a case lips over it, and Samsung
+ * reserves a few pixels along the edge against mis-taps — so a row placed hard against it is a row
+ * that takes two or three attempts.
+ */
+val MONT_TOP_INSET = 44.dp
+
 @Composable
 internal fun StudioPanel(
     onCancel: () -> Unit,

@@ -298,6 +298,8 @@ enum class BallAction(val label: String, val description: String) {
 val DEFAULT_CUSTOM_SHADER_COLORS = listOf(0xFF02080AL, 0xFF0B5056L, 0xFF25D8C7L, 0xFFF4FFFFL)
 
 enum class ClockStyle(val label: String) {
+    /** Square, black, Mont Black. The same surface as every other window. */
+    MONT("Mont"),
     MINIMAL_PILL("Glass Pill"),
     DIGITAL_BOLD("Bold Digital"),
     CLEAN_SANS("Clean Sans"),
@@ -470,6 +472,11 @@ data class TouchpadSettings(
     val keyboardFontWeight: KeyboardFontWeight = KeyboardFontWeight.BOLD,
     val keyboardOpaque: Boolean = false,
     val keyboardScale: Float = 1f,
+    /**
+     * Row height, independent of [keyboardScale]. Key width follows the display, so scaling both
+     * together is the only way to make the keyboard shorter without also making it narrower.
+     */
+    val keyboardHeight: Float = 1f,
 
     // Bidirectional MiniMate Audio companion link.
     val audioOutputEnabled: Boolean = true,
@@ -504,7 +511,7 @@ data class TouchpadSettings(
     val isEditorMode: Boolean = false,
     
     // Clock & HUD customization (Tap = AMOLED, Hold = Open Settings)
-    val clockStyle: ClockStyle = ClockStyle.MINIMAL_PILL,
+    val clockStyle: ClockStyle = ClockStyle.MONT,
     val show24HourFormat: Boolean = false,
     val showSeconds: Boolean = false,
     val showBatteryPercentage: Boolean = true

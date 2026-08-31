@@ -86,6 +86,7 @@ class TouchpadPreferences(context: Context) {
                 put("keyboardFontWeight", settings.keyboardFontWeight.name)
                 put("keyboardOpaque", settings.keyboardOpaque)
                 put("keyboardScale", settings.keyboardScale.toDouble())
+                put("keyboardHeight", settings.keyboardHeight.toDouble())
                 put("audioOutputEnabled", settings.audioOutputEnabled)
                 put("audioMicrophoneEnabled", settings.audioMicrophoneEnabled)
                 put("audioOutputVolume", settings.audioOutputVolume.toDouble())
@@ -246,6 +247,7 @@ class TouchpadPreferences(context: Context) {
                     KeyboardFontWeight.valueOf(json.optString("keyboardFontWeight", "REGULAR"))
                 }.getOrDefault(KeyboardFontWeight.REGULAR),
                 keyboardOpaque = json.optBoolean("keyboardOpaque", false),
+                keyboardHeight = json.optDouble("keyboardHeight", 1.0).toFloat().coerceIn(.7f, 1.5f),
                 keyboardScale = json.optDouble("keyboardScale", 1.0).toFloat().coerceIn(0.65f, 1.3f),
                 audioOutputEnabled = json.optBoolean("audioOutputEnabled", true),
                 audioMicrophoneEnabled = json.optBoolean("audioMicrophoneEnabled", true),
@@ -293,7 +295,7 @@ class TouchpadPreferences(context: Context) {
                 },
                 clockScale = json.optDouble("clockScale", 1.18).toFloat().let { if (it == 1.0f) 1.18f else it },
                 clockStyle = try {
-                    ClockStyle.valueOf(json.optString("clockStyle", "MINIMAL_PILL"))
+                    ClockStyle.valueOf(json.optString("clockStyle", "MONT"))
                 } catch (_: Exception) {
                     ClockStyle.MINIMAL_PILL
                 },

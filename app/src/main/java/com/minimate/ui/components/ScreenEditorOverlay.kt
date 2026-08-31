@@ -23,8 +23,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -103,7 +101,7 @@ fun ScreenEditorOverlay(
         StudioPanel(
             onCancel = onClose,
             onDone = onClose,
-            modifier = Modifier.align(Alignment.TopStart)
+            modifier = Modifier.align(Alignment.TopStart).padding(top = MONT_TOP_INSET)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(24.dp),
@@ -115,16 +113,11 @@ fun ScreenEditorOverlay(
                     fontSize = 8.sp,
                     modifier = Modifier.width(58.dp)
                 )
-                Slider(
+                MontSlider(
                     value = settings.clockScale,
-                    onValueChange = { onSettingsChange(settings.copy(clockScale = it)) },
-                    valueRange = 0.65f..1.60f,
-                    modifier = Modifier.weight(1f).height(22.dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(.14f)
-                    )
+                    range = 0.65f..1.60f,
+                    onChange = { onSettingsChange(settings.copy(clockScale = it)) },
+                    modifier = Modifier.weight(1f).height(22.dp)
                 )
             }
             StudioChip("Reset position", false) {

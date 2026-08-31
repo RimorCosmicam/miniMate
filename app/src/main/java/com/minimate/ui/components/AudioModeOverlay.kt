@@ -23,10 +23,6 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -176,7 +172,10 @@ private fun OutputControls(
             Column(Modifier.weight(1f)) {
                 Text(state.outputDeviceName, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-            Switch(checked = state.outputEnabled, onCheckedChange = onEnabled, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White))
+            MontToggle(
+                checked = state.outputEnabled,
+                onChange = onEnabled
+            )
         }
         DeviceList(
             devices = state.outputDevices,
@@ -244,10 +243,9 @@ private fun MicrophoneControls(
                 Text("Microphone", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Text("Phone array, beam aimed at you", color = Color.White.copy(.48f), fontSize = 7.5.sp)
             }
-            Switch(
+            MontToggle(
                 checked = state.microphoneEnabled,
-                onCheckedChange = onEnabled,
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
+                onChange = onEnabled
             )
         }
         LinearProgressIndicator(
@@ -302,13 +300,12 @@ private fun CompactAudioSlider(
             Text(label, color = Color.White.copy(if (enabled) .56f else .22f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Text(valueLabel, color = Color.White.copy(if (enabled) .72f else .25f), fontSize = 7.sp)
         }
-        Slider(
-            value = value, onValueChange = onValue, valueRange = range, enabled = enabled,
+        MontSlider(
+            value = value,
+            range = range,
+            onChange = onValue,
             modifier = Modifier.fillMaxWidth().height(30.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White, activeTrackColor = Color.White,
-                inactiveTrackColor = Color.White.copy(.14f)
-            )
+            enabled = enabled
         )
     }
 }
@@ -324,13 +321,12 @@ private fun LabeledAudioSlider(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Color.White.copy(if (enabled) .56f else .22f), fontSize = 8.sp, modifier = Modifier.weight(.42f))
-        Slider(
-            value = value, onValueChange = onValue, valueRange = range, enabled = enabled,
+        MontSlider(
+            value = value,
+            range = range,
+            onChange = onValue,
             modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White, activeTrackColor = Color.White,
-                inactiveTrackColor = Color.White.copy(.14f)
-            )
+            enabled = enabled
         )
         Text(valueLabel, color = Color.White.copy(if (enabled) .72f else .25f), fontSize = 9.sp, modifier = Modifier.weight(.25f))
     }

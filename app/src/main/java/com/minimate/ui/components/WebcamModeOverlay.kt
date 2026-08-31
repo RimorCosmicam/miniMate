@@ -17,10 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -97,15 +93,9 @@ fun WebcamModeOverlay(
                         Text("MiniMate Camera", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         Text("No phone preview · sent straight to the Mac", color = Color.White.copy(.47f), fontSize = 8.5.sp)
                     }
-                    Switch(
+                    MontToggle(
                         checked = enabled,
-                        onCheckedChange = onEnabled,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
-                            checkedTrackColor = Color.White,
-                            uncheckedThumbColor = Color.White.copy(.72f),
-                            uncheckedTrackColor = Color.White.copy(.12f)
-                        )
+                        onChange = onEnabled
                     )
                 }
 
@@ -170,12 +160,11 @@ private fun Choice(label: String, selected: Boolean, modifier: Modifier = Modifi
 private fun LabeledSlider(label: String, valueLabel: String, value: Float, range: ClosedFloatingPointRange<Float>, onValue: (Float) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Color.White.copy(.48f), fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(55.dp))
-        Slider(
+        MontSlider(
             value = value,
-            onValueChange = onValue,
-            valueRange = range,
-            modifier = Modifier.weight(1f).height(24.dp),
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(.12f))
+            range = range,
+            onChange = onValue,
+            modifier = Modifier.weight(1f).height(24.dp)
         )
         Text(valueLabel, color = Color.White.copy(.72f), fontSize = 8.5.sp, modifier = Modifier.width(38.dp))
     }

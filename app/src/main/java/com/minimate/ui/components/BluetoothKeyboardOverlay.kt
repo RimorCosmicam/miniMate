@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -176,6 +174,8 @@ private fun KeyboardCustomizerTop(
     onFontWeight: (KeyboardWeightSetting) -> Unit,
     onOpaque: (Boolean) -> Unit,
     onScale: (Float) -> Unit,
+    height: Float,
+    onHeight: (Float) -> Unit,
     onCancel: () -> Unit,
     onDone: () -> Unit,
     maxHeight: Dp = 150.dp,
@@ -212,12 +212,12 @@ private fun KeyboardCustomizerTop(
                     }
                 }
             }
-            KeyboardCustomizer.SIZE -> Slider(
-                value = scale,
-                onValueChange = onScale,
-                valueRange = 0.65f..1.3f,
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(.18f))
-            )
+            KeyboardCustomizer.SIZE -> {
+                StudioLabel("KEY SIZE", dim = true, size = 11)
+                MontSlider(value = scale, range = 0.65f..1.3f, onChange = onScale)
+                StudioLabel("HEIGHT", dim = true, size = 11)
+                MontSlider(value = height, range = 0.7f..1.5f, onChange = onHeight)
+            }
         }
         if (section == KeyboardCustomizer.THEME) {
             Row(Modifier.fillMaxWidth()) {
@@ -313,7 +313,7 @@ private fun SwipeTypingPanel(
     }
 
     Box(
-        Modifier.fillMaxWidth().height(121.dp).onSizeChanged { surfaceSize = it }
+        Modifier.fillMaxWidth().height(121.dp * LocalKeyboardHeight.current).onSizeChanged { surfaceSize = it }
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val keyBrush = if (amoled) Brush.verticalGradient(listOf(Color.Black, Color.Black)) else when (theme) {
@@ -567,6 +567,9 @@ private val LocalKeyboardTrail = staticCompositionLocalOf { KeyboardTrail.AURORA
 private val LocalKeyboardOpaque = staticCompositionLocalOf { false }
 private val LocalKeyboardScale = staticCompositionLocalOf { 1f }
 
+/** Row height only. Key width follows the display, so this shortens without narrowing. */
+private val LocalKeyboardHeight = staticCompositionLocalOf { 1f }
+
 private data class KeyboardKey(val label: String, val usage: Int, val requiredModifier: Int = 0, val weight: Float = 1f)
 
 private fun letterRow(text: String) = text.map { char ->
@@ -613,6 +616,8 @@ fun BluetoothKeyboardOverlay(
     onOpaqueChange: (Boolean) -> Unit,
     keyboardScale: Float,
     onKeyboardScaleChange: (Float) -> Unit,
+    keyboardHeight: Float,
+    onKeyboardHeightChange: (Float) -> Unit,
     editorMode: Boolean,
     onEditorCancel: () -> Unit,
     onEditorDone: () -> Unit,
@@ -650,7 +655,8 @@ fun BluetoothKeyboardOverlay(
         LocalKeyboardFontWeight provides fontWeight,
         LocalKeyboardTrail provides trail,
         LocalKeyboardOpaque provides opaque,
-        LocalKeyboardScale provides keyboardScale
+        LocalKeyboardScale provides keyboardScale,
+        LocalKeyboardHeight provides keyboardHeight
     ) {
     BoxWithConstraints(modifier.fillMaxSize()
         .background(if (amoledMode) Color.Black else Color.Transparent)
@@ -738,6 +744,7 @@ fun BluetoothKeyboardOverlay(
                 fontWeight = fontWeight,
                 opaque = opaque,
                 scale = keyboardScale,
+                height = keyboardHeight,
                 onSection = { customizer = it },
                 onTheme = { onHaptic(); onThemeChange(it) },
                 onTrail = { onHaptic(); onTrailChange(it) },
@@ -745,6 +752,8 @@ fun BluetoothKeyboardOverlay(
                 onFontWeight = { onHaptic(); onFontWeightChange(it) },
                 onOpaque = { onHaptic(); onOpaqueChange(it) },
                 onScale = onKeyboardScaleChange,
+                height = keyboardHeight,
+                onHeight = onKeyboardHeightChange,
                 onCancel = onEditorCancel,
                 onDone = onEditorDone,
                 maxHeight = studioCeiling,
@@ -944,6 +953,7 @@ private fun RowScope.GlassKey(
     val fontWeight = LocalKeyboardFontWeight.current
     val opaque = LocalKeyboardOpaque.current
     val scale = LocalKeyboardScale.current
+    val rowHeight = LocalKeyboardHeight.current
     // Keys that run their own gesture detector have to report the press themselves. Space and the
     // repeating keys did not, which is why they were the only ones that stayed dark under a finger.
     var held by remember { mutableStateOf(false) }
@@ -1016,7 +1026,7 @@ private fun RowScope.GlassKey(
     } else {
         Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
     }
-    Box(Modifier.weight(weight).height((if (compact) 28.dp else 37.dp) * scale).clip(shape)
+    Box(Modifier.weight(weight).height((if (compact) 28.dp else 37.dp) * scale * rowHeight).clip(shape)
         .background(Brush.verticalGradient(fillColors)).border(1.dp, border, shape).then(actionModifier),
         contentAlignment = Alignment.Center) {
         if (icon != null) {

@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -98,7 +96,7 @@ fun CommandBar(
                 .heightIn(max = ceiling)
                 // Just short of opaque, so the scene reads faintly behind the bar.
                 .background(Color.Black.copy(alpha = MONT_SURFACE_ALPHA))
-                .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 10.dp)
+                .padding(start = 22.dp, top = MONT_TOP_INSET, end = 14.dp, bottom = 10.dp)
         ) {
             MenuColumn(
                 nodes = root + MenuAction("Close") { onDismiss() },
@@ -164,16 +162,11 @@ private fun MenuColumn(
                             Label(node.label, Modifier.weight(1f))
                             Label(node.display, dim = true)
                         }
-                        Slider(
+                        MontSlider(
                             value = node.value.coerceIn(node.range.start, node.range.endInclusive),
-                            onValueChange = node.onChange,
-                            valueRange = node.range,
-                            modifier = Modifier.fillMaxWidth().height(20.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color.White,
-                                inactiveTrackColor = Color.White.copy(.22f)
-                            )
+                            range = node.range,
+                            onChange = node.onChange,
+                            modifier = Modifier.fillMaxWidth().height(20.dp)
                         )
                     }
                 }

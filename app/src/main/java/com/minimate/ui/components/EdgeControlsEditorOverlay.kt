@@ -19,8 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,15 +107,10 @@ private fun StudioSizeSlider(label: String, value: Float, onChange: (Float) -> U
             StudioLabel(label.uppercase(), dim = true, size = 11)
             StudioLabel("${(value * 100f).roundToInt()}%", size = 11)
         }
-        Slider(
+        MontSlider(
             value = value.coerceIn(.65f, 1.8f),
-            onValueChange = onChange,
-            valueRange = .65f..1.8f,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color.White,
-                inactiveTrackColor = Color.White.copy(.14f)
-            ),
+            range = .65f..1.8f,
+            onChange = onChange,
             modifier = Modifier.fillMaxWidth().height(28.dp)
         )
     }

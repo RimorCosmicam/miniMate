@@ -6,6 +6,7 @@ import com.minimate.touchpad.model.EdgeControlSide
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.KeyboardFont
 import com.minimate.touchpad.model.KeyboardLanguage
+import com.minimate.touchpad.model.ClockStyle
 import com.minimate.touchpad.model.KeyboardTheme
 import com.minimate.touchpad.model.withKeyboardTheme
 import com.minimate.touchpad.model.KeyboardTrail

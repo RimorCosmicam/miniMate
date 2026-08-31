@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,7 +75,7 @@ fun SceneStudioOverlay(
         StudioPanel(
             onCancel = onCancel,
             onDone = onKeep,
-            modifier = Modifier.align(Alignment.TopStart)
+            modifier = Modifier.align(Alignment.TopStart).padding(top = MONT_TOP_INSET)
         ) {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -132,21 +130,16 @@ fun SceneStudioOverlay(
                                     fontSize = 8.sp,
                                     modifier = Modifier.width(62.dp)
                                 )
-                                Slider(
+                                MontSlider(
                                     value = value.coerceIn(param.min, param.max),
-                                    onValueChange = { next ->
+                                    range = param.min..param.max,
+                                    onChange = { next ->
                                         val updated = values.toMutableList()
                                         while (updated.size < scene.params.size) updated += 0f
                                         updated[index] = next
                                         onSettingsChange(settings.copy(shaderParams = updated))
                                     },
-                                    valueRange = param.min..param.max,
-                                    modifier = Modifier.weight(1f).height(22.dp),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color.White,
-                                        activeTrackColor = Color.White,
-                                        inactiveTrackColor = Color.White.copy(.14f)
-                                    )
+                                    modifier = Modifier.weight(1f).height(22.dp)
                                 )
                             }
                         }
@@ -195,16 +188,11 @@ fun SceneStudioOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Touch", color = Color.White.copy(.7f), fontSize = 8.sp, modifier = Modifier.width(62.dp))
-                        Slider(
+                        MontSlider(
                             value = settings.shaderTouchStrength.coerceIn(0f, 2f),
-                            onValueChange = { onSettingsChange(settings.copy(shaderTouchStrength = it)) },
-                            valueRange = 0f..2f,
-                            modifier = Modifier.weight(1f).height(22.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color.White,
-                                inactiveTrackColor = Color.White.copy(.14f)
-                            )
+                            range = 0f..2f,
+                            onChange = { onSettingsChange(settings.copy(shaderTouchStrength = it)) },
+                            modifier = Modifier.weight(1f).height(22.dp)
                         )
                     }
                 }

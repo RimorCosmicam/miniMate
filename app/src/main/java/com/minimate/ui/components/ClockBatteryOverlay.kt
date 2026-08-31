@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.minimate.ui.theme.Mont
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothUiState
@@ -141,6 +142,50 @@ fun ClockBatteryOverlay(
             }
     ) {
         when (clockStyle) {
+            // Square, black, Mont Black, no border and no accent colours: the same surface as the
+            // command bar and the panels, so the pill stops being the one ornamented thing left.
+            ClockStyle.MONT -> {
+                Row(
+                    modifier = Modifier
+                        .background(Color.Black.copy(MONT_SURFACE_ALPHA))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = currentTimeText,
+                        color = Color.White.copy(if (isPressed) 1f else .92f),
+                        fontFamily = Mont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp
+                    )
+                    if (currentAmPm.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = currentAmPm,
+                            color = Color.White.copy(.55f),
+                            fontFamily = Mont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 9.sp
+                        )
+                    }
+                    if (showBattery) {
+                        Spacer(modifier = Modifier.width(9.dp))
+                        Text(
+                            text = "$batteryPercentage%",
+                            color = Color.White.copy(if (batteryPercentage < 20) .95f else .55f),
+                            fontFamily = Mont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp
+                        )
+                    }
+                    if (bluetoothState.status == ConnectionStatus.CONNECTED) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // A square, not a dot. Nothing here is round.
+                        Box(Modifier.size(5.dp).background(Color.White))
+                    }
+                }
+            }
+
             ClockStyle.MINIMAL_PILL -> {
                 Row(
                     modifier = Modifier
