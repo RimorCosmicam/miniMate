@@ -92,7 +92,8 @@ fun CommandBar(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .fillMaxHeight(.33f)
-                .background(Color.Black)
+                // Just short of opaque, so the scene reads faintly behind the bar.
+                .background(Color.Black.copy(alpha = .95f))
                 .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 10.dp)
         ) {
             MenuColumn(
