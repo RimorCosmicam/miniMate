@@ -45,7 +45,7 @@ import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.AudioDeviceEqProfile
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.HapticIntensity
-import com.minimate.touchpad.model.SUPERHUMAN_BAND_HZ
+import com.minimate.touchpad.model.MicrophonePlacement
 import com.minimate.touchpad.model.SuperhumanPreset
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
@@ -116,6 +116,7 @@ fun TouchpadScreen(
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
         settings.audioMicrophonePreset,
+        settings.audioMicrophonePlacement,
         settings.audioSuperhumanBands
     ) {
         audioBridge.configure(
@@ -126,7 +127,8 @@ fun TouchpadScreen(
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
             settings.audioMicrophonePreset,
-            settings.audioSuperhumanBands
+            settings.audioSuperhumanBands,
+            settings.audioMicrophonePlacement
         )
     }
 
@@ -144,6 +146,7 @@ fun TouchpadScreen(
     ) {
         localListen.preset = settings.audioMicrophonePreset
         localListen.bands = settings.audioSuperhumanBands
+        localListen.placement = settings.audioMicrophonePlacement
         localListen.gain = settings.audioMicrophoneGain
         localListen.listenVolume = settings.audioListenVolume
         localListen.outputDeviceKey = settings.audioOutputDeviceKey.takeIf { it != "phone" }
@@ -533,12 +536,10 @@ fun TouchpadScreen(
                 onMicrophonePreset = { preset ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophonePreset = preset))
                 },
-                onSuperhumanBand = { index, value ->
-                    val next = settings.audioSuperhumanBands.toMutableList()
-                    while (next.size < SUPERHUMAN_BAND_HZ.size) next += 0f
-                    next[index.coerceIn(0, next.lastIndex)] = value.coerceIn(-18f, 18f)
-                    touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = next))
+                onPlacement = { placement ->
+                    touchpadEngine.updateSettings(settings.copy(audioMicrophonePlacement = placement))
                 },
+                placement = settings.audioMicrophonePlacement,
                 onListenToggled = { listening = it },
                 onSuperhumanPreset = { shape ->
                     touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = shape.bands))

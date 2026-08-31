@@ -368,23 +368,27 @@ enum class AudioTransport(val label: String) {
 }
 
 /**
- * Microphone character. The first entry is unprocessed; the voice group colours speech; the two
- * tool modes reshape the microphone into a different instrument entirely.
+ * Microphone mode. Voice colouring and effects were removed: the subtle ones were inaudible and
+ * the novelty ones were not worth the space. What remains is the plain microphone and the two
+ * listening instruments.
  */
 enum class MicrophoneVoicePreset(val label: String) {
     CLEAN("Clean"),
-    RICH("Rich"),
-    WARM("Warm"),
-    BRIGHT("Bright"),
-    DEEP("Deep"),
-    RADIO("Radio"),
-    ROBOT("Robot"),
-    BABY("Baby"),
-    ARENA_ANNOUNCER("Mortal Kombat"),
-    /** Contact listening: body-conducted and structure-borne sound rather than air. */
+    /** Contact listening: structure-borne sound rather than air. */
     STETHO("Stetho"),
     /** Extreme sensitivity with user-shaped spectrum, for faint and muffled sound. */
     SUPERHUMAN("Super Human")
+}
+
+/**
+ * Where the phone is while speaking. This is not a cosmetic label: it sets the microphone array's
+ * beam width and the gain, both of which depend on distance. Held near the face the beam is
+ * narrow, which rejects most of the room. Lying on a desk at arm's length the same narrow beam
+ * would cut off anyone who leans or turns, so it widens and the gain rises to cover the distance.
+ */
+enum class MicrophonePlacement(val label: String, val fieldDimension: Float, val gainScale: Float) {
+    HANDHELD("Handheld", .75f, 1f),
+    DESK("On desk", .35f, 2.1f)
 }
 
 /**
@@ -513,6 +517,7 @@ data class TouchpadSettings(
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
     val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
+    val audioMicrophonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
     val audioSuperhumanBands: List<Float> = DEFAULT_SUPERHUMAN_BANDS,
     /**
      * Playback level for on-device listening. Low by default and deliberately separate from

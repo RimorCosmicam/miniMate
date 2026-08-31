@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.Process
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.minimate.touchpad.model.MicrophonePlacement
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -48,6 +49,7 @@ class LocalListen(private val context: Context) {
 
     @Volatile var preset: MicrophoneVoicePreset = MicrophoneVoicePreset.SUPERHUMAN
     @Volatile var bands: List<Float> = emptyList()
+    @Volatile var placement: MicrophonePlacement = MicrophonePlacement.HANDHELD
     @Volatile var gain: Float = 1f
     /** Playback level, 0..1. Starts low deliberately — see the feedback note in start(). */
     @Volatile var listenVolume: Float = .30f
@@ -141,7 +143,7 @@ class LocalListen(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !isToolMode()) {
                 runCatching {
                     mic.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
-                    mic.setPreferredMicrophoneFieldDimension(.75f)
+                    mic.setPreferredMicrophoneFieldDimension(placement.fieldDimension)
                 }
             }
             // Suppression and echo cancellation are deliberately off for the tools: both remove
@@ -204,7 +206,7 @@ class LocalListen(private val context: Context) {
                     continue
                 }
                 emptyReads = 0
-                val processed = engine.process(samples, read, gain, preset, bands)
+                val processed = engine.process(samples, read, gain, preset, bands, placement.gainScale)
 
                 var peak = 0
                 for (index in 0 until read) {

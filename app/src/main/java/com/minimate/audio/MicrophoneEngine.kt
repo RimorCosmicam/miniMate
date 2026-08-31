@@ -47,46 +47,6 @@ internal class Biquad(
 }
 
 /**
- * Time-domain pitch shifter: two crossfaded delay taps swept in opposite directions. Cheap enough
- * for the capture loop, and adequate for a voice effect rather than transparent transposition.
- */
-internal class PitchShifter {
-    private val buffer = FloatArray(4096)
-    private var writeIndex = 0
-    private var phase = 0.0
-
-    fun process(input: Float, factor: Float): Float {
-        buffer[writeIndex] = input
-        if (factor == 1f) {
-            writeIndex = (writeIndex + 1) % buffer.size
-            return input
-        }
-        val range = 2_048f
-        val minimumDelay = 192f
-        val maximumDelay = minimumDelay + range
-        phase = (phase + abs(factor - 1f) / range) % 1.0
-
-        fun tap(at: Double): Float {
-            val delay = if (factor > 1f) maximumDelay - at.toFloat() * range
-            else minimumDelay + at.toFloat() * range
-            var position = writeIndex - delay
-            while (position < 0f) position += buffer.size
-            val first = position.toInt() % buffer.size
-            val next = (first + 1) % buffer.size
-            val fraction = position - position.toInt()
-            return buffer[first] * (1f - fraction) + buffer[next] * fraction
-        }
-
-        val second = (phase + .5) % 1.0
-        val firstWeight = (.5 - .5 * cos(2.0 * PI * phase)).toFloat()
-        val secondWeight = (.5 - .5 * cos(2.0 * PI * second)).toFloat()
-        val result = tap(phase) * firstWeight + tap(second) * secondWeight
-        writeIndex = (writeIndex + 1) % buffer.size
-        return result
-    }
-}
-
-/**
  * Microphone level control and character.
  *
  * Calibrated against measured capture from this hardware. On the phone's own array, speech
@@ -132,12 +92,10 @@ class MicrophoneEngine(private val sampleRate: Int) {
     private val ceiling = LIMIT_THRESHOLD * Short.MAX_VALUE
     private val headroom = Short.MAX_VALUE - ceiling
 
-    // Character state
+    // Stetho voicing state.
     private var lowPass = 0f
     private var subBass = 0f
     private var previousDry = 0f
-    private var robotPhase = 0.0
-    private val pitchShifter = PitchShifter()
 
     // Super Human band shaper, rebuilt only when the requested shape changes.
     private var bandFilters: List<Biquad> = emptyList()
@@ -161,7 +119,8 @@ class MicrophoneEngine(private val sampleRate: Int) {
         count: Int,
         trim: Float,
         preset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
-        superhumanBands: List<Float> = emptyList()
+        superhumanBands: List<Float> = emptyList(),
+        placementGain: Float = 1f
     ): ShortArray {
         val output = ShortArray(count)
         if (count <= 0) return output
@@ -208,7 +167,7 @@ class MicrophoneEngine(private val sampleRate: Int) {
         //
         // So loudness is the user's decision and stays where they put it. The gate ducks between
         // phrases so room tone is not held at speaking level, and the limiter catches peaks.
-        val base = if (isTool) TOOL_BASE_GAIN else VOICE_BASE_GAIN
+        val base = (if (isTool) TOOL_BASE_GAIN else VOICE_BASE_GAIN) * placementGain
         val targetGain = if (voiceActive) {
             base * trim.coerceIn(0f, 3f)
         } else {
@@ -220,13 +179,6 @@ class MicrophoneEngine(private val sampleRate: Int) {
         val previousGain = currentGain
         currentGain += (targetGain - currentGain) * (1f - exp(-dt / tau))
 
-        val pitchFactor = when (preset) {
-            MicrophoneVoicePreset.BABY -> 1.38f
-            MicrophoneVoicePreset.ARENA_ANNOUNCER -> .72f
-            MicrophoneVoicePreset.DEEP -> .82f
-            else -> 1f
-        }
-
         var outputPeak = 0f
         for (index in 0 until count) {
             val dry = samples[index].toFloat()
@@ -234,28 +186,15 @@ class MicrophoneEngine(private val sampleRate: Int) {
             lowPass += (dry - lowPass) * .12f
             subBass += (dry - subBass) * .018f
             val highPass = dry - lowPass
-            val shifted = pitchShifter.process(dry, pitchFactor)
 
             val coloured = when (preset) {
                 MicrophoneVoicePreset.CLEAN -> dry
-                MicrophoneVoicePreset.RICH -> dry * .82f + lowPass * .28f + highPass * .10f
-                MicrophoneVoicePreset.WARM -> dry * .72f + lowPass * .42f
-                MicrophoneVoicePreset.BRIGHT -> dry + highPass * .48f
-                MicrophoneVoicePreset.DEEP -> shifted * .82f + lowPass * .38f
-                MicrophoneVoicePreset.RADIO -> highPass * 1.45f
-                MicrophoneVoicePreset.ROBOT -> {
-                    robotPhase += 2.0 * PI * 46.0 / sampleRate
-                    if (robotPhase > PI * 2.0) robotPhase -= PI * 2.0
-                    dry * (.35f + .65f * sin(robotPhase).toFloat())
-                }
-                MicrophoneVoicePreset.BABY -> shifted * .9f + highPass * .18f
-                MicrophoneVoicePreset.ARENA_ANNOUNCER -> shifted * .86f + lowPass * .52f
                 MicrophoneVoicePreset.STETHO -> {
                     // Contact listening. Structure-borne sound is carried in the low-mid band,
                     // so slow rumble below it is removed and the resonant body emphasised, while
                     // transient edges are preserved so taps stay crisp. The airborne signal is
-                    // largely rejected — a contact microphone that still hears the room is just
-                    // an amplifier, which is what the first attempt at this was.
+                    // subtracted — a contact microphone that still hears the room is just an
+                    // amplifier, which is what the first attempt at this was.
                     val body = lowPass - subBass
                     val transient = dry - previousDry
                     (body * 1.2f + transient * .25f) - highPass * .35f
@@ -272,11 +211,7 @@ class MicrophoneEngine(private val sampleRate: Int) {
                 // into a wall of distortion and loses the detail the tool exists to reveal.
                 MicrophoneVoicePreset.STETHO -> tanh(coloured / 20_000f) * 15_000f
                 MicrophoneVoicePreset.SUPERHUMAN -> tanh(coloured / 22_000f) * 16_000f
-                MicrophoneVoicePreset.RADIO -> tanh(coloured / 9_000f) * 18_000f
-                MicrophoneVoicePreset.ROBOT -> (coloured / 900f).roundToInt() * 900f
-                MicrophoneVoicePreset.RICH -> tanh(coloured / 20_000f) * 22_000f
-                MicrophoneVoicePreset.ARENA_ANNOUNCER -> tanh(coloured / 12_000f) * 21_000f
-                else -> coloured
+                MicrophoneVoicePreset.CLEAN -> coloured
             }
             previousDry = dry
 

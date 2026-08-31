@@ -48,22 +48,14 @@ import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.AudioDeviceSummary
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
+import com.minimate.touchpad.model.MicrophonePlacement
 import com.minimate.touchpad.model.MicrophoneVoicePreset
-import com.minimate.touchpad.model.SUPERHUMAN_BAND_HZ
 import com.minimate.touchpad.model.SuperhumanPreset
 
 private enum class AudioEditorTab(val label: String) {
     OUTPUT("Output"), INPUT("Input"), TOOLS("Tools")
 }
 
-private val VOICE_PRESETS = listOf(
-    MicrophoneVoicePreset.CLEAN, MicrophoneVoicePreset.RICH, MicrophoneVoicePreset.WARM,
-    MicrophoneVoicePreset.BRIGHT
-)
-private val VOICE_TOYS = listOf(
-    MicrophoneVoicePreset.DEEP, MicrophoneVoicePreset.RADIO, MicrophoneVoicePreset.ROBOT,
-    MicrophoneVoicePreset.BABY, MicrophoneVoicePreset.ARENA_ANNOUNCER
-)
 
 @Composable
 fun AudioModeOverlay(
@@ -76,8 +68,9 @@ fun AudioModeOverlay(
     onOutputEqBand: (Int, Float) -> Unit,
     onMicrophoneGain: (Float) -> Unit,
     onMicrophonePreset: (MicrophoneVoicePreset) -> Unit,
-    onSuperhumanBand: (Int, Float) -> Unit,
     onListenToggled: (Boolean) -> Unit,
+    onPlacement: (MicrophonePlacement) -> Unit,
+    placement: MicrophonePlacement,
     onSuperhumanPreset: (SuperhumanPreset) -> Unit,
     onListenVolume: (Float) -> Unit,
     listenVolume: Float,
@@ -116,7 +109,7 @@ fun AudioModeOverlay(
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
                     state, onMicrophoneEnabled, onMicrophoneGain,
-                    microphonePreset, onMicrophonePreset
+                    placement, onPlacement
                 )
                 AudioEditorTab.TOOLS -> ToolsControls(
                     preset = microphonePreset,
@@ -124,7 +117,6 @@ fun AudioModeOverlay(
                     listening = listening,
                     listenVolume = listenVolume,
                     onPreset = onMicrophonePreset,
-                    onBand = onSuperhumanBand,
                     onBandPreset = onSuperhumanPreset,
                     onListenVolume = onListenVolume,
                     onListenToggled = onListenToggled
@@ -294,8 +286,8 @@ private fun MicrophoneControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
     onGain: (Float) -> Unit,
-    preset: MicrophoneVoicePreset,
-    onPreset: (MicrophoneVoicePreset) -> Unit
+    placement: MicrophonePlacement,
+    onPlacement: (MicrophonePlacement) -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
@@ -330,24 +322,23 @@ private fun MicrophoneControls(
             valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
             onValue = onGain
         )
-        Text("VOICE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            VOICE_PRESETS.forEach { option ->
-                CompactChoice(option.label, option == preset, state.microphoneEnabled) { onPreset(option) }
+        Text("PHONE POSITION", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MicrophonePlacement.entries.forEach { option ->
+                Box(Modifier.weight(1f)) {
+                    CompactChoice(option.label, option == placement, state.microphoneEnabled) {
+                        onPlacement(option)
+                    }
+                }
             }
         }
-        Text("VOICE TOYS", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            VOICE_TOYS.forEach { option ->
-                CompactChoice(option.label, option == preset, state.microphoneEnabled) { onPreset(option) }
-            }
-        }
+        Text(
+            when (placement) {
+                MicrophonePlacement.HANDHELD -> "Narrow beam, close range. Rejects most of the room."
+                MicrophonePlacement.DESK -> "Wider beam and more gain for arm's length."
+            },
+            color = Color.White.copy(.42f), fontSize = 7.sp
+        )
     }
 }
 
@@ -363,7 +354,6 @@ private fun ToolsControls(
     listening: Boolean,
     listenVolume: Float,
     onPreset: (MicrophoneVoicePreset) -> Unit,
-    onBand: (Int, Float) -> Unit,
     onBandPreset: (SuperhumanPreset) -> Unit,
     onListenVolume: (Float) -> Unit,
     onListenToggled: (Boolean) -> Unit
@@ -412,14 +402,14 @@ private fun ToolsControls(
                 MicrophoneVoicePreset.STETHO ->
                     "Contact listening: press the phone against a surface for structure-borne sound."
                 MicrophoneVoicePreset.SUPERHUMAN ->
-                    "Maximum sensitivity, unfiltered capture, no gate. Shape the bands below."
+                    "Maximum sensitivity, no filtering, no gate. Pick what you are listening for."
                 else -> "Pick a tool. Both bypass noise suppression so faint sound survives."
             },
             color = Color.White.copy(.42f), fontSize = 7.sp
         )
 
         if (preset == MicrophoneVoicePreset.SUPERHUMAN) {
-            Text("SHAPE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Text("LISTENING FOR", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -430,31 +420,6 @@ private fun ToolsControls(
             }
             SuperhumanPreset.entries.firstOrNull { it.bands == bands }?.let { active ->
                 Text(active.hint, color = Color.White.copy(.4f), fontSize = 7.sp)
-            }
-            Text("SPECTRUM", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-            // Obstructions attenuate progressively with frequency, so sound through a wall or
-            // door arrives as low-mid energy with the consonants gone. The low bands are where
-            // anything recoverable actually is; the high bands are mostly worth cutting.
-            SUPERHUMAN_BAND_HZ.forEachIndexed { index, hz ->
-                val value = bands.getOrElse(index) { 0f }
-                Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (hz >= 1000f) "${(hz / 1000f).formatGain()}k" else "${hz.toInt()}",
-                        color = Color.White.copy(.55f), fontSize = 7.sp, modifier = Modifier.size(26.dp, 12.dp)
-                    )
-                    Slider(
-                        value = value, onValueChange = { onBand(index, it) }, valueRange = -18f..18f,
-                        modifier = Modifier.weight(1f).height(20.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White, activeTrackColor = Color.White,
-                            inactiveTrackColor = Color.White.copy(.14f)
-                        )
-                    )
-                    Text(
-                        "${if (value >= 0) "+" else ""}${value.toInt()}",
-                        color = Color.White.copy(.6f), fontSize = 7.sp, modifier = Modifier.size(20.dp, 12.dp)
-                    )
-                }
             }
         }
     }

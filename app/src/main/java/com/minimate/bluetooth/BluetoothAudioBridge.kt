@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
 import com.minimate.audio.MicrophoneEngine
+import com.minimate.touchpad.model.MicrophonePlacement
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 import com.minimate.touchpad.model.ThemeFilter
 
@@ -127,6 +128,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     @Volatile private var micGeneration = 0
     @Volatile private var microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN
     @Volatile private var superhumanBands: List<Float> = emptyList()
+    @Volatile private var microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD
     private var audioTrack: AudioTrack? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var audioTrackRate = 0
@@ -156,10 +158,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
         microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
-        superhumanBands: List<Float> = emptyList()
+        superhumanBands: List<Float> = emptyList(),
+        microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD
     ) {
         this.microphonePreset = microphonePreset
         this.superhumanBands = superhumanBands
+        this.microphonePlacement = microphonePlacement
         val restartMicrophone = false
         deviceEqProfiles = outputProfiles
         _state.update {
@@ -479,9 +483,9 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isPhoneMic) {
                 runCatching {
                     recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
-                    recorder.setPreferredMicrophoneFieldDimension(.75f)
+                    recorder.setPreferredMicrophoneFieldDimension(microphonePlacement.fieldDimension)
                 }.onFailure { Log.w(TAG, "startMicrophone: beamforming unavailable", it) }
-                Log.i(TAG, "startMicrophone: beamforming towards user, field .75")
+                Log.i(TAG, "startMicrophone: beamforming towards user, placement=${microphonePlacement.name} field=${microphonePlacement.fieldDimension}")
             }
             // Platform AGC pre-processor. This is the piece that was missing: it runs inside the
             // capture chain, so it raises a low-sensitivity capsule's signal before we ever see
@@ -540,7 +544,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     consecutiveEmptyReads = 0
                     val gain = _state.value.microphoneGain
-                    val adjusted = engine.process(samples, count, gain, microphonePreset, superhumanBands)
+                    val adjusted = engine.process(samples, count, gain, microphonePreset, superhumanBands, microphonePlacement.gainScale)
                     for (index in 0 until count) {
                         val rawAbs = kotlin.math.abs(samples[index].toInt())
                         if (rawAbs > windowRawPeak) windowRawPeak = rawAbs
