@@ -24,16 +24,20 @@ class TouchImpulseHistoryTest {
     }
 
     @Test
-    fun releasedReactionRemainsAsPersistentSceneMemory() {
+    fun releasedReactionDecaysInsteadOfPersisting() {
         val history = TouchImpulseHistory()
         history.update(listOf(TouchPoint(1f, 2f, id = 0)), 0f)
         history.update(emptyList(), .1f)
-        assertEquals(1, history.update(emptyList(), 2.2f).size)
-        assertEquals(1, history.update(emptyList(), 200f).size)
+        // Still present while the visual decay is running.
+        assertEquals(1, history.update(emptyList(), 1.0f).size)
+        // Dropped once it has finished. Keeping released contacts forever left a permanent
+        // disturbance everywhere the screen had ever been touched.
+        assertEquals(0, history.update(emptyList(), 3f).size)
+        assertEquals(0, history.update(emptyList(), 200f).size)
     }
 
     @Test
-    fun oldestSceneMemoryIsReplacedOnlyAtCapacity() {
+    fun oldestImpulseIsReplacedAtCapacity() {
         val history = TouchImpulseHistory(capacity = 2)
         history.update(listOf(TouchPoint(1f, 2f, id = 0)), 0f)
         history.update(emptyList(), .1f)
