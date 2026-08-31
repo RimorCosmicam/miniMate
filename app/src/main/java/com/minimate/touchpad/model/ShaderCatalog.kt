@@ -1493,49 +1493,44 @@ val shaderScenes: List<ShaderScene> = listOf(
 
     ShaderScene(
         "warp_jump", "Warp Jump", ShaderFamily.STARS,
-        "Stars drawing out into light as the speed comes on.",
+        "Held at speed, stars drawn out into light.",
         listOf(
             param("lanes", "Star lanes", 20f, 90f, 46f),
-            param("cycle", "Jump rate", .2f, 2.5f, .8f),
+            param("speed", "Speed", .05f, 1f, .45f),
             param("stretch", "Stretch", .2f, 2f, 1f),
-            param("core", "Vanishing glow", 0f, 2f, .9f)
+            param("bright", "Brightness", .2f, 2f, .9f)
         ),
         NIGHT,
         """
         float3 scene(float2 p, float2 uv, float t){
             float radius = max(length(p), 0.004);
             float angle = atan(p.y, p.x);
-
-            // The jump comes on and eases off rather than running flat out: a constant streak
-            // reads as wallpaper, and it is the acceleration that makes it feel like speed.
-            float phase = fract(t * uP1 * 0.07);
-            float speed = pow(smoothstep(0.0, 0.30, phase) * smoothstep(1.0, 0.72, phase), 1.5);
-
             float3 c = uC0;
 
-            // Stars are laid out in angle against log-radius. Travelling forward is then a plain
-            // constant slide along one axis, which is exactly why they sweep outward and pull
-            // apart as they near the edge instead of moving at one uniform rate.
+            // Stars are laid out in angle against log-radius, so travelling forward is one plain
+            // constant slide along a single axis — which is why they pull apart as they near the
+            // edge rather than moving at one uniform rate. The speed is held, not cycled: a jump
+            // that keeps stopping and restarting is a effect playing at you, not a journey.
             float lr = log(radius);
             for (int layer = 0; layer < 3; layer++){
                 float fl = float(layer);
-                float2 q = float2(angle / 6.2831 * uP0, lr * 2.6 - t * (0.35 + speed * 4.2) + fl * 19.0);
+                float2 q = float2(angle / 6.2831 * uP0, lr * 2.6 - t * uP1 * 4.5 + fl * 19.0);
                 float2 id = floor(q);
                 float2 f = fract(q) - 0.5;
 
                 float mag = pow(hash(id + fl * 3.1), 4.5);
                 if (mag > 0.004){
-                    // Stretching only along the radial axis is what turns a point into a streak.
-                    float stretch = 1.0 + speed * uP2 * 24.0;
+                    // Stretching along the radial axis alone turns a point into a streak.
+                    float stretch = 1.0 + uP1 * uP2 * 26.0;
                     float d = length(float2(f.x * 2.6, f.y / stretch));
-                    // Running toward something shifts its light blue, and the faster the bluer.
-                    float3 tint = starColor(clamp(hash(id + 7.3) * 0.55 + speed * 0.45, 0.0, 1.0));
-                    c += tint * psf(d, 0.05 + mag * 0.05) * mag * (0.45 + speed * 1.3);
+                    // Nothing accumulates at the vanishing point. A star near the centre is still
+                    // far off, so it arrives faint and short and grows as it comes past — the
+                    // previous version let every lane pile into the middle and burn out white.
+                    float emerging = smoothstep(0.0, 0.20, radius) * smoothstep(0.0, 0.06, radius);
+                    float3 tint = starColor(clamp(hash(id + 7.3) * 0.5 + uP1 * 0.5, 0.0, 1.0));
+                    c += tint * psf(d, 0.05 + mag * 0.05) * mag * emerging * uP3;
                 }
             }
-
-            // The point being travelled toward piles up light, and does so hardest mid-jump.
-            c += mix(uC2, uC3, speed) * exp(-radius * 7.0) * uP3 * (0.10 + speed * 0.55);
             return c;
         }
         """,
@@ -1544,54 +1539,166 @@ val shaderScenes: List<ShaderScene> = listOf(
 
     ShaderScene(
         "constellations", "Constellations", ShaderFamily.STARS,
-        "Figures drawing themselves between the stars, then letting go.",
+        "Orion, the Plough, Cassiopeia and the Northern Cross.",
         listOf(
-            param("spread", "Star spread", 2f, 9f, 4.2f),
-            param("linked", "How many join", 0f, 1f, .45f),
-            param("draw", "Drawing rate", .1f, 2f, .5f),
-            param("weight", "Line weight", .001f, .012f, .004f)
+            param("size", "Size", .12f, .34f, .20f),
+            param("weight", "Line weight", .0008f, .008f, .0025f),
+            param("fade", "Fade cycle", 0f, 1.5f, .35f),
+            param("field", "Background stars", 4f, 16f, 9f)
         ),
         NIGHT,
         """
-        float segment(float2 p, float2 a, float2 b){
+        float seg(float2 p, float2 a, float2 b){
             float2 pa = p - a, ba = b - a;
             return length(pa - ba * clamp(dot(pa, ba) / max(dot(ba, ba), 0.000001), 0.0, 1.0));
         }
 
-        /** Where the star belonging to a cell actually sits, jittered off the lattice. */
-        float2 starAt(float2 id){
-            return id + 0.15 + hash2(id) * 0.7;
+        float node(float2 p, float2 a, float mag){
+            return psf(length(p - a), 0.014 + mag * 0.020) * mag;
+        }
+
+        // The four figures below are the real asterisms, with the stars roughly where they
+        // actually sit relative to one another. A procedural lattice joined by a coin toss — which
+        // is what this was — produces no figure at all, because a constellation is not a pattern,
+        // it is a specific set of stars people agreed to join up. Each returns the distance to the
+        // nearest line in x, and the accumulated starlight in y.
+
+        /** Orion: shoulders, belt, knees, and the head above. */
+        float2 orion(float2 q){
+            float2 betelgeuse = float2(-0.42, 0.72);
+            float2 bellatrix = float2(0.40, 0.80);
+            float2 meissa = float2(-0.02, 1.12);
+            float2 alnitak = float2(-0.22, 0.00);
+            float2 alnilam = float2(0.00, 0.06);
+            float2 mintaka = float2(0.22, 0.12);
+            float2 saiph = float2(-0.38, -0.76);
+            float2 rigel = float2(0.52, -0.82);
+
+            float d = 9.0;
+            d = min(d, seg(q, betelgeuse, bellatrix));
+            d = min(d, seg(q, betelgeuse, meissa));
+            d = min(d, seg(q, bellatrix, meissa));
+            d = min(d, seg(q, betelgeuse, alnitak));
+            d = min(d, seg(q, bellatrix, mintaka));
+            d = min(d, seg(q, alnitak, alnilam));
+            d = min(d, seg(q, alnilam, mintaka));
+            d = min(d, seg(q, alnitak, saiph));
+            d = min(d, seg(q, mintaka, rigel));
+
+            float s = node(q, betelgeuse, 1.0) + node(q, rigel, 1.0) + node(q, bellatrix, 0.8)
+                    + node(q, alnitak, 0.8) + node(q, alnilam, 0.85) + node(q, mintaka, 0.8)
+                    + node(q, saiph, 0.7) + node(q, meissa, 0.5);
+            return float2(d, s);
+        }
+
+        /** Ursa Major's plough: the bowl, and the handle bending away from it. */
+        float2 plough(float2 q){
+            float2 dubhe = float2(0.92, 0.34);
+            float2 merak = float2(0.88, -0.10);
+            float2 phecda = float2(0.40, -0.24);
+            float2 megrez = float2(0.44, 0.16);
+            float2 alioth = float2(0.02, 0.30);
+            float2 mizar = float2(-0.40, 0.30);
+            float2 alkaid = float2(-0.84, 0.06);
+
+            float d = 9.0;
+            d = min(d, seg(q, dubhe, merak));
+            d = min(d, seg(q, merak, phecda));
+            d = min(d, seg(q, phecda, megrez));
+            d = min(d, seg(q, megrez, dubhe));
+            d = min(d, seg(q, megrez, alioth));
+            d = min(d, seg(q, alioth, mizar));
+            d = min(d, seg(q, mizar, alkaid));
+
+            float s = node(q, dubhe, 0.95) + node(q, merak, 0.85) + node(q, phecda, 0.8)
+                    + node(q, megrez, 0.6) + node(q, alioth, 0.9) + node(q, mizar, 0.85)
+                    + node(q, alkaid, 0.9);
+            return float2(d, s);
+        }
+
+        /** Cassiopeia, the W. */
+        float2 cassiopeia(float2 q){
+            float2 caph = float2(-0.88, 0.16);
+            float2 schedar = float2(-0.44, -0.18);
+            float2 gamma = float2(0.02, 0.26);
+            float2 ruchbah = float2(0.46, -0.12);
+            float2 segin = float2(0.88, 0.30);
+
+            float d = 9.0;
+            d = min(d, seg(q, caph, schedar));
+            d = min(d, seg(q, schedar, gamma));
+            d = min(d, seg(q, gamma, ruchbah));
+            d = min(d, seg(q, ruchbah, segin));
+
+            float s = node(q, caph, 0.85) + node(q, schedar, 0.95) + node(q, gamma, 0.9)
+                    + node(q, ruchbah, 0.8) + node(q, segin, 0.65);
+            return float2(d, s);
+        }
+
+        /** Cygnus, the Northern Cross, laid along the swan. */
+        float2 cygnus(float2 q){
+            float2 deneb = float2(0.00, 1.00);
+            float2 sadr = float2(0.00, 0.10);
+            float2 albireo = float2(-0.04, -0.96);
+            float2 gienah = float2(-0.78, 0.22);
+            float2 delta = float2(0.74, 0.30);
+
+            float d = 9.0;
+            d = min(d, seg(q, deneb, sadr));
+            d = min(d, seg(q, sadr, albireo));
+            d = min(d, seg(q, gienah, sadr));
+            d = min(d, seg(q, sadr, delta));
+
+            float s = node(q, deneb, 1.0) + node(q, sadr, 0.8) + node(q, albireo, 0.7)
+                    + node(q, gienah, 0.8) + node(q, delta, 0.75);
+            return float2(d, s);
+        }
+
+        /** One figure, placed and turned, its lines and stars resolved into colour. */
+        float3 figure(float2 hit, float scale, float fade){
+            // The line width is given in screen terms and divided into local space, so a figure
+            // does not draw with thicker strokes simply because it is larger.
+            float width = uP1 / scale;
+            float3 c = mix(uC2, uC3, 0.30) * smoothstep(width, 0.0, hit.x) * fade * 0.9;
+            c += mix(uC3, float3(1.0), 0.5) * hit.y * (0.35 + fade * 0.65);
+            return c;
         }
 
         float3 scene(float2 p, float2 uv, float t){
-            float3 c = uC0 + uC1 * fbm(p * 3.2) * 0.05;
+            float3 c = uC0 + uC1 * fbm(p * 3.0) * 0.05;
 
-            float2 g = p * uP0 + float2(t * 0.012, 0.0);
+            // The sky the figures are picked out of.
+            float2 g = p * uP3;
             float2 cell = floor(g);
-
+            float2 f = fract(g) - 0.5;
             for (int j = 0; j < 9; j++){
                 float fj = float(j);
-                float2 id = cell + float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
-                float2 a = starAt(id);
-                float mag = 0.25 + pow(hash(id + 5.7), 3.0) * 0.9;
-
-                // Each cell links only rightward and downward, so every pair is considered once
-                // and no line is ever drawn twice over itself at double brightness.
-                for (int k = 0; k < 2; k++){
-                    float2 neighbour = id + (k == 0 ? float2(1.0, 0.0) : float2(0.0, 1.0));
-                    float pair = hash(id + neighbour * 3.7 + 1.3);
-                    if (pair < uP1){
-                        float2 b = starAt(neighbour);
-                        // Figures come and go: each line has its own slow cycle, so the sky is
-                        // always partly drawn and never the same arrangement twice.
-                        float life = 0.5 + 0.5 * sin(t * uP2 * (0.5 + pair) + pair * 30.0);
-                        float d = segment(g, a, b);
-                        c += mix(uC2, uC3, 0.35) * smoothstep(uP3 * uP0, 0.0, d) * life * 0.75;
-                    }
+                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
+                float2 id = cell + o;
+                float mag = pow(hash(id + 0.7), 7.0);
+                if (mag > 0.003){
+                    float2 d = f - o + (hash2(id) - 0.5) * 0.8;
+                    c += starColor(hash(id + 4.2)) * psf(length(d), 0.011 + mag * 0.02) * mag * 0.7;
                 }
-
-                c += starColor(hash(id + 2.4)) * psf(length(g - a), 0.035 + mag * 0.03) * mag * 0.5;
             }
+
+            // Each figure keeps its own slow cycle, so the sky is always partly joined up and
+            // never shows the same arrangement twice.
+            float drift = t * 0.02;
+            float scale = uP0;
+
+            float2 q0 = rot(p - float2(-0.21 + sin(drift) * 0.012, 0.24), 0.10) / scale;
+            c += figure(orion(q0), scale, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 0.0)));
+
+            float2 q1 = rot(p - float2(0.23, 0.30 + cos(drift) * 0.012), -0.18) / scale;
+            c += figure(plough(q1), scale, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 1.9)));
+
+            float2 q2 = rot(p - float2(-0.24, -0.28), 0.22) / (scale * 0.9);
+            c += figure(cassiopeia(q2), scale * 0.9, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 3.4)));
+
+            float2 q3 = rot(p - float2(0.25, -0.26 + sin(drift * 1.3) * 0.012), -0.08) / scale;
+            c += figure(cygnus(q3), scale, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 5.1)));
+
             return c;
         }
         """,
@@ -1600,58 +1707,64 @@ val shaderScenes: List<ShaderScene> = listOf(
 
     ShaderScene(
         "meteors", "Meteor Shower", ShaderFamily.STARS,
-        "A quiet sky, and something falling through it.",
+        "A sky worth watching, and plenty falling through it.",
         listOf(
-            param("rate", "Fall rate", .1f, 2f, .6f),
-            param("trail", "Trail length", .1f, 1.2f, .45f),
-            param("radiant", "Direction", -3.14f, 3.14f, -2.2f),
-            param("spread", "Spread", 0f, 1.2f, .45f)
+            param("rate", "Fall rate", .3f, 3f, 1.2f),
+            param("trail", "Trail length", .15f, 1.2f, .55f),
+            param("radiant", "Direction", -3.14f, 3.14f, -2.4f),
+            param("spread", "Spread", 0f, 1.2f, .40f)
         ),
         NIGHT,
         """
-        float segment(float2 p, float2 a, float2 b){
+        float seg(float2 p, float2 a, float2 b){
             float2 pa = p - a, ba = b - a;
             return length(pa - ba * clamp(dot(pa, ba) / max(dot(ba, ba), 0.000001), 0.0, 1.0));
         }
 
         float3 scene(float2 p, float2 uv, float t){
-            // The sky the meteors fall through. Faint and still, so the motion is the whole event.
-            float3 c = uC0 + uC1 * fbm(p * 3.0) * 0.05;
-            float2 g = p * 11.0;
+            // A denser, livelier field than before. If the sky between events is dull there is
+            // nothing to watch, and a meteor shower is mostly the waiting.
+            float3 c = uC0 + uC1 * fbm(p * 2.8) * 0.06;
+            float2 g = p * 16.0;
             float2 cell = floor(g);
             float2 f = fract(g) - 0.5;
             for (int j = 0; j < 9; j++){
                 float fj = float(j);
                 float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
                 float2 id = cell + o;
-                float mag = pow(hash(id + 0.7), 6.0);
-                if (mag > 0.004){
+                float mag = pow(hash(id + 0.7), 5.0);
+                if (mag > 0.003){
                     float2 d = f - o + (hash2(id) - 0.5) * 0.8;
-                    c += starColor(hash(id + 4.2)) * psf(length(d), 0.012 + mag * 0.02) * mag * 0.8;
+                    float twinkle = 0.78 + 0.22 * sin(t * (1.6 + hash(id) * 5.0) + hash(id) * 30.0);
+                    c += starColor(hash(id + 4.2)) * psf(length(d), 0.010 + mag * 0.02) * mag * twinkle;
                 }
             }
 
-            for (int i = 0; i < 7; i++){
+            for (int i = 0; i < 10; i++){
                 float fi = float(i);
-                // Flooring the clock gives each slot a fresh meteor every pass, so they do not
-                // repeat on a loop the eye can learn.
-                float clock = t * uP0 * 0.11 + fi * 0.37;
+                // Flooring the clock hands each slot a fresh meteor every pass, so they never
+                // settle into a loop the eye can learn.
+                float clock = t * uP0 * 0.22 + fi * 0.41;
                 float life = fract(clock);
                 float2 seed = hash2(float2(fi, floor(clock)));
 
-                // They come from one radiant, but not all on precisely the same line.
                 float aim = uP2 + (seed.x - 0.5) * uP3;
                 float2 dir = float2(cos(aim), sin(aim));
-                float2 head = (seed - 0.5) * 2.4 - dir * 1.1 + dir * life * 2.4;
-                float2 tail = head - dir * uP1 * (0.5 + seed.y);
+                // Across the direction of travel, not scattered anywhere in a box twice the size
+                // of the display. The path is laid over the visible field and entered from just
+                // outside it, so a meteor crosses the screen instead of mostly missing it.
+                float2 across = float2(-dir.y, dir.x) * (seed.y - 0.5) * 0.95;
+                float2 head = across - dir * 0.75 + dir * life * 1.5;
+                float trail = uP1 * (0.55 + seed.y * 0.6);
+                float2 tail = head - dir * trail;
 
-                float d = segment(p, tail, head);
-                // Position along the streak: bright and tight at the head, wide and dim behind.
-                float along = clamp(dot(p - tail, dir) / max(uP1 * (0.5 + seed.y), 0.001), 0.0, 1.0);
-                float fade = smoothstep(0.0, 0.10, life) * smoothstep(1.0, 0.65, life);
-                float3 tint = starColor(0.45 + seed.y * 0.5);
-                c += tint * exp(-d * (150.0 - along * 90.0)) * along * along * fade * 1.2;
-                c += float3(1.0) * psf(length(p - head), 0.007) * fade * 0.9;
+                float d = seg(p, tail, head);
+                // Bright and tight at the head, wide and dim behind.
+                float along = clamp(dot(p - tail, dir) / max(trail, 0.001), 0.0, 1.0);
+                float fade = smoothstep(0.0, 0.08, life) * smoothstep(1.0, 0.72, life);
+                float3 tint = starColor(0.4 + seed.y * 0.55);
+                c += tint * exp(-d * (170.0 - along * 110.0)) * along * along * fade * 1.5;
+                c += float3(1.0) * psf(length(p - head), 0.006) * fade * 1.1;
             }
             return c;
         }
@@ -1660,66 +1773,72 @@ val shaderScenes: List<ShaderScene> = listOf(
     ),
 
     ShaderScene(
-        "still_water", "Starlight on Water", ShaderFamily.STARS,
-        "The sky, and the sky again, moving.",
+        "supernova", "Supernova", ShaderFamily.STARS,
+        "A star runs out, and takes the sky with it.",
         listOf(
-            param("horizon", "Horizon", -.25f, .35f, .06f),
-            param("chop", "Ripple", 0f, 2f, .8f),
-            param("glitter", "Glitter", 0f, 2f, .9f),
-            param("density", "Star density", 4f, 16f, 8f)
+            param("rate", "How often", .05f, .6f, .16f),
+            param("swell", "Warning", 0f, 2f, 1f),
+            param("expand", "Expansion", .3f, 2f, .9f),
+            param("field", "Background stars", 5f, 18f, 10f)
         ),
-        listOf(MIDNIGHT, ICE, VIOLET, EMBER, TEAL, MONO),
+        listOf(MIDNIGHT, HYDROGEN, EMBER, ICE, VIOLET, MONO),
         """
-        /** The sky itself, sampled wherever it is asked for — above the horizon or under it. */
-        float3 sky(float2 s, float t){
-            float3 c = uC0 + uC1 * fbm(s * 2.4 + 4.0) * 0.07;
-            float2 g = s * uP3;
+        float3 scene(float2 p, float2 uv, float t){
+            float3 c = uC0 + uC1 * fbm(p * 2.6) * 0.05;
+
+            float2 g = p * uP3;
             float2 cell = floor(g);
             float2 f = fract(g) - 0.5;
             for (int j = 0; j < 9; j++){
                 float fj = float(j);
                 float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
                 float2 id = cell + o;
-                float mag = pow(hash(id + 1.9), 6.0);
+                float mag = pow(hash(id + 1.1), 6.0);
                 if (mag > 0.003){
                     float2 d = f - o + (hash2(id) - 0.5) * 0.8;
-                    float twinkle = 0.8 + 0.2 * sin(t * 2.2 + hash(id) * 30.0);
-                    c += starColor(hash(id + 6.6)) * psf(length(d), 0.011 + mag * 0.022) * mag * twinkle;
+                    c += starColor(hash(id + 3.3)) * psf(length(d), 0.011 + mag * 0.02) * mag * 0.85;
                 }
             }
-            return c;
-        }
 
-        float3 scene(float2 p, float2 uv, float t){
-            float horizon = uP0;
+            // One event at a time, somewhere new each time.
+            float clock = t * uP0;
+            float life = fract(clock);
+            float2 seed = hash2(float2(floor(clock), 5.0));
+            float2 at = (seed - 0.5) * 0.55;
+            float2 d = p - at;
+            float r = length(d);
 
-            if (p.y > horizon){
-                float3 c = sky(p, t);
-                // The air is never quite dark at the horizon.
-                c += mix(uC1, uC2, 0.4) * exp(-(p.y - horizon) * 9.0) * 0.16;
-                return c;
-            }
+            // Before: the star swells and brightens. Something is about to happen, and the wait is
+            // most of what makes the moment land.
+            float warn = smoothstep(0.0, 0.30, life);
+            c += starColor(0.85) * psf(r, 0.005 + warn * 0.010)
+                 * (0.35 + warn * warn * warn * 26.0 * uP1);
 
-            // Below, the same sky mirrored — and then broken up, because water does not hold an
-            // image still. The further down the surface is seen, the shallower the viewing angle
-            // and the more the ripples smear it sideways.
-            float depth = horizon - p.y;
-            float2 mirrored = float2(p.x, horizon * 2.0 - p.y);
+            float gone = smoothstep(0.30, 0.335, life);
+            float age = max(life - 0.315, 0.0);
 
-            float wave = sin(p.y * 52.0 - t * 1.7) * 0.5 + fbm(float2(p.x * 5.0, p.y * 16.0 - t * 0.6)) - 0.5;
-            mirrored.x += wave * uP1 * 0.05 * (0.25 + depth * 3.5);
-            mirrored.y -= abs(wave) * uP1 * 0.02;
+            // The flash. Everything nearby is briefly lit by it, and the aperture answers with
+            // spikes, because that is what a camera does with light it cannot hold.
+            float flash = exp(-age * 30.0) * gone;
+            c += float3(1.0, 0.97, 0.90) * flash * (0.30 + 0.75 / (1.0 + r * 7.0));
+            c += float3(1.0, 0.95, 0.85)
+                 * (exp(-abs(d.x) * 90.0) + exp(-abs(d.y) * 90.0)) * exp(-r * 3.0) * flash * 0.6;
 
-            float3 c = sky(mirrored, t) * (0.62 - depth * 0.35);
+            // The shell: thrown outward, ragged rather than circular, thinning and cooling as it
+            // goes — white, then blue, then the red of a remnant left behind.
+            float shell = age * uP2 * 2.6;
+            float around = atan(d.y, d.x);
+            float ragged = 1.0 + fbm(float2(around * 2.2, shell * 2.6)) * 0.22 - 0.11;
+            float thickness = 0.010 + shell * 0.13;
+            float edge = exp(-pow(abs(r - shell * ragged) / thickness, 2.0));
 
-            // Glitter: where a ripple happens to tilt toward the eye it throws back a hard flash,
-            // which is what stops the reflection reading as a blurred copy.
-            float facet = fbm(float2(p.x * 26.0, p.y * 60.0 - t * 2.2));
-            c += mix(uC2, uC3, 0.5) * pow(smoothstep(0.62, 0.98, facet), 3.0)
-                 * uP2 * exp(-depth * 2.6) * 0.9;
+            float3 hot = mix(float3(1.0, 0.98, 0.94), float3(0.58, 0.74, 1.0), clamp(shell * 1.5, 0.0, 1.0));
+            hot = mix(hot, float3(1.0, 0.34, 0.20), clamp(shell * 1.0 - 0.45, 0.0, 1.0));
+            float dying = exp(-age * 3.0);
+            c += hot * edge * gone * dying * 3.2;
 
-            // The waterline itself catches the most light.
-            c += mix(uC2, uC3, 0.6) * exp(-depth * 26.0) * 0.30;
+            // What is left inside the shell, glowing on for a while after.
+            c += mix(uC2, uC3, 0.4) * exp(-pow(r / max(shell, 0.02), 2.0)) * gone * dying * 0.30;
             return c;
         }
         """,
