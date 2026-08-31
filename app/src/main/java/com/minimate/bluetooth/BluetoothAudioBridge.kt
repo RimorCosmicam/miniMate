@@ -18,6 +18,8 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.MicrophoneDirection
+import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.NoiseSuppressor
@@ -619,11 +621,17 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             val sampleRate = if (link.transport == AudioTransport.WIFI) WIFI_SAMPLE_RATE else AudioBridgeProtocol.SAMPLE_RATE
             val frames = if (link.transport == AudioTransport.WIFI) WIFI_FRAMES_PER_PACKET else AudioBridgeProtocol.FRAMES_PER_PACKET
             val min = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            // Each AudioSource maps to a different HAL input profile with its own preamp gain,
-            // and which one a given USB dongle actually feeds properly is a device fact, not
-            // something that can be reasoned out. Measure all of them against this exact device
-            // and take whichever delivers the most signal, instead of hardcoding a guess.
-            val chosenSource = probeLoudestSource(targetDevice, sampleRate, frames)
+            // The phone's own microphone is a known quantity and must not be probed. It is a
+            // multi-capsule array, and the configuration below — speech-tuned capture plus
+            // beamforming aimed at the user — is what the last version anyone was happy with
+            // used. Probing would pick a profile on ambient noise and could discard it.
+            // External hardware is the unknown, so that is what gets measured.
+            val isPhoneMic = targetDevice == null || targetDevice.type == AudioDeviceInfo.TYPE_BUILTIN_MIC
+            val chosenSource = if (isPhoneMic) {
+                MediaRecorder.AudioSource.VOICE_RECOGNITION
+            } else {
+                probeLoudestSource(targetDevice, sampleRate, frames)
+            }
             val recorder = AudioRecord(
                 chosenSource,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,
@@ -638,6 +646,23 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             }
             val preferSet = recorder.setPreferredDevice(targetDevice)
             Log.i(TAG, "startMicrophone: setPreferredDevice($targetDevice) returned $preferSet, routedDevice=${recorder.preferredDevice?.type}/${recorder.preferredDevice?.id}")
+            // Beamforming. This is the single largest quality lever available on the phone
+            // microphone and it runs in the audio HAL against the physical capsule array, so
+            // nothing applied afterwards in software can substitute for it: the hardware steers
+            // its pickup toward the user and rejects the rest of the room before the signal is
+            // ever digitised. Removing these two calls while stripping out noise processing is
+            // what cost the phone microphone its quality.
+            //
+            // Restricted to the built-in array on purpose. An external single-capsule mic has no
+            // array to steer, and applying direction hints there previously produced garbled
+            // audio rather than no effect.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isPhoneMic) {
+                runCatching {
+                    recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+                    recorder.setPreferredMicrophoneFieldDimension(.75f)
+                }.onFailure { Log.w(TAG, "startMicrophone: beamforming unavailable", it) }
+                Log.i(TAG, "startMicrophone: beamforming towards user, field .75")
+            }
             // Platform AGC pre-processor. This is the piece that was missing: it runs inside the
             // capture chain, so it raises a low-sensitivity capsule's signal before we ever see
             // it, which post-hoc digital gain fundamentally cannot do (amplifying afterwards
@@ -656,7 +681,14 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true }
                 }.onFailure { Log.w(TAG, "startMicrophone: NoiseSuppressor failed", it) }.getOrNull()
             } else null
-            Log.i(TAG, "startMicrophone: platform AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}; NS available=${NoiseSuppressor.isAvailable()} enabled=${noiseSuppressor?.enabled}")
+            // Echo cancellation only makes sense against the phone's own array, which is what it
+            // is calibrated for; it also stops the phone's speaker leaking back into capture.
+            val echoCanceler = if (isPhoneMic && AcousticEchoCanceler.isAvailable()) {
+                runCatching {
+                    AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true }
+                }.onFailure { Log.w(TAG, "startMicrophone: AEC failed", it) }.getOrNull()
+            } else null
+            Log.i(TAG, "startMicrophone: phoneMic=$isPhoneMic source=$chosenSource; AGC available=${AutomaticGainControl.isAvailable()} enabled=${automaticGain?.enabled}; NS available=${NoiseSuppressor.isAvailable()} enabled=${noiseSuppressor?.enabled}; AEC enabled=${echoCanceler?.enabled}")
             activeRecorder = recorder
             val samples = ShortArray(frames)
             val engine = MicrophoneEngine(sampleRate)
@@ -721,6 +753,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 runCatching { recorder.stop() }
                 runCatching { automaticGain?.release() }
                 runCatching { noiseSuppressor?.release() }
+                runCatching { echoCanceler?.release() }
                 recorder.release()
                 // Only the most recent session releases routing: if a newer one has already
                 // started (e.g. the user switched devices while this one was still tearing
