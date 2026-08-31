@@ -115,7 +115,7 @@ fun WelcomeScreen(
     )
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
-        MustardDiagonals(travel, 0f, inverted, Modifier.fillMaxSize())
+        MustardDiagonals(travel, 0f, inverted, modifier = Modifier.fillMaxSize())
 
         Column(
             Modifier
@@ -276,7 +276,7 @@ fun SwitcherIntro(
         val homeY = (targetY * heightPx - pillSize.height / 2f)
             .coerceIn(8f, (heightPx - pillSize.height - 8f).coerceAtLeast(8f))
 
-        MustardDiagonals(travel, journey, Modifier.fillMaxSize())
+        MustardDiagonals(travel, journey, modifier = Modifier.fillMaxSize())
 
         Column(
             Modifier
