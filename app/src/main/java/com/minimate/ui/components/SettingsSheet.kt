@@ -57,7 +57,6 @@ fun SettingsSheet(
     onOpenEdgeThemeEditor: () -> Unit,
     onOpenScreenEditor: () -> Unit,
     onOpenTrackpadTester: () -> Unit,
-    onOpenStickTester: () -> Unit,
     onConnectAddress: (String) -> Unit,
     onDisconnect: () -> Unit,
     onPairNewDevice: () -> Unit,
@@ -111,7 +110,6 @@ fun SettingsSheet(
                     onSettingsChange = onSettingsChange,
                     onOpenEditor = { onDismiss(); onOpenScreenEditor() },
                     onOpenTrackpadTester = { onDismiss(); onOpenTrackpadTester() },
-                    onOpenStickTester = { onDismiss(); onOpenStickTester() }
                 )
                 MenuPane.PAIRING -> PairingPane(
                     bluetoothState, batteryPercentage, onConnectAddress, onDisconnect,
@@ -219,7 +217,6 @@ private fun MousePane(
     onSettingsChange: (TouchpadSettings) -> Unit,
     onOpenEditor: () -> Unit,
     onOpenTrackpadTester: () -> Unit,
-    onOpenStickTester: () -> Unit
 ) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         item {
@@ -281,27 +278,7 @@ private fun MousePane(
         }
         item {
             GlassCard(accent = GlassAccentMuted) {
-                SectionLabel("Analog stick", "Movement, scrolling, and actions")
-                GlassSwitch("Show analog stick", "Hide the control completely when disabled", settings.stickEnabled) {
-                    onSettingsChange(settings.copy(stickEnabled = it))
-                }
-                ChoiceRow("Mode", AnalogStickMode.values().map { it.label }, settings.analogStickMode.ordinal) { index ->
-                    onSettingsChange(settings.copy(analogStickMode = AnalogStickMode.values()[index]))
-                }
-                Text("Stick design", color = GlassMuted, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StickTheme.values().forEach { theme -> GlassChip(theme.label, settings.stickTheme == theme) { onSettingsChange(settings.copy(stickTheme = theme)) } }
-                }
-                GlassSlider("Stick speed", settings.stickScrollSensitivity, .1f..2f) { onSettingsChange(settings.copy(stickScrollSensitivity = it)) }
-                GlassSlider("Dead zone", settings.stickDeadzone, .04f..0.35f) { onSettingsChange(settings.copy(stickDeadzone = it)) }
-                ActionSelector("Tap", settings.stickSingleTapAction) { onSettingsChange(settings.copy(stickSingleTapAction = it)) }
-                ActionSelector("Double tap", settings.stickDoubleTapAction) { onSettingsChange(settings.copy(stickDoubleTapAction = it)) }
-                ActionSelector("Hold", settings.stickHoldAction) { onSettingsChange(settings.copy(stickHoldAction = it)) }
-                Spacer(Modifier.height(8.dp))
-                LiquidButton("Test centered stick", Icons.Default.OpenWith, GlassAccent, onOpenStickTester)
-            }
-        }
-        item { LiquidButton("Arrange Stick & Clock", Icons.Default.OpenInFull, GlassAccent, onOpenEditor) }
+        item { LiquidButton("Arrange clock", Icons.Default.OpenInFull, GlassAccent, onOpenEditor) }
     }
 }
 

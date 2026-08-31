@@ -257,12 +257,6 @@ enum class WebcamResolution(val label: String, val width: Int, val height: Int) 
     FULL_HD("1080p", 1920, 1080)
 }
 
-enum class AnalogStickMode(val label: String, val description: String) {
-    ANALOG_SCROLL("2D Analog Scroller", "Tilt stick in any direction to scroll continuously with velocity scaling"),
-    ANALOG_CURSOR("Continuous Cursor", "Tilt stick to glide the mouse pointer continuously"),
-    VIRTUAL_DPAD("Directional D-Pad", "Push up/down/left/right to trigger page scroll & navigation")
-}
-
 enum class EdgeControlSide(val label: String) {
     LEFT("Left"),
     RIGHT("Right")
@@ -280,17 +274,6 @@ enum class EdgeControlSize(val label: String, val scale: Float) {
     COMPACT("Compact", .82f),
     STANDARD("Standard", 1f),
     LARGE("Large", 1.20f)
-}
-
-enum class StickTheme(val label: String, val description: String) {
-    PRECISION_DISC("Optical Glass", "Clear precision glass with a quiet cyan edge"),
-    ALUMINUM_DIAL("Brushed Titanium", "Cool architectural metal and restrained highlights"),
-    CLASSIC_TRACKBALL("Cobalt Lens", "Deep optical blue suspended inside smoked glass"),
-    ARCADE_BALL("Obsidian Lens", "Near-black glass with a warm internal reflection"),
-    PIXEL_DPAD("Jade Glass", "Dark mineral green with a clean luminous edge"),
-    VINYL_JOG("Smoked Quartz", "Neutral charcoal crystal with fine concentric depth"),
-    CANDY_CAP("Ruby Glass", "Dense wine-red optical glass without playful ornament"),
-    CAMEO_SEAL("Champagne Crystal", "Warm translucent mineral glass and pale gold light")
 }
 
 enum class BallAction(val label: String, val description: String) {
@@ -480,16 +463,6 @@ data class TouchpadSettings(
     val customImageUri: String? = null,
     val fingerEffectsEnabled: Boolean = true, // Shaders react directly to touch
     
-    // Analog Stick Configurations (Single Hand Mastery)
-    val analogStickMode: AnalogStickMode = AnalogStickMode.ANALOG_SCROLL,
-    val stickEnabled: Boolean = true,
-    val stickTheme: StickTheme = StickTheme.PRECISION_DISC,
-    val stickSingleTapAction: BallAction = BallAction.MIDDLE_CLICK,
-    val stickDoubleTapAction: BallAction = BallAction.RIGHT_CLICK,
-    val stickHoldAction: BallAction = BallAction.AMOLED_DIM,
-    val stickScrollSensitivity: Float = 0.40f, // Calibrated comfortable sensitivity
-    val stickDeadzone: Float = 0.12f,
-
     // Mirrored single-hand edge controls. The right-click corner is always opposite the rail.
     val edgeScrollEnabled: Boolean = true,
     val edgeRightClickEnabled: Boolean = true,
@@ -543,9 +516,6 @@ data class TouchpadSettings(
     val webcamFilters: List<ThemeFilter> = emptyList(),
     
     // Screen Editor: Freeform Positions & Sizes
-    val ballPositionX: Float = 0.15f,
-    val ballPositionY: Float = 0.82f,
-    val ballSizeDp: Float = 56f,
     
     val clockPositionX: Float = 0.248f,
     val clockPositionY: Float = 0.882f,

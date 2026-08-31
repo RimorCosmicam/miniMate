@@ -7,7 +7,7 @@ import org.json.JSONObject
 
 /**
  * Robust persistent storage for TouchpadSettings using Android SharedPreferences.
- * Preserves all user configurations, themes, analog stick settings, and layout coordinates across launches.
+ * Preserves all user configurations, themes, and layout coordinates across launches.
  */
 class TouchpadPreferences(context: Context) {
 
@@ -49,15 +49,6 @@ class TouchpadPreferences(context: Context) {
                 // Finger FX
                 put("fingerEffectsEnabled", settings.fingerEffectsEnabled)
 
-                // Analog Stick (Single Hand Mode)
-                put("analogStickMode", settings.analogStickMode.name)
-                put("stickEnabled", settings.stickEnabled)
-                put("stickTheme", settings.stickTheme.name)
-                put("stickSingleTapAction", settings.stickSingleTapAction.name)
-                put("stickDoubleTapAction", settings.stickDoubleTapAction.name)
-                put("stickHoldAction", settings.stickHoldAction.name)
-                put("stickScrollSensitivity", settings.stickScrollSensitivity.toDouble())
-                put("stickDeadzone", settings.stickDeadzone.toDouble())
                 put("edgeScrollEnabled", settings.edgeScrollEnabled)
                 put("edgeRightClickEnabled", settings.edgeRightClickEnabled)
                 put("edgeControlSide", settings.edgeControlSide.name)
@@ -114,9 +105,6 @@ class TouchpadPreferences(context: Context) {
                 put("webcamFilters", JSONArray(settings.webcamFilters.map { it.name }))
 
                 // Screen Editor layout
-                put("ballPositionX", settings.ballPositionX.toDouble())
-                put("ballPositionY", settings.ballPositionY.toDouble())
-                put("ballSizeDp", settings.ballSizeDp.toDouble())
                 put("clockPositionX", settings.clockPositionX.toDouble())
                 put("clockPositionY", settings.clockPositionY.toDouble())
                 put("clockScale", settings.clockScale.toDouble())
@@ -190,34 +178,6 @@ class TouchpadPreferences(context: Context) {
                 }?.takeIf { it.size == 4 } ?: DEFAULT_CUSTOM_SHADER_COLORS,
                 customImageUri = json.optString("customImageUri", "").takeIf { it.isNotEmpty() },
                 fingerEffectsEnabled = json.optBoolean("fingerEffectsEnabled", true),
-                analogStickMode = try {
-                    AnalogStickMode.valueOf(json.optString("analogStickMode", "ANALOG_SCROLL"))
-                } catch (_: Exception) {
-                    AnalogStickMode.ANALOG_SCROLL
-                },
-                stickEnabled = json.optBoolean("stickEnabled", true),
-                stickTheme = try {
-                    StickTheme.valueOf(json.optString("stickTheme", "PRECISION_DISC"))
-                } catch (_: Exception) {
-                    StickTheme.PRECISION_DISC
-                },
-                stickSingleTapAction = try {
-                    BallAction.valueOf(json.optString("stickSingleTapAction", "MIDDLE_CLICK"))
-                } catch (_: Exception) {
-                    BallAction.MIDDLE_CLICK
-                },
-                stickDoubleTapAction = try {
-                    BallAction.valueOf(json.optString("stickDoubleTapAction", "RIGHT_CLICK"))
-                } catch (_: Exception) {
-                    BallAction.RIGHT_CLICK
-                },
-                stickHoldAction = try {
-                    BallAction.valueOf(json.optString("stickHoldAction", "AMOLED_DIM"))
-                } catch (_: Exception) {
-                    BallAction.AMOLED_DIM
-                },
-                stickScrollSensitivity = json.optDouble("stickScrollSensitivity", 1.0).toFloat(),
-                stickDeadzone = json.optDouble("stickDeadzone", 0.10).toFloat(),
                 edgeScrollEnabled = json.optBoolean("edgeScrollEnabled", true),
                 edgeRightClickEnabled = json.optBoolean("edgeRightClickEnabled", true),
                 edgeControlSide = runCatching {
@@ -321,9 +281,6 @@ class TouchpadPreferences(context: Context) {
                         }
                     }
                 } ?: emptyList(),
-                ballPositionX = json.optDouble("ballPositionX", 0.15).toFloat(),
-                ballPositionY = json.optDouble("ballPositionY", 0.82).toFloat(),
-                ballSizeDp = json.optDouble("ballSizeDp", 64.0).toFloat(),
                 // Migrate the old centered-top default to the camera-safe lower-left layout.
                 clockPositionX = json.optDouble("clockPositionX", 0.248).toFloat().let {
                     if (it == 0.50f && json.optDouble("clockPositionY", 0.882).toFloat() == 0.09f) 0.248f else it

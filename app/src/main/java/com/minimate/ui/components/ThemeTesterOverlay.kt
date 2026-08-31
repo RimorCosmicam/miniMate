@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.BackgroundAnimation
 import com.minimate.touchpad.model.AbstractShaderTheme
 import com.minimate.touchpad.model.ShaderRecolor
-import com.minimate.touchpad.model.StickTheme
 import com.minimate.touchpad.model.ThemeFilter
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.colorwaysFor
@@ -54,7 +53,7 @@ import com.minimate.touchpad.model.validColorway
 
 private enum class StudioPicker(val label: String) {
     THEME("Theme"), FILTER("Filter"), SUBTHEME("Subtheme"), RECOLOR("Color"),
-    MOTION("Motion"), TOUCH("Touch"), STICK("Stick")
+    MOTION("Motion"), TOUCH("Touch")
 }
 
 /** A small, compact, corner-anchored picker — content-sized, never full-screen, so the live
@@ -144,9 +143,6 @@ fun ThemeTesterOverlay(
                             StudioChip("Distortion off", !settings.fingerEffectsEnabled) {
                                 onSettingsChange(settings.copy(fingerEffectsEnabled = false))
                             }
-                        }
-                        StudioPicker.STICK -> StickTheme.entries.forEach { theme ->
-                            StudioChip(theme.label, settings.stickTheme == theme) { onSettingsChange(settings.copy(stickTheme = theme)) }
                         }
                     }
                 }

@@ -57,7 +57,6 @@ import com.minimate.ui.components.EdgeControlsOverlay
 import com.minimate.ui.components.EdgeControlsEditorOverlay
 import com.minimate.ui.components.EdgeRefractionSurface
 import com.minimate.ui.components.HudToast
-import com.minimate.ui.components.LiquidGlassAnalogStick
 import com.minimate.ui.components.LiveCalibrationMode
 import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
@@ -236,7 +235,7 @@ fun TouchpadScreen(
         }
     }
 
-    fun executeStickAction(action: BallAction) {
+    fun executeBallAction(action: BallAction) {
         touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
         when (action) {
             BallAction.MIDDLE_CLICK -> {
@@ -357,7 +356,7 @@ fun TouchpadScreen(
             )
         }
 
-        // Mirrored single-hand edge controls sit above the touchpad but below the HUD/stick.
+        // Mirrored single-hand edge controls sit above the touchpad but below the HUD.
         // Their narrow hit regions consume edge gestures so cursor motion never leaks through.
         if (!isDimMode && !showKeyboard && !showAudio && !showWebcam && !showSettingsSheet && !showPairingDialog && !showScreenEditor &&
             !showThemeTester && liveCalibrationMode == null
@@ -381,7 +380,7 @@ fun TouchpadScreen(
                         )
                     }
                 },
-                onRightClick = { if (!showEdgeThemeEditor) executeStickAction(BallAction.RIGHT_CLICK) },
+                onRightClick = { if (!showEdgeThemeEditor) executeBallAction(BallAction.RIGHT_CLICK) },
                 onRailTouchDown = {
                     touchpadEngine.hapticEngine.playTouchDown(settings.hapticIntensity)
                 }
@@ -591,54 +590,7 @@ fun TouchpadScreen(
             )
         }
 
-        // Layer 6: Pure Liquid Glass 2D Analog Stick (Single-Hand Scroll / Click Mastery)
-        if (!isDimMode && !showKeyboard && !showAudio && !showWebcam && !showThemeTester && !showScreenEditor && !showEdgeThemeEditor && !settings.isLocked && settings.stickEnabled) {
-            val centeringStick = liveCalibrationMode == LiveCalibrationMode.STICK
-            LiquidGlassAnalogStick(
-                stickSizeDp = settings.ballSizeDp,
-                positionXFraction = if (centeringStick) 0.5f else settings.ballPositionX,
-                positionYFraction = if (centeringStick) 0.5f else settings.ballPositionY,
-                screenWidthPx = screenWidthPx,
-                screenHeightPx = screenHeightPx,
-                mode = settings.analogStickMode,
-                theme = settings.stickTheme,
-                scrollSensitivity = settings.stickScrollSensitivity,
-                deadzone = settings.stickDeadzone,
-                isLocked = settings.isLocked,
-                onSingleTap = {
-                    executeStickAction(settings.stickSingleTapAction)
-                },
-                onDoubleTap = {
-                    executeStickAction(settings.stickDoubleTapAction)
-                },
-                onHold = {
-                    executeStickAction(settings.stickHoldAction)
-                },
-                onAnalogScroll = { vScroll, hScroll ->
-                    hidManager.sendMouseInput(
-                        buttons = HidDescriptor.BUTTON_NONE,
-                        dx = 0,
-                        dy = 0,
-                        wheel = vScroll,
-                        pan = hScroll
-                    )
-                },
-                onAnalogCursorMove = { dx, dy ->
-                    hidManager.sendMouseInput(
-                        buttons = HidDescriptor.BUTTON_NONE,
-                        dx = dx,
-                        dy = dy,
-                        wheel = 0,
-                        pan = 0
-                    )
-                },
-                onTouchDown = {
-                    touchpadEngine.hapticEngine.playTouchDown(settings.hapticIntensity)
-                }
-            )
-        }
-
-        // Layer 7: Freeform Screen Editor Overlay (Move Stick & Clock freely)
+        // Layer 6: Freeform Screen Editor Overlay (move the clock freely)
         if (showScreenEditor) {
             ScreenEditorOverlay(
                 settings = settings,
@@ -692,12 +644,6 @@ fun TouchpadScreen(
                 },
                 onOpenTrackpadTester = {
                     liveCalibrationMode = LiveCalibrationMode.TRACKPAD
-                },
-                onOpenStickTester = {
-                    if (settings.analogStickMode != com.minimate.touchpad.model.AnalogStickMode.ANALOG_SCROLL) {
-                        touchpadEngine.updateSettings(settings.copy(analogStickMode = com.minimate.touchpad.model.AnalogStickMode.ANALOG_SCROLL))
-                    }
-                    liveCalibrationMode = LiveCalibrationMode.STICK
                 },
                 onConnectAddress = { address ->
                     hidManager.connectByAddress(address)
@@ -813,7 +759,7 @@ fun TouchpadScreen(
                     }
                 }
             },
-            onDoubleTap = { executeStickAction(BallAction.AMOLED_DIM) },
+            onDoubleTap = { executeBallAction(BallAction.AMOLED_DIM) },
             onLongPress = {
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
                 hidManager.refreshPairedDevices()

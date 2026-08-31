@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -61,49 +60,12 @@ fun ScreenEditorOverlay(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedElement by remember { mutableStateOf("clock") } // Pill placement is the debug editor's primary job.
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.55f))
     ) {
-        // Drag Target 1: Ball Handle
-        val ballPx = settings.ballSizeDp * 2.7f
-        val ballX = (settings.ballPositionX * screenWidthPx - ballPx / 2f).coerceIn(0f, screenWidthPx - ballPx)
-        val ballY = (settings.ballPositionY * screenHeightPx - ballPx / 2f).coerceIn(0f, screenHeightPx - ballPx)
-
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(ballX.roundToInt(), ballY.roundToInt()) }
-                .size(settings.ballSizeDp.dp)
-                .border(2.dp, if (selectedElement == "ball") AccentPink else Color(0x66FFFFFF), CircleShape)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { selectedElement = "ball" },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            val newX = (ballX + dragAmount.x + ballPx / 2f) / screenWidthPx
-                            val newY = (ballY + dragAmount.y + ballPx / 2f) / screenHeightPx
-                            onSettingsChange(
-                                settings.copy(
-                                    ballPositionX = newX.coerceIn(0.05f, 0.95f),
-                                    ballPositionY = newY.coerceIn(0.05f, 0.95f)
-                                )
-                            )
-                        }
-                    )
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(AccentPink)
-            )
-        }
-
         // Drag Target 2: Clock Handle
         val clockWidth = (140f * settings.clockScale) * 2.7f
         val clockHeight = (38f * settings.clockScale) * 2.7f
@@ -114,10 +76,9 @@ fun ScreenEditorOverlay(
             modifier = Modifier
                 .offset { IntOffset(clockX.roundToInt(), clockY.roundToInt()) }
                 .size(width = (140f * settings.clockScale).dp, height = (38f * settings.clockScale).dp)
-                .border(2.dp, if (selectedElement == "clock") AccentCyan else Color(0x66FFFFFF), RoundedCornerShape(16.dp))
+                .border(2.dp, AccentCyan, RoundedCornerShape(16.dp))
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { selectedElement = "clock" },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val newX = (clockX + dragAmount.x + clockWidth / 2f) / screenWidthPx
@@ -174,9 +135,6 @@ fun ScreenEditorOverlay(
                                 .clickable {
                                     onSettingsChange(
                                         settings.copy(
-                                            ballPositionX = 0.12f,
-                                            ballPositionY = 0.86f,
-                                            ballSizeDp = 48f,
                                             clockPositionX = 0.248f,
                                             clockPositionY = 0.882f,
                                             clockScale = 1.18f
@@ -203,74 +161,23 @@ fun ScreenEditorOverlay(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Element Switcher
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (selectedElement == "ball") AccentPink else Color(0x22FFFFFF))
-                            .clickable { selectedElement = "ball" }
-                            .padding(vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Analog Stick Size", color = if (selectedElement == "ball") Color.White else TextSecondary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (selectedElement == "clock") AccentCyan else Color(0x22FFFFFF))
-                            .clickable { selectedElement = "clock" }
-                            .padding(vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Clock HUD Scale", color = if (selectedElement == "clock") Color.Black else TextSecondary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text(String.format("Scale (%.2fx)", settings.clockScale), color = TextPrimary, fontSize = 11.sp)
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (selectedElement == "ball") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Stick Size (${settings.ballSizeDp.roundToInt()} dp)", color = TextPrimary, fontSize = 11.sp)
-                    }
-                    Slider(
-                        value = settings.ballSizeDp,
-                        onValueChange = { onSettingsChange(settings.copy(ballSizeDp = it)) },
-                        valueRange = 36f..72f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = AccentPink,
-                            activeTrackColor = AccentPink,
-                            inactiveTrackColor = Color(0x33FFFFFF)
-                        )
+                Slider(
+                    value = settings.clockScale,
+                    onValueChange = { onSettingsChange(settings.copy(clockScale = it)) },
+                    valueRange = 0.65f..1.60f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = AccentCyan,
+                        activeTrackColor = AccentCyan,
+                        inactiveTrackColor = Color(0x33FFFFFF)
                     )
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(String.format("Scale (%.2fx)", settings.clockScale), color = TextPrimary, fontSize = 11.sp)
-                    }
-                    Slider(
-                        value = settings.clockScale,
-                        onValueChange = { onSettingsChange(settings.copy(clockScale = it)) },
-                        valueRange = 0.65f..1.60f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = AccentCyan,
-                            activeTrackColor = AccentCyan,
-                            inactiveTrackColor = Color(0x33FFFFFF)
-                        )
-                    )
-                }
+                )
             }
         }
     }
