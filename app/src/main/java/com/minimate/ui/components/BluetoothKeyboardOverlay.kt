@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -70,6 +71,7 @@ import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.KeyboardShortcut
@@ -98,8 +100,12 @@ private const val FLASH_NANOS = 190_000_000f
 /** Clears the clock pill, which is the only way in and out of this sheet. */
 private val STUDIO_TOP = 50.dp
 
-/** The keyboard never starts lower than this, so it cannot be pushed into the camera cutout. */
-private val KEYBOARD_TOP_LIMIT = 196.dp
+/**
+ * Height the keyboard needs at its largest, measured against the cover display's 399dp. The editor
+ * is given whatever is left above it rather than a constant of its own, because a constant that
+ * fits one display is only luck on the next.
+ */
+private val KEYBOARD_RESERVE = 232.dp
 
 private enum class KeyboardCustomizer(val label: String) {
     THEME("Themes"), TRAIL("Trail"), FONT("Font"), SIZE("Size")
@@ -172,6 +178,7 @@ private fun KeyboardCustomizerTop(
     onScale: (Float) -> Unit,
     onCancel: () -> Unit,
     onDone: () -> Unit,
+    maxHeight: Dp = 150.dp,
     modifier: Modifier = Modifier
 ) {
     val subtitle = when (section) {
@@ -180,7 +187,7 @@ private fun KeyboardCustomizerTop(
         KeyboardCustomizer.FONT -> "${font.label} · ${fontWeight.label}"
         KeyboardCustomizer.SIZE -> "%.0f%%".format(scale * 100)
     }
-    StudioPanel("Keyboard Studio", subtitle, onCancel, onDone, modifier) {
+    StudioPanel("Keyboard Studio", subtitle, onCancel, onDone, modifier, maxHeight) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             KeyboardCustomizer.entries.forEach { item ->
                 StudioChip(item.label, section == item, Modifier.weight(1f)) { onSection(item) }
@@ -649,9 +656,12 @@ fun BluetoothKeyboardOverlay(
         LocalKeyboardOpaque provides opaque,
         LocalKeyboardScale provides keyboardScale
     ) {
-    Box(modifier.fillMaxSize()
+    BoxWithConstraints(modifier.fillMaxSize()
         .background(if (amoledMode) Color.Black else Color.Transparent)
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})) {
+        // The editor may take whatever is left once the keyboard has what it needs, and never more.
+        val studioCeiling = (maxHeight - KEYBOARD_RESERVE - STUDIO_TOP - 8.dp).coerceAtLeast(72.dp)
+        val keyboardTopLimit = STUDIO_TOP + studioCeiling + 8.dp
         if (glidePreview.isNotEmpty()) {
             Text(
                 text = glidePreview,
@@ -676,10 +686,12 @@ fun BluetoothKeyboardOverlay(
                     top = when {
                         // Back to its normal place the moment editing ends.
                         !editorMode -> 64.dp
+                        // Below whatever the editor actually measured, but never so far down
+                        // that the keyboard runs off the bottom or into the camera cutout.
                         studioHeightPx > 0 -> (STUDIO_TOP +
                             with(LocalDensity.current) { studioHeightPx.toDp() } + 8.dp)
-                            .coerceIn(STUDIO_TOP + 40.dp, KEYBOARD_TOP_LIMIT)
-                        else -> 150.dp
+                            .coerceIn(STUDIO_TOP + 40.dp, keyboardTopLimit)
+                        else -> keyboardTopLimit
                     }
                 )
                 .fillMaxWidth()
@@ -739,6 +751,7 @@ fun BluetoothKeyboardOverlay(
                 onScale = onKeyboardScaleChange,
                 onCancel = onEditorCancel,
                 onDone = onEditorDone,
+                maxHeight = studioCeiling,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = STUDIO_TOP)
