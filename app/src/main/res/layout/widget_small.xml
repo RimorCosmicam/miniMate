@@ -1,67 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The square face. Centred rather than anchored to a corner, because the same layout has to sit in
-  a two-by-two cell on the inner screen and fill a whole panel on the cover screen, and content
-  held to the top-left of a full panel reads as a mistake.
+  One block. There is no room for the name at this size, so the three toggles are the whole widget
+  — which is the part anyone puts it there to reach anyway.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:gravity="center"
     android:background="@drawable/widget_card"
-    android:padding="14dp">
+    android:padding="8dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="mini"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:fontFamily="@font/mont_thin"
-        android:includeFontPadding="false" />
+    <ImageView
+        android:id="@+id/widget_speaker"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:src="@drawable/ic_widget_speaker"
+        android:contentDescription="Speaker" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Mate"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:fontFamily="@font/mont_black"
-        android:includeFontPadding="false" />
+    <ImageView
+        android:id="@+id/widget_mic"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:src="@drawable/ic_widget_mic"
+        android:contentDescription="Microphone" />
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:orientation="horizontal"
-        android:gravity="center">
-
-        <ImageView
-            android:id="@+id/widget_speaker"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:layout_marginStart="9dp"
-            android:layout_marginEnd="9dp"
-            android:src="@drawable/ic_widget_speaker"
-            android:contentDescription="Speaker" />
-
-        <ImageView
-            android:id="@+id/widget_mic"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:layout_marginStart="9dp"
-            android:layout_marginEnd="9dp"
-            android:src="@drawable/ic_widget_mic"
-            android:contentDescription="Microphone" />
-
-        <ImageView
-            android:id="@+id/widget_camera"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:layout_marginStart="9dp"
-            android:layout_marginEnd="9dp"
-            android:src="@drawable/ic_widget_camera"
-            android:contentDescription="Camera" />
-    </LinearLayout>
+    <ImageView
+        android:id="@+id/widget_camera"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:src="@drawable/ic_widget_camera"
+        android:contentDescription="Camera" />
 </LinearLayout>

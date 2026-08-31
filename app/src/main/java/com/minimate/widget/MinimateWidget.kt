@@ -58,9 +58,13 @@ abstract class MinimateWidget(private val layout: Int) : AppWidgetProvider() {
     }
 }
 
-/** The two faces. Separate providers because a widget's size is declared, not chosen. */
-class MinimateSmallWidget : MinimateWidget(R.layout.widget_small)
-class MinimateBarWidget : MinimateWidget(R.layout.widget_bar)
+/**
+ * Three sizes. Separate providers because a widget's size is declared, not chosen — one block, two
+ * across, and a square, so it can sit wherever there is room rather than only where it fits.
+ */
+class MinimateWidgetSmall : MinimateWidget(R.layout.widget_small)
+class MinimateWidgetMedium : MinimateWidget(R.layout.widget_medium)
+class MinimateWidgetLarge : MinimateWidget(R.layout.widget_large)
 
 private fun render(context: Context, layout: Int, settings: TouchpadSettings): RemoteViews =
     RemoteViews(context.packageName, layout).apply {
@@ -74,7 +78,7 @@ private fun render(context: Context, layout: Int, settings: TouchpadSettings): R
     }
 
 private fun togglePendingIntent(context: Context, which: String): PendingIntent {
-    val intent = Intent(context, MinimateSmallWidget::class.java).apply {
+    val intent = Intent(context, MinimateWidgetSmall::class.java).apply {
         action = ACTION_TOGGLE
         putExtra(EXTRA_WHICH, which)
         // Distinct data per toggle, or the three collapse into one intent and the last one wins.
@@ -88,13 +92,14 @@ private fun togglePendingIntent(context: Context, which: String): PendingIntent 
     )
 }
 
-/** Both faces are redrawn together, since they are showing the same three facts. */
+/** Every face is redrawn together, since they are all showing the same three facts. */
 fun refreshAll(context: Context) {
     val manager = AppWidgetManager.getInstance(context)
     val settings = TouchpadPreferences(context).loadSettings()
     listOf(
-        MinimateSmallWidget::class.java to R.layout.widget_small,
-        MinimateBarWidget::class.java to R.layout.widget_bar
+        MinimateWidgetSmall::class.java to R.layout.widget_small,
+        MinimateWidgetMedium::class.java to R.layout.widget_medium,
+        MinimateWidgetLarge::class.java to R.layout.widget_large
     ).forEach { (provider, layout) ->
         manager.getAppWidgetIds(ComponentName(context, provider)).forEach { id ->
             manager.updateAppWidget(id, render(context, layout, settings))
