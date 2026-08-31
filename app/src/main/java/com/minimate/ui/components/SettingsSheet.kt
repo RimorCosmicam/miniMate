@@ -38,16 +38,27 @@ private val GlassMuted = Color(0xFFB5B5B7)
 private val GlassAccent = Color(0xFFF7F7F7)
 private val GlassAccentMuted = Color(0xFFCAD0D8)
 
-private enum class MenuPane(val label: String, val icon: ImageVector) {
-    THEMES("Themes", Icons.Default.Palette),
-    MOUSE("Mouse", Icons.Default.Mouse),
-    PAIRING("Pairing", Icons.Default.Bluetooth)
+/**
+ * What the settings sheet is about, decided by whatever page is open behind it.
+ *
+ * Opening settings from the keyboard and being shown pointer acceleration, or opening it from the
+ * camera and being shown scroll rails, means hunting through choices that cannot apply. The sheet
+ * now answers the page it was opened from, and only offers the pairing pane in addition because
+ * that is genuinely global.
+ */
+enum class SettingsContext(val label: String, val icon: ImageVector, val subtitle: String) {
+    TOUCHPAD("Trackpad", Icons.Default.Mouse, "Movement, scrolling, gestures and edges"),
+    SCENE("Scene", Icons.Default.Palette, "Background, filters and the pill"),
+    KEYBOARD("Keyboard", Icons.Default.Keyboard, "Layout, trail, fonts and size"),
+    AUDIO("Audio", Icons.Default.Mic, "Microphone and output"),
+    CAMERA("Camera", Icons.Default.Videocam, "Capture size, frame rate and thermal")
 }
 
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(
+    context: SettingsContext,
     settings: TouchpadSettings,
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
@@ -64,7 +75,7 @@ fun SettingsSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var pane by remember { mutableStateOf(MenuPane.THEMES) }
+    var showPairing by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -92,28 +103,37 @@ fun SettingsSheet(
                     .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(18.dp)).padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                MenuPane.values().forEach { destination ->
-                    LiquidTab(destination, pane == destination, Modifier.weight(1f)) { pane = destination }
-                }
+                ContextTab(context.label, context.icon, !showPairing, Modifier.weight(1f)) { showPairing = false }
+                ContextTab("Pairing", Icons.Default.Bluetooth, showPairing, Modifier.weight(1f)) { showPairing = true }
             }
             Spacer(Modifier.height(10.dp))
-            when (pane) {
-                MenuPane.THEMES -> ThemesPane(
-                    settings,
-                    onSettingsChange,
-                    { onDismiss(); onOpenThemeTester() },
-                    { onDismiss(); onOpenKeyboardThemeEditor() },
-                    { onDismiss(); onOpenEdgeThemeEditor() }
-                )
-                MenuPane.MOUSE -> MousePane(
-                    settings = settings,
-                    onSettingsChange = onSettingsChange,
-                    onOpenEditor = { onDismiss(); onOpenScreenEditor() },
-                    onOpenTrackpadTester = { onDismiss(); onOpenTrackpadTester() },
-                )
-                MenuPane.PAIRING -> PairingPane(
+            if (showPairing) {
+                PairingPane(
                     bluetoothState, batteryPercentage, onConnectAddress, onDisconnect,
                     onPairNewDevice, onRefreshDevices
+                )
+            } else when (context) {
+                SettingsContext.TOUCHPAD -> TrackpadPane(
+                    settings = settings,
+                    onSettingsChange = onSettingsChange,
+                    onOpenTrackpadTester = { onDismiss(); onOpenTrackpadTester() },
+                    onOpenEdgeStudio = { onDismiss(); onOpenEdgeThemeEditor() }
+                )
+                SettingsContext.SCENE -> ScenePane(
+                    settings = settings,
+                    onOpenStudio = { onDismiss(); onOpenThemeTester() },
+                    onOpenEditor = { onDismiss(); onOpenScreenEditor() }
+                )
+                SettingsContext.KEYBOARD -> KeyboardPane(
+                    onOpenKeyboardStudio = { onDismiss(); onOpenKeyboardThemeEditor() }
+                )
+                SettingsContext.AUDIO -> ContextHint(
+                    "Audio",
+                    "Microphone and output live in the audio page itself, so the controls sit next to the meter that shows them working."
+                )
+                SettingsContext.CAMERA -> ContextHint(
+                    "Camera",
+                    "Capture size and frame rate live in the camera page, where the thermal state is visible alongside them."
                 )
             }
         }
@@ -142,81 +162,94 @@ private fun GlassHeader(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun LiquidTab(destination: MenuPane, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ContextTab(label: String, icon: ImageVector, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val fill = if (selected) Brush.horizontalGradient(listOf(Color.White.copy(.18f), Color.White.copy(.10f)))
     else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
     Row(
         modifier.clip(RoundedCornerShape(14.dp)).background(fill).clickable(onClick = onClick).padding(vertical = 9.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(destination.icon, null, tint = if (selected) Color.White else GlassMuted, modifier = Modifier.size(15.dp))
+        Icon(icon, null, tint = if (selected) Color.White else GlassMuted, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(destination.label, color = if (selected) Color.White else GlassMuted, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = if (selected) Color.White else GlassMuted, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun ThemesPane(
+private fun ScenePane(
     settings: TouchpadSettings,
-    onSettingsChange: (TouchpadSettings) -> Unit,
     onOpenStudio: () -> Unit,
-    onOpenKeyboardStudio: () -> Unit,
-    onOpenEdgeStudio: () -> Unit
+    onOpenEditor: () -> Unit
 ) {
-    val subtheme = subthemesFor(settings.abstractShaderTheme).getOrNull(settings.abstractSubthemeIndex)
-    val activeColorway = validColorway(settings.abstractShaderTheme, settings.abstractSubthemeIndex, settings.shaderRecolor)
-    val authoredColorway = sceneColorwayFor(settings.abstractShaderTheme, settings.abstractSubthemeIndex, activeColorway)
-    val previewStops = authoredColorway.stops
+    val scene = sceneById(settings.shaderSceneId)
+    val palette = scene.palettes.getOrElse(settings.shaderPaletteIndex) { scene.palettes.first() }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         item {
             GlassCard(accent = GlassAccentMuted) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(44.dp).clip(RoundedCornerShape(15.dp))
-                            .background(Brush.linearGradient(listOf(Color(previewStops.getOrElse(1) { previewStops.first() }), Color(previewStops.getOrElse(2) { previewStops.last() }))))
-                            .border(1.dp, Color.White.copy(.3f), RoundedCornerShape(15.dp)),
-                        contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Default.Palette, null, tint = Color.White) }
+                            .background(Brush.linearGradient(palette.stops.map { Color(it) }))
+                            .border(1.dp, Color.White.copy(.3f), RoundedCornerShape(15.dp))
+                    )
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(settings.abstractShaderTheme.label, color = GlassText, fontSize = 14.sp, fontWeight = FontWeight.Black)
-                        Text(subtheme?.label ?: "Shader ${settings.abstractSubthemeIndex + 1}", color = GlassMuted, fontSize = 10.sp)
-                        Text("${authoredColorway.label} · ${if (settings.themeFilters.isEmpty()) "Clean" else settings.themeFilters.joinToString(" + ") { it.label }}", color = GlassAccentMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(scene.label, color = GlassText, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                        Text(scene.family.label, color = GlassMuted, fontSize = 10.sp)
+                        Text(
+                            if (settings.themeFilters.isEmpty()) "Clean"
+                            else settings.themeFilters.joinToString(" + ") { it.label },
+                            color = GlassAccentMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                LiquidButton("Open Theme Studio", Icons.Default.OpenInFull, GlassAccent, onOpenStudio)
+                LiquidButton("Open Scene Studio", Icons.Default.OpenInFull, GlassAccent, onOpenStudio)
             }
         }
         item {
             GlassCard(accent = GlassAccentMuted) {
-                SectionLabel("Keyboard", "Preview keys, glide trail, fonts, weights, and opacity")
+                SectionLabel("Pill", "Position and size of the clock pill")
                 Spacer(Modifier.height(10.dp))
-                LiquidButton("Open Keyboard Studio", Icons.Default.Keyboard, GlassAccent, onOpenKeyboardStudio)
+                LiquidButton("Arrange pill", Icons.Default.OpenInFull, GlassAccent, onOpenEditor)
             }
-        }
-        item {
-            GlassCard(accent = GlassAccentMuted) {
-                SectionLabel("Buttons", "Preview the scroll rail and right-click corner as a pair")
-                Spacer(Modifier.height(10.dp))
-                LiquidButton("Open Buttons Studio", Icons.Default.TouchApp, GlassAccent, onOpenEdgeStudio)
-            }
-        }
-        item {
-            Text(
-                "Each studio opens on the main screen so its changes can be judged against the active scene.",
-                color = GlassMuted, fontSize = 9.5.sp, lineHeight = 13.sp, modifier = Modifier.padding(horizontal = 6.dp)
-            )
         }
     }
 }
 
 @Composable
-private fun MousePane(
+private fun KeyboardPane(onOpenKeyboardStudio: () -> Unit) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        item {
+            GlassCard(accent = GlassAccentMuted) {
+                SectionLabel("Keyboard", "Keys, glide trail, fonts, weight, opacity and size")
+                Spacer(Modifier.height(10.dp))
+                LiquidButton("Open Keyboard Studio", Icons.Default.Keyboard, GlassAccent, onOpenKeyboardStudio)
+            }
+        }
+    }
+}
+
+/** Used where a page owns its own controls, so the sheet says where they are instead of duplicating them. */
+@Composable
+private fun ContextHint(title: String, body: String) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        item {
+            GlassCard(accent = GlassAccentMuted) {
+                SectionLabel(title, "Controls live on the page itself")
+                Spacer(Modifier.height(8.dp))
+                Text(body, color = GlassMuted, fontSize = 10.sp, lineHeight = 14.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackpadPane(
     settings: TouchpadSettings,
     onSettingsChange: (TouchpadSettings) -> Unit,
-    onOpenEditor: () -> Unit,
     onOpenTrackpadTester: () -> Unit,
+    onOpenEdgeStudio: () -> Unit
 ) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         item {
@@ -276,7 +309,7 @@ private fun MousePane(
                 )
             }
         }
-        item { LiquidButton("Arrange clock", Icons.Default.OpenInFull, GlassAccent, onOpenEditor) }
+        item { LiquidButton("Open Buttons Studio", Icons.Default.TouchApp, GlassAccent, onOpenEdgeStudio) }
     }
 }
 

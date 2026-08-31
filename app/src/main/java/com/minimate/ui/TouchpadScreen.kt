@@ -58,6 +58,7 @@ import com.minimate.ui.components.LiveCalibrationMode
 import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
+import com.minimate.ui.components.SettingsContext
 import com.minimate.ui.components.SettingsSheet
 import com.minimate.ui.components.SceneStudioOverlay
 import com.minimate.ui.components.WebcamModeOverlay
@@ -521,6 +522,14 @@ fun TouchpadScreen(
         // Layer 8: Settings & Theme Manager Modal Sheet (3 Tabs)
         if (showSettingsSheet) {
             SettingsSheet(
+                // Settings answer the page they were opened from rather than listing everything.
+                context = when {
+                    showKeyboard -> SettingsContext.KEYBOARD
+                    showAudio -> SettingsContext.AUDIO
+                    showWebcam -> SettingsContext.CAMERA
+                    showThemeTester || showScreenEditor -> SettingsContext.SCENE
+                    else -> SettingsContext.TOUCHPAD
+                },
                 settings = settings,
                 bluetoothState = bluetoothState,
                 batteryPercentage = batteryPercentage,
