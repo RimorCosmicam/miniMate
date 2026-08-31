@@ -99,6 +99,7 @@ class TouchpadPreferences(context: Context) {
                 put("audioInputDeviceKey", settings.audioInputDeviceKey)
                 put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
                 put("audioSuperhumanBands", JSONArray(settings.audioSuperhumanBands))
+                put("audioListenVolume", settings.audioListenVolume.toDouble())
                 put("audioTransport", settings.audioTransport.name)
                 put("webcamEnabled", settings.webcamEnabled)
                 put("webcamResolution", settings.webcamResolution.name)
@@ -292,6 +293,7 @@ class TouchpadPreferences(context: Context) {
                 audioSuperhumanBands = json.optJSONArray("audioSuperhumanBands")?.let { array ->
                     (0 until array.length()).map { array.optDouble(it, 0.0).toFloat().coerceIn(-18f, 18f) }
                 }?.takeIf { it.size == SUPERHUMAN_BAND_HZ.size } ?: DEFAULT_SUPERHUMAN_BANDS,
+                audioListenVolume = json.optDouble("audioListenVolume", 0.30).toFloat().coerceIn(0f, 1f),
                 audioTransport = runCatching {
                     AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))
                 }.getOrDefault(AudioTransport.WIFI),

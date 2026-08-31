@@ -46,6 +46,7 @@ import com.minimate.touchpad.model.AudioDeviceEqProfile
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.SUPERHUMAN_BAND_HZ
+import com.minimate.touchpad.model.SuperhumanPreset
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
 import com.minimate.ui.components.AudioModeOverlay
@@ -140,11 +141,13 @@ fun TouchpadScreen(
         settings.audioMicrophonePreset,
         settings.audioSuperhumanBands,
         settings.audioMicrophoneGain,
+        settings.audioListenVolume,
         settings.audioOutputDeviceKey
     ) {
         localListen.preset = settings.audioMicrophonePreset
         localListen.bands = settings.audioSuperhumanBands
         localListen.gain = settings.audioMicrophoneGain
+        localListen.listenVolume = settings.audioListenVolume
         localListen.outputDeviceKey = settings.audioOutputDeviceKey.takeIf { it != "phone" }
         if (listening && !localListen.isRunning) {
             if (!localListen.start()) listening = false
@@ -542,6 +545,13 @@ fun TouchpadScreen(
                     touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = next))
                 },
                 onListenToggled = { listening = it },
+                onSuperhumanPreset = { shape ->
+                    touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = shape.bands))
+                },
+                onListenVolume = { value ->
+                    touchpadEngine.updateSettings(settings.copy(audioListenVolume = value.coerceIn(0f, 1f)))
+                },
+                listenVolume = settings.audioListenVolume,
                 microphonePreset = settings.audioMicrophonePreset,
                 superhumanBands = settings.audioSuperhumanBands,
                 listening = listening

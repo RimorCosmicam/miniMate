@@ -49,6 +49,8 @@ class LocalListen(private val context: Context) {
     @Volatile var preset: MicrophoneVoicePreset = MicrophoneVoicePreset.SUPERHUMAN
     @Volatile var bands: List<Float> = emptyList()
     @Volatile var gain: Float = 1f
+    /** Playback level, 0..1. Starts low deliberately — see the feedback note in start(). */
+    @Volatile var listenVolume: Float = .30f
     /** Output device key to play into, or null for whatever the system is using. */
     @Volatile var outputDeviceKey: String? = null
     @Volatile var lastError: String? = null
@@ -158,6 +160,13 @@ class LocalListen(private val context: Context) {
 
             val engine = MicrophoneEngine(SAMPLE_RATE)
             val samples = ShortArray(frames)
+            // Feedback guard. The earphones are centimetres from the microphone driving them, so
+            // any loop gain above unity builds into a howl within a fraction of a second. This
+            // watches for the signature — output sustained near full scale across consecutive
+            // blocks, which speech and incidental sound do not produce — and ducks hard until it
+            // clears. Without it, enabling monitoring at any useful level is a blast of noise.
+            var hotBlocks = 0
+            var duck = 1f
             recorder.startRecording()
             track.play()
             Log.i(TAG, "local listen started: preset=$preset frames=$frames out=${track.routedDevice?.productName}")
@@ -171,6 +180,26 @@ class LocalListen(private val context: Context) {
                 }
                 emptyReads = 0
                 val processed = engine.process(samples, read, gain, preset, bands)
+
+                var peak = 0
+                for (index in 0 until read) {
+                    val magnitude = kotlin.math.abs(processed[index].toInt())
+                    if (magnitude > peak) peak = magnitude
+                }
+                if (peak > 30_000) hotBlocks++ else hotBlocks = 0
+                if (hotBlocks >= 12) {
+                    duck = (duck * .55f).coerceAtLeast(.05f)
+                    hotBlocks = 0
+                    Log.i(TAG, "feedback guard engaged, duck=$duck")
+                } else if (peak < 12_000) {
+                    duck = (duck * 1.02f).coerceAtMost(1f)
+                }
+
+                val level = listenVolume.coerceIn(0f, 1f) * duck
+                for (index in 0 until read) {
+                    processed[index] = (processed[index] * level).toInt()
+                        .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                }
                 track.write(processed, 0, read, AudioTrack.WRITE_BLOCKING)
             }
         } catch (error: Exception) {

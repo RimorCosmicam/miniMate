@@ -113,9 +113,15 @@ class MicrophoneEngine(private val sampleRate: Int) {
         const val LIMIT_THRESHOLD = .88f
         const val NOISE_WINDOW_BLOCKS = 200
 
-        /** Tool modes listen for faint continuous sound, so they aim far hotter than speech. */
-        const val TOOL_TARGET_RMS = 7_000f
-        const val TOOL_MAX_GAIN = 900f
+        /**
+         * Tool modes aim only slightly hotter than speech, and their gain ceiling is modest.
+         * Earlier values of 7000 / 900x were set on the reasoning that faint sound needs
+         * enormous amplification; in practice that drives room tone to full scale the instant
+         * nothing else is happening, which is heard as being blasted with noise rather than as
+         * sensitivity. Amplifying a noise floor never reveals anything underneath it.
+         */
+        const val TOOL_TARGET_RMS = 2_600f
+        const val TOOL_MAX_GAIN = 60f
     }
 
     private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
@@ -245,12 +251,14 @@ class MicrophoneEngine(private val sampleRate: Int) {
                 MicrophoneVoicePreset.BABY -> shifted * .9f + highPass * .18f
                 MicrophoneVoicePreset.ARENA_ANNOUNCER -> shifted * .86f + lowPass * .52f
                 MicrophoneVoicePreset.STETHO -> {
-                    // Contact listening. Structure-borne and body-conducted sound is carried in
-                    // the low-mid band, so the slow rumble below it is removed and the resonant
-                    // body emphasised, while transient edges are preserved so taps stay crisp.
+                    // Contact listening. Structure-borne sound is carried in the low-mid band,
+                    // so slow rumble below it is removed and the resonant body emphasised, while
+                    // transient edges are preserved so taps stay crisp. The airborne signal is
+                    // largely rejected — a contact microphone that still hears the room is just
+                    // an amplifier, which is what the first attempt at this was.
                     val body = lowPass - subBass
                     val transient = dry - previousDry
-                    body * 1.85f + transient * .42f
+                    (body * 1.2f + transient * .25f) - highPass * .35f
                 }
                 MicrophoneVoicePreset.SUPERHUMAN -> {
                     var shaped = dry
@@ -260,8 +268,10 @@ class MicrophoneEngine(private val sampleRate: Int) {
             }
 
             val driven = when (preset) {
-                MicrophoneVoicePreset.STETHO -> tanh(coloured / 14_000f) * 22_000f
-                MicrophoneVoicePreset.SUPERHUMAN -> tanh(coloured / 16_000f) * 24_000f
+                // Tools stay well below the limiter. Saturating them turns every surface tap
+                // into a wall of distortion and loses the detail the tool exists to reveal.
+                MicrophoneVoicePreset.STETHO -> tanh(coloured / 20_000f) * 15_000f
+                MicrophoneVoicePreset.SUPERHUMAN -> tanh(coloured / 22_000f) * 16_000f
                 MicrophoneVoicePreset.RADIO -> tanh(coloured / 9_000f) * 18_000f
                 MicrophoneVoicePreset.ROBOT -> (coloured / 900f).roundToInt() * 900f
                 MicrophoneVoicePreset.RICH -> tanh(coloured / 20_000f) * 22_000f

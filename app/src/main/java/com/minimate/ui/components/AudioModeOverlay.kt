@@ -30,6 +30,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 import com.minimate.touchpad.model.SUPERHUMAN_BAND_HZ
+import com.minimate.touchpad.model.SuperhumanPreset
 
 private enum class AudioEditorTab(val label: String) {
     OUTPUT("Output"), INPUT("Input"), TOOLS("Tools")
@@ -77,6 +79,9 @@ fun AudioModeOverlay(
     onMicrophonePreset: (MicrophoneVoicePreset) -> Unit,
     onSuperhumanBand: (Int, Float) -> Unit,
     onListenToggled: (Boolean) -> Unit,
+    onSuperhumanPreset: (SuperhumanPreset) -> Unit,
+    onListenVolume: (Float) -> Unit,
+    listenVolume: Float,
     microphonePreset: MicrophoneVoicePreset,
     superhumanBands: List<Float>,
     listening: Boolean,
@@ -92,10 +97,16 @@ fun AudioModeOverlay(
                 .align(Alignment.TopCenter)
                 .padding(start = 18.dp, end = 20.dp, top = 20.dp)
         )
+        // The cover display has a physical camera cutout in the bottom-right corner, roughly
+        // 84 dp tall by 198 dp wide on a 361 x 399 dp panel. Content is kept above it and made
+        // scrollable rather than allowed to extend underneath, where it cannot be seen or
+        // touched. The Tools tab is the tallest panel and was running straight into it.
         Column(
             Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth(.70f),
+                .align(Alignment.TopCenter)
+                .fillMaxWidth(.70f)
+                .padding(top = 58.dp, bottom = 96.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -112,8 +123,11 @@ fun AudioModeOverlay(
                     preset = microphonePreset,
                     bands = superhumanBands,
                     listening = listening,
+                    listenVolume = listenVolume,
                     onPreset = onMicrophonePreset,
                     onBand = onSuperhumanBand,
+                    onBandPreset = onSuperhumanPreset,
+                    onListenVolume = onListenVolume,
                     onListenToggled = onListenToggled
                 )
             }
@@ -355,8 +369,11 @@ private fun ToolsControls(
     preset: MicrophoneVoicePreset,
     bands: List<Float>,
     listening: Boolean,
+    listenVolume: Float,
     onPreset: (MicrophoneVoicePreset) -> Unit,
     onBand: (Int, Float) -> Unit,
+    onBandPreset: (SuperhumanPreset) -> Unit,
+    onListenVolume: (Float) -> Unit,
     onListenToggled: (Boolean) -> Unit
 ) {
     Column(
@@ -381,6 +398,13 @@ private fun ToolsControls(
             )
         }
 
+        // Separate from microphone trim on purpose: the earphones sit centimetres from the
+        // microphone feeding them, so this starts low and is the first thing to reach for.
+        CompactAudioSlider(
+            label = "LISTEN VOLUME", value = listenVolume, range = 0f..1f,
+            valueLabel = "${(listenVolume * 100).toInt()}%", enabled = true, onValue = onListenVolume
+        )
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(MicrophoneVoicePreset.STETHO, MicrophoneVoicePreset.SUPERHUMAN).forEach { tool ->
                 Box(Modifier.weight(1f)) {
@@ -403,6 +427,18 @@ private fun ToolsControls(
         )
 
         if (preset == MicrophoneVoicePreset.SUPERHUMAN) {
+            Text("SHAPE", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                SuperhumanPreset.entries.forEach { shape ->
+                    CompactChoice(shape.label, bands == shape.bands) { onBandPreset(shape) }
+                }
+            }
+            SuperhumanPreset.entries.firstOrNull { it.bands == bands }?.let { active ->
+                Text(active.hint, color = Color.White.copy(.4f), fontSize = 7.sp)
+            }
             Text("SPECTRUM", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
             // Obstructions attenuate progressively with frequency, so sound through a wall or
             // door arrives as low-mid energy with the consonants gone. The low bands are where
