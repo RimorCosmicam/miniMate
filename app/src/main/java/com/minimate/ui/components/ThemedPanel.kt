@@ -205,7 +205,9 @@ private fun androidx.compose.foundation.layout.BoxScope.PanelSurface(
                     .offset { IntOffset(-originX.roundToInt(), -originY.roundToInt()) }
                     .graphicsLayer {
                         renderEffect = runCatching {
-                            if (glass != null) {
+                            // The explicit version check is what lint needs; `glass` is only
+                            // ever built on 33 or above, but that is not something it can see.
+                            if (glass != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 glassEffect(
                                     glass, originX, originY, size.width, size.height,
                                     theme.cornerRadius * density.density, canvasWidth, canvasHeight
