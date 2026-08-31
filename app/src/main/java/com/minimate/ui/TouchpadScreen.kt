@@ -117,6 +117,7 @@ fun TouchpadScreen(
         settings.audioMicrophoneGain,
         settings.audioMicrophonePreset,
         settings.audioMicrophonePlacement,
+        settings.audioPlacementAuto,
         settings.audioSuperhumanBands
     ) {
         audioBridge.configure(
@@ -128,7 +129,8 @@ fun TouchpadScreen(
             settings.audioMicrophoneGain,
             settings.audioMicrophonePreset,
             settings.audioSuperhumanBands,
-            settings.audioMicrophonePlacement
+            settings.audioMicrophonePlacement,
+            settings.audioPlacementAuto
         )
     }
 
@@ -147,6 +149,7 @@ fun TouchpadScreen(
         localListen.preset = settings.audioMicrophonePreset
         localListen.bands = settings.audioSuperhumanBands
         localListen.placement = settings.audioMicrophonePlacement
+        localListen.placementAuto = settings.audioPlacementAuto
         localListen.gain = settings.audioMicrophoneGain
         localListen.listenVolume = settings.audioListenVolume
         localListen.outputDeviceKey = settings.audioOutputDeviceKey.takeIf { it != "phone" }
@@ -539,7 +542,11 @@ fun TouchpadScreen(
                 onPlacement = { placement ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophonePlacement = placement))
                 },
+                onPlacementAuto = { auto ->
+                    touchpadEngine.updateSettings(settings.copy(audioPlacementAuto = auto))
+                },
                 placement = settings.audioMicrophonePlacement,
+                placementAuto = settings.audioPlacementAuto,
                 onListenToggled = { listening = it },
                 onSuperhumanPreset = { shape ->
                     touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = shape.bands))

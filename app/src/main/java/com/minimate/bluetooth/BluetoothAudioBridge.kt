@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
 import com.minimate.audio.MicrophoneEngine
+import com.minimate.audio.PlacementDetector
 import com.minimate.touchpad.model.MicrophonePlacement
 import com.minimate.touchpad.model.MicrophoneVoicePreset
 import com.minimate.touchpad.model.ThemeFilter
@@ -129,6 +130,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
     @Volatile private var microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN
     @Volatile private var superhumanBands: List<Float> = emptyList()
     @Volatile private var microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD
+    @Volatile private var placementAuto: Boolean = true
+    private val placementDetector = PlacementDetector(context)
+
+    /** The manual choice, or what the phone reports about its own orientation. */
+    private fun activePlacement(): MicrophonePlacement =
+        if (placementAuto && placementDetector.available) placementDetector.current else microphonePlacement
     private var audioTrack: AudioTrack? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var audioTrackRate = 0
@@ -159,8 +166,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         microphoneGain: Float,
         microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
         superhumanBands: List<Float> = emptyList(),
-        microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD
+        microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
+        placementAuto: Boolean = true
     ) {
+        this.placementAuto = placementAuto
         this.microphonePreset = microphonePreset
         this.superhumanBands = superhumanBands
         this.microphonePlacement = microphonePlacement
@@ -211,6 +220,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         }
         updateNetworkAvailability()
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        placementDetector.start()
         updateAudioDevices()
         scope.launch { bluetoothAcceptLoop() }
         scope.launch { wifiAcceptLoop() }
@@ -483,9 +493,9 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isPhoneMic) {
                 runCatching {
                     recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
-                    recorder.setPreferredMicrophoneFieldDimension(microphonePlacement.fieldDimension)
+                    recorder.setPreferredMicrophoneFieldDimension(activePlacement().fieldDimension)
                 }.onFailure { Log.w(TAG, "startMicrophone: beamforming unavailable", it) }
-                Log.i(TAG, "startMicrophone: beamforming towards user, placement=${microphonePlacement.name} field=${microphonePlacement.fieldDimension}")
+                Log.i(TAG, "startMicrophone: beamforming towards user, placement=${activePlacement().name} auto=$placementAuto")
             }
             // Platform AGC pre-processor. This is the piece that was missing: it runs inside the
             // capture chain, so it raises a low-sensitivity capsule's signal before we ever see
@@ -521,6 +531,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start recording" }
                 Log.i(TAG, "startMicrophone: source=$chosenSource recording started, actual routed device=${recorder.routedDevice?.type}/${recorder.routedDevice?.id}/${recorder.routedDevice?.productName}")
                 var consecutiveEmptyReads = 0
+                var appliedPlacement = activePlacement()
                 // Rolling 1-second window of the LOUDEST moment, not a random snapshot — a
                 // sparse per-N-reads sample mostly lands between words and looks falsely quiet.
                 var windowRawPeak = 0
@@ -544,7 +555,17 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     consecutiveEmptyReads = 0
                     val gain = _state.value.microphoneGain
-                    val adjusted = engine.process(samples, count, gain, microphonePreset, superhumanBands, microphonePlacement.gainScale)
+                    val placement = activePlacement()
+                    if (placement != appliedPlacement) {
+                        // Beam width is re-applied live: picking the phone up off the desk should
+                        // narrow the beam immediately, not at the next capture session.
+                        appliedPlacement = placement
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            runCatching { recorder.setPreferredMicrophoneFieldDimension(placement.fieldDimension) }
+                        }
+                        Log.i(TAG, "placement changed to ${placement.name}, field=${placement.fieldDimension}")
+                    }
+                    val adjusted = engine.process(samples, count, gain, microphonePreset, superhumanBands, placement.gainScale)
                     for (index in 0 until count) {
                         val rawAbs = kotlin.math.abs(samples[index].toInt())
                         if (rawAbs > windowRawPeak) windowRawPeak = rawAbs
@@ -702,6 +723,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         running = false
         runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
         runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
+        placementDetector.stop()
         unregisterNsd()
         runCatching { bluetoothServer?.close() }
         runCatching { wifiServer?.close() }

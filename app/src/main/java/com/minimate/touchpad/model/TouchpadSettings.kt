@@ -518,6 +518,8 @@ data class TouchpadSettings(
     val audioMicrophoneGain: Float = 1f,
     val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioMicrophonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
+    /** Follow the gravity sensor instead of the manual choice above. */
+    val audioPlacementAuto: Boolean = true,
     val audioSuperhumanBands: List<Float> = DEFAULT_SUPERHUMAN_BANDS,
     /**
      * Playback level for on-device listening. Low by default and deliberately separate from

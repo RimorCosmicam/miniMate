@@ -98,6 +98,7 @@ class TouchpadPreferences(context: Context) {
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
                 put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
                 put("audioMicrophonePlacement", settings.audioMicrophonePlacement.name)
+                put("audioPlacementAuto", settings.audioPlacementAuto)
                 put("audioSuperhumanBands", JSONArray(settings.audioSuperhumanBands))
                 put("audioListenVolume", settings.audioListenVolume.toDouble())
                 put("audioTransport", settings.audioTransport.name)
@@ -292,6 +293,7 @@ class TouchpadPreferences(context: Context) {
                 audioMicrophonePlacement = runCatching {
                     MicrophonePlacement.valueOf(json.optString("audioMicrophonePlacement", "HANDHELD"))
                 }.getOrDefault(MicrophonePlacement.HANDHELD),
+                audioPlacementAuto = json.optBoolean("audioPlacementAuto", true),
                 audioSuperhumanBands = json.optJSONArray("audioSuperhumanBands")?.let { array ->
                     (0 until array.length()).map { array.optDouble(it, 0.0).toFloat().coerceIn(-18f, 18f) }
                 }?.takeIf { it.size == SUPERHUMAN_BAND_HZ.size } ?: DEFAULT_SUPERHUMAN_BANDS,

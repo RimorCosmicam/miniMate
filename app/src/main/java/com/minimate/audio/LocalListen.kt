@@ -50,6 +50,11 @@ class LocalListen(private val context: Context) {
     @Volatile var preset: MicrophoneVoicePreset = MicrophoneVoicePreset.SUPERHUMAN
     @Volatile var bands: List<Float> = emptyList()
     @Volatile var placement: MicrophonePlacement = MicrophonePlacement.HANDHELD
+    @Volatile var placementAuto: Boolean = true
+    private val placementDetector = PlacementDetector(context)
+
+    private fun activePlacement(): MicrophonePlacement =
+        if (placementAuto && placementDetector.available) placementDetector.current else placement
     @Volatile var gain: Float = 1f
     /** Playback level, 0..1. Starts low deliberately — see the feedback note in start(). */
     @Volatile var listenVolume: Float = .30f
@@ -70,11 +75,13 @@ class LocalListen(private val context: Context) {
             return false
         }
         running.set(true)
+        placementDetector.start()
         worker = thread(name = "MiniMate-local-listen", isDaemon = true) { run() }
         return true
     }
 
     fun stop() {
+        placementDetector.stop()
         running.set(false)
         runCatching { worker?.join(300) }
         worker = null
@@ -143,7 +150,7 @@ class LocalListen(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !isToolMode()) {
                 runCatching {
                     mic.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
-                    mic.setPreferredMicrophoneFieldDimension(placement.fieldDimension)
+                    mic.setPreferredMicrophoneFieldDimension(activePlacement().fieldDimension)
                 }
             }
             // Suppression and echo cancellation are deliberately off for the tools: both remove
@@ -206,7 +213,7 @@ class LocalListen(private val context: Context) {
                     continue
                 }
                 emptyReads = 0
-                val processed = engine.process(samples, read, gain, preset, bands, placement.gainScale)
+                val processed = engine.process(samples, read, gain, preset, bands, activePlacement().gainScale)
 
                 var peak = 0
                 for (index in 0 until read) {

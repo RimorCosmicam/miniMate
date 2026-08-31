@@ -70,7 +70,9 @@ fun AudioModeOverlay(
     onMicrophonePreset: (MicrophoneVoicePreset) -> Unit,
     onListenToggled: (Boolean) -> Unit,
     onPlacement: (MicrophonePlacement) -> Unit,
+    onPlacementAuto: (Boolean) -> Unit,
     placement: MicrophonePlacement,
+    placementAuto: Boolean,
     onSuperhumanPreset: (SuperhumanPreset) -> Unit,
     onListenVolume: (Float) -> Unit,
     listenVolume: Float,
@@ -109,7 +111,7 @@ fun AudioModeOverlay(
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
                     state, onMicrophoneEnabled, onMicrophoneGain,
-                    placement, onPlacement
+                    placement, onPlacement, placementAuto, onPlacementAuto
                 )
                 AudioEditorTab.TOOLS -> ToolsControls(
                     preset = microphonePreset,
@@ -287,7 +289,9 @@ private fun MicrophoneControls(
     onEnabled: (Boolean) -> Unit,
     onGain: (Float) -> Unit,
     placement: MicrophonePlacement,
-    onPlacement: (MicrophonePlacement) -> Unit
+    onPlacement: (MicrophonePlacement) -> Unit,
+    placementAuto: Boolean,
+    onPlacementAuto: (Boolean) -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
@@ -323,17 +327,23 @@ private fun MicrophoneControls(
             onValue = onGain
         )
         Text("PHONE POSITION", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(Modifier.weight(1f)) {
+                CompactChoice("Auto", placementAuto, state.microphoneEnabled) { onPlacementAuto(true) }
+            }
             MicrophonePlacement.entries.forEach { option ->
                 Box(Modifier.weight(1f)) {
-                    CompactChoice(option.label, option == placement, state.microphoneEnabled) {
+                    CompactChoice(option.label, !placementAuto && option == placement, state.microphoneEnabled) {
+                        onPlacementAuto(false)
                         onPlacement(option)
                     }
                 }
             }
         }
         Text(
-            when (placement) {
+            if (placementAuto) {
+                "Follows whether the phone is lying on its back or in your hand."
+            } else when (placement) {
                 MicrophonePlacement.HANDHELD -> "Narrow beam, close range. Rejects most of the room."
                 MicrophonePlacement.DESK -> "Wider beam and more gain for arm's length."
             },
