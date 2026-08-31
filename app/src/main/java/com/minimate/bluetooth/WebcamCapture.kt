@@ -19,6 +19,7 @@ import android.util.Range
 import android.os.PowerManager
 import android.util.Log
 import android.util.Size
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.minimate.touchpad.model.WebcamResolution
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,7 +77,9 @@ class WebcamCapture(
      * SoC — which degrades everything else running. Dropping frame rate first is far cheaper than
      * letting it get that far, and it is reversible the moment the device cools.
      */
-    private val thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
+    @get:RequiresApi(Build.VERSION_CODES.Q)
+    private val thermalListener by lazy(LazyThreadSafetyMode.NONE) {
+        PowerManager.OnThermalStatusChangedListener { status ->
         val scale = when {
             status >= PowerManager.THERMAL_STATUS_SEVERE -> .34f
             status >= PowerManager.THERMAL_STATUS_MODERATE -> .5f
@@ -90,6 +93,7 @@ class WebcamCapture(
             // Re-apply the frame rate on the live session rather than restarting the camera:
             // tearing the session down and back up is itself expensive when already hot.
             runCatching { applyFrameRate() }
+        }
         }
     }
 
@@ -245,7 +249,10 @@ class WebcamCapture(
                 set(CaptureRequest.JPEG_ORIENTATION, info[CameraCharacteristics.SENSOR_ORIENTATION] ?: 0)
             }.build()
             captureSession.setRepeatingRequest(request, null, handler)
-            runCatching { power.addThermalStatusListener(thermalListener) }
+            // Thermal status arrived in API 29; below that the capture rate stays as requested.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                runCatching { power.addThermalStatusListener(thermalListener) }
+            }
         }.onFailure { failure ->
             _state.update { it.copy(error = failure.message ?: "Unable to update camera controls") }
         }
@@ -281,7 +288,9 @@ class WebcamCapture(
 
     fun stop() {
         generation++
-        runCatching { power.removeThermalStatusListener(thermalListener) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching { power.removeThermalStatusListener(thermalListener) }
+        }
         runCatching { session?.stopRepeating() }
         session?.close(); session = null
         camera?.close(); camera = null
