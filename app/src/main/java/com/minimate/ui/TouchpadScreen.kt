@@ -58,8 +58,8 @@ import com.minimate.ui.components.LiveCalibrationMode
 import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
-import com.minimate.ui.components.SettingsContext
-import com.minimate.ui.components.SettingsSheet
+import com.minimate.ui.components.CommandBar
+import com.minimate.ui.components.buildCommandMenu
 import com.minimate.ui.components.SceneStudioOverlay
 import com.minimate.ui.components.WebcamModeOverlay
 import com.minimate.touchpad.model.sceneById
@@ -86,6 +86,7 @@ fun TouchpadScreen(
     val shaderTouchPoints by touchpadEngine.shaderTouchPoints.collectAsState()
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var editingPanels by remember { mutableStateOf(false) }
     var showPairingDialog by remember { mutableStateOf(false) }
     var showScreenEditor by remember { mutableStateOf(false) }
     var showThemeTester by remember { mutableStateOf(false) }
@@ -501,6 +502,70 @@ fun TouchpadScreen(
                 onExposure = { touchpadEngine.updateSettings(settings.copy(webcamExposure = it)) },
                 onFlashEnabled = { touchpadEngine.updateSettings(settings.copy(webcamFlashEnabled = it)) },
                 onFlashIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFlashIntensity = it)) },
+            )
+        }
+
+        // Layer 6: Freeform Screen Editor Overlay (move the clock freely)
+        if (showScreenEditor) {
+            ScreenEditorOverlay(
+                settings = settings,
+                screenWidthPx = screenWidthPx,
+                screenHeightPx = screenHeightPx,
+                onSettingsChange = { newSettings ->
+                    touchpadEngine.updateSettings(newSettings)
+                },
+                onClose = {
+                    showScreenEditor = false
+                }
+            )
+        }
+
+        // Layer 8: Settings & Theme Manager Modal Sheet (3 Tabs)
+        if (showSettingsSheet) {
+            CommandBar(
+                root = buildCommandMenu(
+                    settings = settings,
+                    onChange = touchpadEngine::updateSettings,
+                    onOpenSceneStudio = {
+                        themeTesterOriginal = settings
+                        showSettingsSheet = false
+                        showWebcam = false
+                        showThemeTester = true
+                    },
+                    onOpenKeyboardStudio = {
+                        keyboardThemeEditorOriginal = settings
+                        showSettingsSheet = false
+                        showEdgeThemeEditor = false
+                        showAudio = false
+                        showWebcam = false
+                        showKeyboard = true
+                        showKeyboardThemeEditor = true
+                    },
+                    onOpenEdgeStudio = {
+                        edgeThemeEditorOriginal = settings
+                        showSettingsSheet = false
+                        showKeyboardThemeEditor = false
+                        showKeyboard = false
+                        showAudio = false
+                        showWebcam = false
+                        showEdgeThemeEditor = true
+                    },
+                    onOpenPillEditor = {
+                        showSettingsSheet = false
+                        showScreenEditor = true
+                    },
+                    onEditPanels = {
+                        showSettingsSheet = false
+                        editingPanels = true
+                    },
+                    onPairNewDevice = { showSettingsSheet = false; showPairingDialog = true },
+                    onRefreshDevices = { hidManager.refreshPairedDevices() },
+                    onDisconnect = { hidManager.disconnect() },
+                    pairedSummary = if (bluetoothState.status == ConnectionStatus.CONNECTED) {
+                        "Connected · battery $batteryPercentage%"
+                    } else "Not connected"
+                ),
+                onDismiss = { showSettingsSheet = false }
             )
         }
 
