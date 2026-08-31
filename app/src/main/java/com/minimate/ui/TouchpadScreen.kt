@@ -5,6 +5,11 @@ import android.content.Intent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -62,6 +67,8 @@ import com.minimate.ui.components.CommandBar
 import com.minimate.ui.components.buildCommandMenu
 import com.minimate.ui.components.SceneStudioOverlay
 import com.minimate.ui.components.WebcamModeOverlay
+import com.minimate.touchpad.model.PanelLayout
+import com.minimate.touchpad.model.panelThemeAt
 import com.minimate.touchpad.model.sceneById
 import com.minimate.ui.shader.SceneShaderCanvas
 import com.minimate.ui.shader.ThemeFilterStack
@@ -479,6 +486,18 @@ fun TouchpadScreen(
                 },
                 placement = settings.audioMicrophonePlacement,
                 placementAuto = settings.audioPlacementAuto,
+                panelTheme = panelThemeAt(settings.panelThemeIndex),
+                panelLayout = PanelLayout(settings.audioPanelX, settings.audioPanelY, settings.audioPanelScale),
+                editingPanel = editingPanels,
+                onPanelLayoutChange = { layout ->
+                    touchpadEngine.updateSettings(
+                        settings.copy(
+                            audioPanelX = layout.x,
+                            audioPanelY = layout.y,
+                            audioPanelScale = layout.scale
+                        )
+                    )
+                },
             )
         }
 
@@ -502,6 +521,18 @@ fun TouchpadScreen(
                 onExposure = { touchpadEngine.updateSettings(settings.copy(webcamExposure = it)) },
                 onFlashEnabled = { touchpadEngine.updateSettings(settings.copy(webcamFlashEnabled = it)) },
                 onFlashIntensity = { touchpadEngine.updateSettings(settings.copy(webcamFlashIntensity = it)) },
+                panelTheme = panelThemeAt(settings.panelThemeIndex),
+                panelLayout = PanelLayout(settings.cameraPanelX, settings.cameraPanelY, settings.cameraPanelScale),
+                editingPanel = editingPanels,
+                onPanelLayoutChange = { layout ->
+                    touchpadEngine.updateSettings(
+                        settings.copy(
+                            cameraPanelX = layout.x,
+                            cameraPanelY = layout.y,
+                            cameraPanelScale = layout.scale
+                        )
+                    )
+                },
             )
         }
 
@@ -753,6 +784,23 @@ fun TouchpadScreen(
                 showSettingsSheet = true
             }
         )
+
+        if (editingPanels) {
+            if (showAudio || showWebcam) {
+                Box(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = 108.dp)
+                        .clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(.82f))
+                        .border(1.dp, Color.White.copy(.4f), RoundedCornerShape(14.dp))
+                        .clickable { editingPanels = false }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text("Drag to move · pinch to resize · tap to finish", color = Color.White, fontSize = 9.sp)
+                }
+            } else {
+                // Nothing to arrange on this page, so the mode ends rather than lingering unseen.
+                editingPanels = false
+            }
+        }
 
         // Layer 10: Minimal HUD Toast Feedback
         HudToast(

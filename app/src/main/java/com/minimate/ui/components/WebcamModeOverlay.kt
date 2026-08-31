@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.WebcamCaptureState
+import com.minimate.touchpad.model.PanelLayout
+import com.minimate.touchpad.model.PanelTheme
 import com.minimate.touchpad.model.WebcamResolution
 import kotlin.math.min
 
@@ -56,6 +58,10 @@ fun WebcamModeOverlay(
     onExposure: (Float) -> Unit,
     onFlashEnabled: (Boolean) -> Unit,
     onFlashIntensity: (Float) -> Unit,
+    panelTheme: PanelTheme,
+    panelLayout: PanelLayout,
+    editingPanel: Boolean,
+    onPanelLayoutChange: (PanelLayout) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier.fillMaxSize()) {
@@ -71,13 +77,12 @@ fun WebcamModeOverlay(
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 20.dp)
         )
 
-        Column(
-            Modifier.align(Alignment.Center).fillMaxWidth(.72f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Brush.linearGradient(listOf(Color(0xC4161618), Color(0xB509090B))))
-                .border(1.dp, Color.White.copy(.17f), RoundedCornerShape(24.dp))
-                .padding(horizontal = 15.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ThemedPanel(
+            theme = panelTheme,
+            layout = panelLayout,
+            editing = editingPanel,
+            onLayoutChange = onPanelLayoutChange,
+            widthFraction = .72f
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

@@ -48,6 +48,8 @@ import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.AudioDeviceSummary
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
+import com.minimate.touchpad.model.PanelLayout
+import com.minimate.touchpad.model.PanelTheme
 import com.minimate.touchpad.model.MicrophonePlacement
 
 private enum class AudioEditorTab(val label: String) {
@@ -67,6 +69,10 @@ fun AudioModeOverlay(
     onPlacementAuto: (Boolean) -> Unit,
     placement: MicrophonePlacement,
     placementAuto: Boolean,
+    panelTheme: PanelTheme,
+    panelLayout: PanelLayout,
+    editingPanel: Boolean,
+    onPanelLayoutChange: (PanelLayout) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
@@ -79,19 +85,11 @@ fun AudioModeOverlay(
                 .align(Alignment.TopCenter)
                 .padding(start = 18.dp, end = 20.dp, top = 20.dp)
         )
-        // Two constraints on this column. The tab strip sits at the top and the panel was
-        // running underneath it, so the top padding clears the strip's full height rather than
-        // approximating it. The cover display also has a physical camera cutout in the
-        // bottom-right corner, roughly 84 dp tall on a 399 dp panel, so content stops above
-        // that and scrolls instead of extending somewhere it can be neither seen nor touched.
-        Column(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth(.70f)
-                .padding(top = 76.dp, bottom = 96.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        ThemedPanel(
+            theme = panelTheme,
+            layout = panelLayout,
+            editing = editingPanel,
+            onLayoutChange = onPanelLayoutChange
         ) {
             when (selectedTab) {
                 AudioEditorTab.OUTPUT -> OutputControls(
