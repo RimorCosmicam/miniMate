@@ -7,6 +7,7 @@ import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.KeyboardFont
 import com.minimate.touchpad.model.KeyboardLanguage
 import com.minimate.touchpad.model.KeyboardTheme
+import com.minimate.touchpad.model.withKeyboardTheme
 import com.minimate.touchpad.model.KeyboardTrail
 import com.minimate.touchpad.model.MicrophonePlacement
 import com.minimate.touchpad.model.ShaderFamily
@@ -210,7 +211,7 @@ fun buildCommandMenu(
                 MenuAction("Open Keyboard Studio") { onOpenKeyboardStudio() },
                 MenuBranch("Look", listOf(
                     MenuChoice("Theme", KeyboardTheme.entries.map { it.label }, settings.keyboardTheme.ordinal) {
-                        onChange(settings.copy(keyboardTheme = KeyboardTheme.entries[it]))
+                        onChange(settings.withKeyboardTheme(KeyboardTheme.entries[it]))
                     },
                     MenuChoice("Trail", KeyboardTrail.entries.map { it.label }, settings.keyboardTrail.ordinal) {
                         onChange(settings.copy(keyboardTrail = KeyboardTrail.entries[it]))

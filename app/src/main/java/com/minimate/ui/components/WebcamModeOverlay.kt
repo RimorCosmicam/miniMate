@@ -69,7 +69,8 @@ fun WebcamModeOverlay(
 ) {
     // The whole page, chrome included, follows the panel material — a square panel
     // full of rounded cards still reads as a rounded design with its outline cropped.
-    CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(panelTheme.material)) {
+    CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(panelTheme.material),
+        LocalPanelChrome provides chromeScaleFor(panelTheme.material)) {
         Box(modifier.fillMaxSize()) {
             StatusBadge(
                 text = when {
@@ -141,8 +142,8 @@ fun WebcamModeOverlay(
 @Composable
 private fun StatusBadge(text: String, active: Boolean, modifier: Modifier = Modifier) {
     Row(
-        modifier.clip(panelShape(16.dp)).background(Color.Black.copy(.62f))
-            .border(1.dp, Color.White.copy(.15f), panelShape(16.dp))
+        modifier.clip(panelShape(16.dp)).background(panelChrome(Color.Black.copy(.62f)))
+            .border(1.dp, panelChrome(Color.White.copy(.15f)), panelShape(16.dp))
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -156,12 +157,12 @@ private fun StatusBadge(text: String, active: Boolean, modifier: Modifier = Modi
 private fun Choice(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier.clip(panelShape(13.dp))
-            .background(if (selected) Color.White else Color.White.copy(.075f))
-            .border(1.dp, Color.White.copy(if (selected) .65f else .11f), panelShape(13.dp))
+            .background(if (selected) panelSelectionFill() else panelChrome(Color.White.copy(.075f)))
+            .border(1.dp, panelChrome(Color.White.copy(if (selected) .65f else .11f)), panelShape(13.dp))
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = if (selected) Color.Black else Color.White.copy(.78f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, color = if (selected) panelSelectedText() else Color.White.copy(.78f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 

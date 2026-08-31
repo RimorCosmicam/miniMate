@@ -231,8 +231,8 @@ class TouchpadPreferences(context: Context) {
                     }
                 } ?: DEFAULT_KEYBOARD_SHORTCUTS,
                 keyboardTheme = runCatching {
-                    KeyboardTheme.valueOf(json.optString("keyboardTheme", "GLASS"))
-                }.getOrDefault(KeyboardTheme.GLASS),
+                    KeyboardTheme.valueOf(json.optString("keyboardTheme", "MONT"))
+                }.getOrDefault(KeyboardTheme.MONT),
                 keyboardLanguage = runCatching {
                     KeyboardLanguage.valueOf(json.optString("keyboardLanguage", "ENGLISH"))
                 }.getOrDefault(KeyboardLanguage.ENGLISH),
@@ -240,8 +240,8 @@ class TouchpadPreferences(context: Context) {
                     KeyboardTrail.valueOf(json.optString("keyboardTrail", "AURORA"))
                 }.getOrDefault(KeyboardTrail.AURORA),
                 keyboardFont = runCatching {
-                    KeyboardFont.valueOf(json.optString("keyboardFont", "SYSTEM"))
-                }.getOrDefault(KeyboardFont.SYSTEM),
+                    KeyboardFont.valueOf(json.optString("keyboardFont", "MONT"))
+                }.getOrDefault(KeyboardFont.MONT),
                 keyboardFontWeight = runCatching {
                     KeyboardFontWeight.valueOf(json.optString("keyboardFontWeight", "REGULAR"))
                 }.getOrDefault(KeyboardFontWeight.REGULAR),

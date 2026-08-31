@@ -319,7 +319,9 @@ private fun SwipeTypingPanel(
             val keyBrush = if (amoled) Brush.verticalGradient(listOf(Color.Black, Color.Black)) else when (theme) {
                 KeyboardTheme.GLASS -> Brush.verticalGradient(listOf(Color.White.copy(.18f), Color.White.copy(.07f)))
                 KeyboardTheme.FROST -> Brush.verticalGradient(listOf(Color.White.copy(.88f), Color.White.copy(.58f)))
-                KeyboardTheme.MONT -> Brush.verticalGradient(listOf(Color(0xFF141416), Color(0xFF101012)))
+                KeyboardTheme.MONT -> Brush.verticalGradient(
+                    listOf(Color.Black.copy(MONT_SURFACE_ALPHA), Color.Black.copy(MONT_SURFACE_ALPHA))
+                )
                 KeyboardTheme.TITANIUM -> Brush.verticalGradient(listOf(Color(0xD8EEF2F5), Color(0x9A707983), Color(0xCCCDD3D8), Color(0x88616A73), Color(0xBDAEB6BD)))
                 KeyboardTheme.NOIR -> Brush.verticalGradient(listOf(Color(0xE5222427), Color(0xFA050607)))
                 KeyboardTheme.PORCELAIN -> Brush.verticalGradient(listOf(Color(0xFFFDF9EE), Color(0xFFE5DDCA)))
@@ -942,16 +944,19 @@ private fun RowScope.GlassKey(
     val fontWeight = LocalKeyboardFontWeight.current
     val opaque = LocalKeyboardOpaque.current
     val scale = LocalKeyboardScale.current
-    val active = pressed || selected
+    // Keys that run their own gesture detector have to report the press themselves. Space and the
+    // repeating keys did not, which is why they were the only ones that stayed dark under a finger.
+    var held by remember { mutableStateOf(false) }
+    val active = pressed || held || selected
     val colors = if (amoled) {
         if (active) listOf(Color.White.copy(.18f), Color.White.copy(.07f)) else listOf(Color.Black, Color.Black)
     } else when (theme) {
         KeyboardTheme.GLASS -> if (active) listOf(Color(0x7AFFFFFF), Color(0x34FFFFFF)) else listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))
         KeyboardTheme.FROST -> if (active) listOf(Color(0xE8FFFFFF), Color(0xA8FFFFFF)) else listOf(Color(0xB8FFFFFF), Color(0x70FFFFFF))
         KeyboardTheme.MONT -> if (active) {
-            listOf(Color(0xFF2E2E33), Color(0xFF232327))
+            listOf(Color(0xFF2E2E33).copy(MONT_SURFACE_ALPHA), Color(0xFF232327).copy(MONT_SURFACE_ALPHA))
         } else {
-            listOf(Color(0xFF141416), Color(0xFF101012))
+            listOf(Color.Black.copy(MONT_SURFACE_ALPHA), Color.Black.copy(MONT_SURFACE_ALPHA))
         }
         KeyboardTheme.TITANIUM -> if (active) {
             listOf(Color(0xD8E5E9ED), Color(0xA87D8791), Color(0xCCBFC6CC))
@@ -981,11 +986,20 @@ private fun RowScope.GlassKey(
     val foreground = if (!amoled && theme in setOf(KeyboardTheme.FROST, KeyboardTheme.PORCELAIN, KeyboardTheme.PAPER)) Color(0xFF111214) else Color.White
     val actionModifier = if (onLongPress != null) {
         Modifier.pointerInput(onClick, onLongPress) {
-            detectTapGestures(onTap = { onClick() }, onLongPress = { onLongPress() })
+            detectTapGestures(
+                onPress = {
+                    held = true
+                    tryAwaitRelease()
+                    held = false
+                },
+                onTap = { onClick() },
+                onLongPress = { onLongPress() }
+            )
         }
     } else if (repeatable) {
         Modifier.pointerInput(onClick) {
             detectTapGestures(onPress = {
+                held = true
                 onClick()
                 val repeatJob = repeatScope.launch {
                     delay(360)
@@ -996,6 +1010,7 @@ private fun RowScope.GlassKey(
                 }
                 tryAwaitRelease()
                 repeatJob.cancel()
+                held = false
             })
         }
     } else {

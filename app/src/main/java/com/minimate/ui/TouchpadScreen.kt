@@ -75,6 +75,7 @@ import com.minimate.ui.components.WebcamModeOverlay
 import com.minimate.touchpad.model.PanelLayout
 import com.minimate.touchpad.model.panelThemeAt
 import com.minimate.touchpad.model.sceneById
+import com.minimate.touchpad.model.withKeyboardTheme
 import com.minimate.ui.shader.SceneShaderCanvas
 import com.minimate.ui.shader.ThemeFilterStack
 import kotlinx.coroutines.delay
@@ -379,7 +380,7 @@ fun TouchpadScreen(
                 shortcuts = settings.keyboardShortcuts,
                 theme = settings.keyboardTheme,
                 onThemeChange = { theme ->
-                    touchpadEngine.updateSettings(settings.copy(keyboardTheme = theme))
+                    touchpadEngine.updateSettings(settings.withKeyboardTheme(theme))
                 },
                 language = settings.keyboardLanguage,
                 onLanguageChange = { language ->

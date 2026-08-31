@@ -81,7 +81,8 @@ fun AudioModeOverlay(
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
     // The whole page, chrome included, follows the panel material — a square panel
     // full of rounded cards still reads as a rounded design with its outline cropped.
-    CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(panelTheme.material)) {
+    CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(panelTheme.material),
+        LocalPanelChrome provides chromeScaleFor(panelTheme.material)) {
         Box(modifier.fillMaxSize()) {
             AudioTopBar(
                 state = state,
@@ -136,14 +137,14 @@ private fun AudioTopBar(
             )
         }
         Row(
-            Modifier.clip(panelShape(19.dp)).background(Color.Black.copy(.58f))
-                .border(1.dp, Color.White.copy(.16f), panelShape(19.dp)).padding(4.dp)
+            Modifier.clip(panelShape(19.dp)).background(panelChrome(Color.Black.copy(.58f)))
+                .border(1.dp, panelChrome(Color.White.copy(.16f)), panelShape(19.dp)).padding(4.dp)
         ) {
             AudioEditorTab.values().forEach { tab ->
                 val active = tab == selected
                 Box(
                     Modifier.clip(panelShape(15.dp))
-                        .background(if (active) Color.White else Color.Transparent)
+                        .background(if (active) panelSelectionFill() else Color.Transparent)
                         .clickable { onSelected(tab) }.padding(horizontal = 14.dp, vertical = 9.dp)
                 ) {
                     Text(tab.label, color = if (active) Color.Black else Color.White.copy(.68f), fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
@@ -162,13 +163,13 @@ private fun OutputControls(
 ) {
     Column(
         Modifier.fillMaxWidth().clip(panelShape(22.dp))
-            .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(if (state.outputEnabled) .22f else .10f), panelShape(22.dp))
+            .background(panelChrome(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012)))))
+            .border(1.dp, panelChrome(Color.White.copy(if (state.outputEnabled) .22f else .10f)), panelShape(22.dp))
             .padding(horizontal = 11.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(.11f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(32.dp).clip(CircleShape).background(panelChrome(Color.White.copy(.11f))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Speaker, null, tint = Color.White, modifier = Modifier.size(17.dp))
             }
             Spacer(Modifier.size(8.dp))
@@ -194,11 +195,11 @@ private fun OutputControls(
 private fun CompactChoice(label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier.clip(panelShape(11.dp))
-            .background(if (selected) Color.White else Color.White.copy(.06f))
-            .border(1.dp, Color.White.copy(if (selected) .9f else .12f), panelShape(11.dp))
+            .background(if (selected) panelSelectionFill() else panelChrome(Color.White.copy(.06f)))
+            .border(1.dp, panelChrome(Color.White.copy(if (selected) .9f else .12f)), panelShape(11.dp))
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Text(label, color = if (selected) Color.Black else Color.White.copy(if (enabled) .76f else .26f), fontSize = 8.5.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = if (selected) panelSelectedText() else Color.White.copy(if (enabled) .76f else .26f), fontSize = 8.5.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -229,13 +230,13 @@ private fun MicrophoneControls(
 ) {
     Column(
         Modifier.fillMaxWidth().clip(panelShape(22.dp))
-            .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(if (state.microphoneEnabled) .22f else .10f), panelShape(22.dp))
+            .background(panelChrome(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012)))))
+            .border(1.dp, panelChrome(Color.White.copy(if (state.microphoneEnabled) .22f else .10f)), panelShape(22.dp))
             .padding(horizontal = 11.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(.11f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(30.dp).clip(CircleShape).background(panelChrome(Color.White.copy(.11f))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
             Spacer(Modifier.size(7.dp))

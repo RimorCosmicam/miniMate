@@ -311,6 +311,15 @@ data class KeyboardShortcut(
     val usage: Int
 )
 
+/**
+ * Picking Mont brings Mont Black with it. The theme is a whole look, not a colour scheme, and the
+ * typeface is the larger half of it — but it stays a default, so the Font menu still works after.
+ */
+fun TouchpadSettings.withKeyboardTheme(theme: KeyboardTheme): TouchpadSettings =
+    if (theme == KeyboardTheme.MONT) {
+        copy(keyboardTheme = theme, keyboardFont = KeyboardFont.MONT, keyboardFontWeight = KeyboardFontWeight.BOLD)
+    } else copy(keyboardTheme = theme)
+
 enum class KeyboardTheme(val label: String) {
     GLASS("Glass"),
     FROST("Frost"),
@@ -454,11 +463,11 @@ data class TouchpadSettings(
 
     // User-editable Mac chords exposed by the keyboard's Shortcuts panel.
     val keyboardShortcuts: List<KeyboardShortcut> = DEFAULT_KEYBOARD_SHORTCUTS,
-    val keyboardTheme: KeyboardTheme = KeyboardTheme.GLASS,
+    val keyboardTheme: KeyboardTheme = KeyboardTheme.MONT,
     val keyboardLanguage: KeyboardLanguage = KeyboardLanguage.ENGLISH,
     val keyboardTrail: KeyboardTrail = KeyboardTrail.AURORA,
-    val keyboardFont: KeyboardFont = KeyboardFont.SYSTEM,
-    val keyboardFontWeight: KeyboardFontWeight = KeyboardFontWeight.REGULAR,
+    val keyboardFont: KeyboardFont = KeyboardFont.MONT,
+    val keyboardFontWeight: KeyboardFontWeight = KeyboardFontWeight.BOLD,
     val keyboardOpaque: Boolean = false,
     val keyboardScale: Float = 1f,
 

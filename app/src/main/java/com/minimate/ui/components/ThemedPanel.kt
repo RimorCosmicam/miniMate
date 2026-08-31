@@ -165,7 +165,8 @@ fun ThemedPanel(
 
         Box(panelModifier) {
             PanelSurface(theme, backdrop, originX, originY, canvasWidth, canvasHeight, shape)
-            CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(theme.material)) {
+            CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(theme.material),
+                LocalPanelChrome provides chromeScaleFor(theme.material)) {
                 Column(
                     Modifier.padding(
                         horizontal = if (theme.material == PanelMaterial.MONT) 18.dp else 11.dp,
