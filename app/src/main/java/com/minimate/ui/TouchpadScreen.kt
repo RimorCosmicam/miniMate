@@ -59,7 +59,7 @@ import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.SettingsSheet
-import com.minimate.ui.components.ThemeTesterOverlay
+import com.minimate.ui.components.SceneStudioOverlay
 import com.minimate.ui.components.WebcamModeOverlay
 import com.minimate.touchpad.model.sceneById
 import com.minimate.ui.shader.SceneShaderCanvas
@@ -602,7 +602,7 @@ fun TouchpadScreen(
         }
 
         if (showThemeTester) {
-            ThemeTesterOverlay(
+            SceneStudioOverlay(
                 settings = settings,
                 onSettingsChange = touchpadEngine::updateSettings,
                 onPreviewTouchEvent = touchpadEngine::onPreviewTouchEvent,
