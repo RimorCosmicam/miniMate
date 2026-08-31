@@ -1360,14 +1360,19 @@ val shaderScenes: List<ShaderScene> = listOf(
                         float wide = uP2 * mix(0.55, 1.35, depth);
                         float lit = mix(0.25, 1.0, pow(depth, mix(0.2, 2.2, uP1)));
                         float3 tint = mix(uC1, uC2, depth);
-                        c += tint * smoothstep(wide, 0.0, d) * lit;
+                        // Each channel is resolved at a slightly different line width, so edges
+                        // fringe the way a lens makes them without projecting the whole solid
+                        // three times over — eighty projections a pixel is already the budget.
+                        float3 split = 1.0 + float3(uAberration * 0.16, 0.0, -uAberration * 0.16);
+                        c += tint * smoothstep(wide, 0.0, d) * lit * split;
                         c += mix(tint, uC3, 0.5) * (wide * 2.4 / (wide * 2.4 + d)) * lit * uP3 * 0.09;
                     }
                 }
             }
             return c;
         }
-        """
+        """,
+        dispersive = true
     )
 )
 
