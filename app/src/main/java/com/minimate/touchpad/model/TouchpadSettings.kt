@@ -367,6 +367,37 @@ enum class AudioTransport(val label: String) {
     BLUETOOTH("Bluetooth")
 }
 
+/**
+ * Microphone character. The first entry is unprocessed; the voice group colours speech; the two
+ * tool modes reshape the microphone into a different instrument entirely.
+ */
+enum class MicrophoneVoicePreset(val label: String) {
+    CLEAN("Clean"),
+    RICH("Rich"),
+    WARM("Warm"),
+    BRIGHT("Bright"),
+    DEEP("Deep"),
+    RADIO("Radio"),
+    ROBOT("Robot"),
+    BABY("Baby"),
+    ARENA_ANNOUNCER("Mortal Kombat"),
+    /** Contact listening: body-conducted and structure-borne sound rather than air. */
+    STETHO("Stetho"),
+    /** Extreme sensitivity with user-shaped spectrum, for faint and muffled sound. */
+    SUPERHUMAN("Super Human")
+}
+
+/**
+ * Centre frequencies for the Super Human band shaper, in Hz. Chosen around what actually survives
+ * an obstruction: masonry and doors attenuate progressively with frequency, so speech through a
+ * wall arrives as low-mid energy with the consonants gone. The lower bands are therefore where
+ * the recoverable information is, and the upper bands are mostly there to be cut.
+ */
+val SUPERHUMAN_BAND_HZ = listOf(90f, 200f, 450f, 950f, 2_000f, 4_500f)
+
+/** Default shape: lift what passes through an obstruction, suppress hiss above it. */
+val DEFAULT_SUPERHUMAN_BANDS = listOf(4f, 8f, 9f, 5f, -2f, -8f)
+
 enum class AudioOutputPreset(val label: String, val gains: List<Float>) {
     FLAT("Flat", List(9) { 0f }),
     IEM("IEM", listOf(1f, 1f, .5f, 0f, 0f, .5f, 1f, .5f, -1f)),
@@ -457,6 +488,8 @@ data class TouchpadSettings(
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
     val audioInputDeviceKey: String = "phone",
+    val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
+    val audioSuperhumanBands: List<Float> = DEFAULT_SUPERHUMAN_BANDS,
     val audioTransport: AudioTransport = AudioTransport.WIFI,
 
     // MiniMate Camera. Frames use the companion's active Wi-Fi link; the Mac

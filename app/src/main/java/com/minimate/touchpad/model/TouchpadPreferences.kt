@@ -97,6 +97,8 @@ class TouchpadPreferences(context: Context) {
                 })
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
                 put("audioInputDeviceKey", settings.audioInputDeviceKey)
+                put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
+                put("audioSuperhumanBands", JSONArray(settings.audioSuperhumanBands))
                 put("audioTransport", settings.audioTransport.name)
                 put("webcamEnabled", settings.webcamEnabled)
                 put("webcamResolution", settings.webcamResolution.name)
@@ -284,6 +286,12 @@ class TouchpadPreferences(context: Context) {
                 } ?: emptyList(),
                 audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 3f),
                 audioInputDeviceKey = json.optString("audioInputDeviceKey", "phone"),
+                audioMicrophonePreset = runCatching {
+                    MicrophoneVoicePreset.valueOf(json.optString("audioMicrophonePreset", "CLEAN"))
+                }.getOrDefault(MicrophoneVoicePreset.CLEAN),
+                audioSuperhumanBands = json.optJSONArray("audioSuperhumanBands")?.let { array ->
+                    (0 until array.length()).map { array.optDouble(it, 0.0).toFloat().coerceIn(-18f, 18f) }
+                }?.takeIf { it.size == SUPERHUMAN_BAND_HZ.size } ?: DEFAULT_SUPERHUMAN_BANDS,
                 audioTransport = runCatching {
                     AudioTransport.valueOf(json.optString("audioTransport", "WIFI"))
                 }.getOrDefault(AudioTransport.WIFI),

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.minimate.audio.LocalListen
 import com.minimate.bluetooth.BluetoothAudioBridge
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.bluetooth.WebcamCapture
@@ -43,6 +45,7 @@ import com.minimate.touchpad.model.BallAction
 import com.minimate.touchpad.model.AudioDeviceEqProfile
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.HapticIntensity
+import com.minimate.touchpad.model.SUPERHUMAN_BAND_HZ
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
 import com.minimate.ui.components.AudioModeOverlay
@@ -111,7 +114,9 @@ fun TouchpadScreen(
         settings.audioOutputDeviceKey,
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
-        settings.audioInputDeviceKey
+        settings.audioInputDeviceKey,
+        settings.audioMicrophonePreset,
+        settings.audioSuperhumanBands
     ) {
         audioBridge.configure(
             settings.audioOutputEnabled,
@@ -120,9 +125,39 @@ fun TouchpadScreen(
             settings.audioOutputDeviceKey,
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
-            settings.audioInputDeviceKey
+            settings.audioInputDeviceKey,
+            settings.audioMicrophonePreset,
+            settings.audioSuperhumanBands
         )
     }
+
+    // On-device listening runs independently of any desktop link: the tools are instruments to
+    // be heard immediately in the phone's own earphones, so they must work with nothing paired.
+    val localListen = remember { LocalListen(context) }
+    var listening by remember { mutableStateOf(false) }
+    LaunchedEffect(
+        listening,
+        settings.audioMicrophonePreset,
+        settings.audioSuperhumanBands,
+        settings.audioMicrophoneGain,
+        settings.audioOutputDeviceKey
+    ) {
+        localListen.preset = settings.audioMicrophonePreset
+        localListen.bands = settings.audioSuperhumanBands
+        localListen.gain = settings.audioMicrophoneGain
+        localListen.outputDeviceKey = settings.audioOutputDeviceKey.takeIf { it != "phone" }
+        if (listening && !localListen.isRunning) {
+            if (!localListen.start()) listening = false
+        } else if (listening) {
+            // Preset or routing changed while running: restart so the new capture profile and
+            // output device actually take effect.
+            localListen.stop()
+            localListen.start()
+        } else {
+            localListen.stop()
+        }
+    }
+    DisposableEffect(Unit) { onDispose { localListen.stop() } }
 
     LaunchedEffect(
         settings.webcamEnabled,
@@ -496,7 +531,20 @@ fun TouchpadScreen(
                 },
                 onMicrophoneGain = { gain ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
-                }
+                },
+                onMicrophonePreset = { preset ->
+                    touchpadEngine.updateSettings(settings.copy(audioMicrophonePreset = preset))
+                },
+                onSuperhumanBand = { index, value ->
+                    val next = settings.audioSuperhumanBands.toMutableList()
+                    while (next.size < SUPERHUMAN_BAND_HZ.size) next += 0f
+                    next[index.coerceIn(0, next.lastIndex)] = value.coerceIn(-18f, 18f)
+                    touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = next))
+                },
+                onListenToggled = { listening = it },
+                microphonePreset = settings.audioMicrophonePreset,
+                superhumanBands = settings.audioSuperhumanBands,
+                listening = listening
             )
         }
 

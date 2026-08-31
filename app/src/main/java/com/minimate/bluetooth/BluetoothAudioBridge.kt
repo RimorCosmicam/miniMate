@@ -60,6 +60,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
 import com.minimate.audio.MicrophoneEngine
+import com.minimate.touchpad.model.MicrophoneVoicePreset
 import com.minimate.touchpad.model.ThemeFilter
 
 /** Stable sentinel key for the phone's own built-in speaker/microphone. */
@@ -132,6 +133,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
      *  immediately instead of waiting for the current buffer to fill. */
     @Volatile private var activeRecorder: AudioRecord? = null
     @Volatile private var micGeneration = 0
+    @Volatile private var microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN
+    @Volatile private var superhumanBands: List<Float> = emptyList()
     private var audioTrack: AudioTrack? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var audioTrackRate = 0
@@ -160,8 +163,12 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputDeviceKey: String,
         outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
-        inputDeviceKey: String
+        inputDeviceKey: String,
+        microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
+        superhumanBands: List<Float> = emptyList()
     ) {
+        this.microphonePreset = microphonePreset
+        this.superhumanBands = superhumanBands
         val oldState = _state.value
         val restartMicrophone = oldState.selectedInputKey != inputDeviceKey
         deviceEqProfiles = outputProfiles
@@ -720,7 +727,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                     }
                     consecutiveEmptyReads = 0
                     val gain = _state.value.microphoneGain
-                    val adjusted = engine.process(samples, count, gain)
+                    val adjusted = engine.process(samples, count, gain, microphonePreset, superhumanBands)
                     for (index in 0 until count) {
                         val rawAbs = kotlin.math.abs(samples[index].toInt())
                         if (rawAbs > windowRawPeak) windowRawPeak = rawAbs
