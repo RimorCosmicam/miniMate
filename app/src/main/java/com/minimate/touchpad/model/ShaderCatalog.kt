@@ -115,9 +115,10 @@ val shaderScenes: List<ShaderScene> = listOf(
             float id = floor(hash(float2(col, row + floor(t * uP3 * 9.0))) * 64.0);
             float mask = glyph(id, cell);
 
+            // Black ground, characters lit additively over it — nothing fills the empty cells.
             float3 c = uC0;
-            c = mix(c, uC2, mask * lit);
-            c = mix(c, uC3, mask * isHead);
+            c += uC2 * mask * lit;
+            c += uC3 * mask * isHead;
             return c;
         }
         """
@@ -157,12 +158,16 @@ val shaderScenes: List<ShaderScene> = listOf(
             float id = floor(hash(float2(col, row + floor(t * 6.0))) * 64.0);
             float mask = glyph(id, cell);
 
-            float haze = fbm(float2(uv.x * 3.0, uv.y * 2.0 - t * 0.08));
-            float3 c = mix(uC0, uC1, haze * 0.35);
-            c = mix(c, uC2, mask * clamp(lit + lit2, 0.0, 1.0));
-            c = mix(c, uC3, mask * isHead);
-            c += uC2 * lit * uP2 * 0.22;
-            c = mix(c, uC3 * 0.5, haze * uP3 * 0.12);
+            // The backdrop stays black. Washing it with a haze was what made this read as lit
+            // paper rather than glyphs suspended in the dark, so every lift below is additive
+            // around the characters themselves and never a fill behind them.
+            float3 c = uC0;
+            float glow = clamp(lit + lit2, 0.0, 1.0);
+            c += uC2 * mask * glow;
+            c += uC3 * mask * isHead;
+            // Bloom bleeds a little light around a character without touching empty cells.
+            c += uC2 * glow * glow * uP2 * 0.16;
+            c += uC3 * mask * isHead * uP3 * 0.35;
             return c;
         }
         """
@@ -201,9 +206,10 @@ val shaderScenes: List<ShaderScene> = listOf(
             float dim = mix(1.0, 1.0 - m * 1.4, uP3);
 
             float3 c = uC0;
-            c = mix(c, uC2, mask * lit * fold * dim);
-            c = mix(c, uC3, mask * isHead * fold);
-            c += uC1 * (1.0 - fold) * 0.22;
+            c += uC2 * mask * lit * fold * dim;
+            c += uC3 * mask * isHead * fold;
+            // Only the canyon seam itself catches light; the rest of the ground stays black.
+            c += uC1 * (1.0 - fold) * 0.14;
             return c;
         }
         """
