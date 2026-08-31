@@ -27,18 +27,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.minimate.R
 
-/**
- * Mont Bold is a commercial face and is not in the project, so this is the closest available
- * stand-in: a geometric sans at bold weight. Dropping mont_bold.ttf into res/font and pointing
- * this at it is the only change needed to switch.
- */
-val MenuFont = FontFamily.SansSerif
-private val MenuWeight = FontWeight.Bold
+/** Mont Black, the menu's only typeface. */
+val MenuFont = FontFamily(Font(R.font.mont_black, FontWeight.Black))
+private val MenuWeight = FontWeight.Black
 
 /** Nodes of the command tree. Depth is capped at three by construction: the third level is a leaf. */
 sealed interface MenuNode {
