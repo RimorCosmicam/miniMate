@@ -29,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
@@ -78,33 +79,37 @@ fun AudioModeOverlay(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
-    Box(modifier.fillMaxSize()) {
-        AudioTopBar(
-            state = state,
-            selected = selectedTab,
-            onSelected = { selectedTab = it },
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(start = 18.dp, end = 20.dp, top = 20.dp)
-        )
-        ThemedPanel(
-            theme = panelTheme,
-            layout = panelLayout,
-            editing = editingPanel,
-            onLayoutChange = onPanelLayoutChange,
-            backdrop = backdrop
-        ) {
-            when (selectedTab) {
-                AudioEditorTab.OUTPUT -> OutputControls(
-                    state, onOutputEnabled, onOutputDeviceSelected, onOutputVolume
-                )
-                AudioEditorTab.INPUT -> MicrophoneControls(
-                    state, onMicrophoneEnabled, onMicrophoneGain,
-                    placement, onPlacement, placementAuto, onPlacementAuto
-                )
-            }
-            state.error?.let {
-                Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+    // The whole page, chrome included, follows the panel material — a square panel
+    // full of rounded cards still reads as a rounded design with its outline cropped.
+    CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(panelTheme.material)) {
+        Box(modifier.fillMaxSize()) {
+            AudioTopBar(
+                state = state,
+                selected = selectedTab,
+                onSelected = { selectedTab = it },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(start = 18.dp, end = 20.dp, top = 20.dp)
+            )
+            ThemedPanel(
+                theme = panelTheme,
+                layout = panelLayout,
+                editing = editingPanel,
+                onLayoutChange = onPanelLayoutChange,
+                backdrop = backdrop
+            ) {
+                when (selectedTab) {
+                    AudioEditorTab.OUTPUT -> OutputControls(
+                        state, onOutputEnabled, onOutputDeviceSelected, onOutputVolume
+                    )
+                    AudioEditorTab.INPUT -> MicrophoneControls(
+                        state, onMicrophoneEnabled, onMicrophoneGain,
+                        placement, onPlacement, placementAuto, onPlacementAuto
+                    )
+                }
+                state.error?.let {
+                    Text(it, color = Color(0xFFFFB4AB), fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+                }
             }
         }
     }
@@ -131,13 +136,13 @@ private fun AudioTopBar(
             )
         }
         Row(
-            Modifier.clip(RoundedCornerShape(19.dp)).background(Color.Black.copy(.58f))
-                .border(1.dp, Color.White.copy(.16f), RoundedCornerShape(19.dp)).padding(4.dp)
+            Modifier.clip(panelShape(19.dp)).background(Color.Black.copy(.58f))
+                .border(1.dp, Color.White.copy(.16f), panelShape(19.dp)).padding(4.dp)
         ) {
             AudioEditorTab.values().forEach { tab ->
                 val active = tab == selected
                 Box(
-                    Modifier.clip(RoundedCornerShape(15.dp))
+                    Modifier.clip(panelShape(15.dp))
                         .background(if (active) Color.White else Color.Transparent)
                         .clickable { onSelected(tab) }.padding(horizontal = 14.dp, vertical = 9.dp)
                 ) {
@@ -156,9 +161,9 @@ private fun OutputControls(
     onVolume: (Float) -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+        Modifier.fillMaxWidth().clip(panelShape(22.dp))
             .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(if (state.outputEnabled) .22f else .10f), RoundedCornerShape(22.dp))
+            .border(1.dp, Color.White.copy(if (state.outputEnabled) .22f else .10f), panelShape(22.dp))
             .padding(horizontal = 11.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -188,9 +193,9 @@ private fun OutputControls(
 @Composable
 private fun CompactChoice(label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
-        Modifier.clip(RoundedCornerShape(11.dp))
+        Modifier.clip(panelShape(11.dp))
             .background(if (selected) Color.White else Color.White.copy(.06f))
-            .border(1.dp, Color.White.copy(if (selected) .9f else .12f), RoundedCornerShape(11.dp))
+            .border(1.dp, Color.White.copy(if (selected) .9f else .12f), panelShape(11.dp))
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Text(label, color = if (selected) Color.Black else Color.White.copy(if (enabled) .76f else .26f), fontSize = 8.5.sp, fontWeight = FontWeight.SemiBold)
@@ -223,9 +228,9 @@ private fun MicrophoneControls(
     onPlacementAuto: (Boolean) -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+        Modifier.fillMaxWidth().clip(panelShape(22.dp))
             .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(if (state.microphoneEnabled) .22f else .10f), RoundedCornerShape(22.dp))
+            .border(1.dp, Color.White.copy(if (state.microphoneEnabled) .22f else .10f), panelShape(22.dp))
             .padding(horizontal = 11.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {

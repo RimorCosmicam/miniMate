@@ -84,6 +84,12 @@ private enum class KeyboardPanel(val label: String) {
 /** How long the release ring lives. Long enough to register, short enough not to trail typing. */
 private const val FLASH_NANOS = 190_000_000f
 
+/** Clears the clock pill, which is the only way in and out of this sheet. */
+private val STUDIO_TOP = 50.dp
+
+/** The keyboard never starts lower than this, so it cannot be pushed into the camera cutout. */
+private val KEYBOARD_TOP_LIMIT = 196.dp
+
 private enum class KeyboardCustomizer(val label: String) {
     THEME("Themes"), TRAIL("Trail"), FONT("Font"), SIZE("Size")
 }
@@ -301,7 +307,7 @@ private fun SwipeTypingPanel(
             val keyBrush = if (amoled) Brush.verticalGradient(listOf(Color.Black, Color.Black)) else when (theme) {
                 KeyboardTheme.GLASS -> Brush.verticalGradient(listOf(Color.White.copy(.18f), Color.White.copy(.07f)))
                 KeyboardTheme.FROST -> Brush.verticalGradient(listOf(Color.White.copy(.88f), Color.White.copy(.58f)))
-                KeyboardTheme.MONT -> Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF000000)))
+                KeyboardTheme.MONT -> Brush.verticalGradient(listOf(Color(0xFF141416), Color(0xFF101012)))
                 KeyboardTheme.TITANIUM -> Brush.verticalGradient(listOf(Color(0xD8EEF2F5), Color(0x9A707983), Color(0xCCCDD3D8), Color(0x88616A73), Color(0xBDAEB6BD)))
                 KeyboardTheme.NOIR -> Brush.verticalGradient(listOf(Color(0xE5222427), Color(0xFA050607)))
                 KeyboardTheme.PORCELAIN -> Brush.verticalGradient(listOf(Color(0xFFFDF9EE), Color(0xFFE5DDCA)))
@@ -312,7 +318,7 @@ private fun SwipeTypingPanel(
             }
             val keyBorder = if (amoled) Color.White.copy(.74f) else when (theme) {
                 KeyboardTheme.FROST -> Color.White.copy(.62f)
-                KeyboardTheme.MONT -> Color.White.copy(.20f)
+                KeyboardTheme.MONT -> Color.Transparent
                 KeyboardTheme.TITANIUM -> Color(0xFFF2F5F7).copy(.58f)
                 KeyboardTheme.NOIR -> Color(0xFFFFF8EE).copy(.34f)
                 KeyboardTheme.PORCELAIN -> Color(0xFF345B99).copy(.62f)
@@ -611,6 +617,10 @@ fun BluetoothKeyboardOverlay(
     var showLanguageSwitcher by remember { mutableStateOf(false) }
     var glidePreview by remember { mutableStateOf("") }
     var customizer by remember { mutableStateOf(KeyboardCustomizer.THEME) }
+    // The editor used to sit above the keyboard on the strength of a fixed 118dp, which stopped
+    // being true the moment its chrome grew. Measuring it means the keyboard is pushed down by
+    // however tall the editor actually is, whatever is put in it later.
+    var studioHeightPx by remember { mutableStateOf(0) }
 
     fun modifiers(required: Int = 0) = required or (if (shifted) MOD_SHIFT else 0) or
         (if (ctrl) MOD_CTRL else 0) or (if (option) MOD_OPTION else 0) or (if (command) MOD_COMMAND else 0)
@@ -648,30 +658,20 @@ fun BluetoothKeyboardOverlay(
                 )
             )
         }
-        if (editorMode && glidePreview.isEmpty()) {
-            KeyboardCustomizerTop(
-                section = customizer,
-                theme = theme,
-                trail = trail,
-                font = font,
-                fontWeight = fontWeight,
-                opaque = opaque,
-                scale = keyboardScale,
-                onSection = { customizer = it },
-                onTheme = { onHaptic(); onThemeChange(it) },
-                onTrail = { onHaptic(); onTrailChange(it) },
-                onFont = { onHaptic(); onFontChange(it) },
-                onFontWeight = { onHaptic(); onFontWeightChange(it) },
-                onOpaque = { onHaptic(); onOpaqueChange(it) },
-                onScale = onKeyboardScaleChange,
-                onCancel = onEditorCancel,
-                onDone = onEditorDone,
-                modifier = Modifier.align(Alignment.TopStart)
-            )
-        }
         // The clock pill remains visible above this sheet and is the sole open/close affordance.
         Column(
-            Modifier.align(Alignment.TopCenter).padding(top = if (editorMode) 118.dp else 64.dp).fillMaxWidth()
+            Modifier.align(Alignment.TopCenter)
+                .padding(
+                    top = when {
+                        // Back to its normal place the moment editing ends.
+                        !editorMode -> 64.dp
+                        studioHeightPx > 0 -> (STUDIO_TOP +
+                            with(LocalDensity.current) { studioHeightPx.toDp() } + 8.dp)
+                            .coerceIn(STUDIO_TOP + 40.dp, KEYBOARD_TOP_LIMIT)
+                        else -> 150.dp
+                    }
+                )
+                .fillMaxWidth()
                 .padding(horizontal = 7.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp * keyboardScale)
         ) {
@@ -709,6 +709,30 @@ fun BluetoothKeyboardOverlay(
                     onSend = { usage -> onHaptic(); onConsumerControl(usage) }
                 )
             }
+        }
+        if (editorMode && glidePreview.isEmpty()) {
+            KeyboardCustomizerTop(
+                section = customizer,
+                theme = theme,
+                trail = trail,
+                font = font,
+                fontWeight = fontWeight,
+                opaque = opaque,
+                scale = keyboardScale,
+                onSection = { customizer = it },
+                onTheme = { onHaptic(); onThemeChange(it) },
+                onTrail = { onHaptic(); onTrailChange(it) },
+                onFont = { onHaptic(); onFontChange(it) },
+                onFontWeight = { onHaptic(); onFontWeightChange(it) },
+                onOpaque = { onHaptic(); onOpaqueChange(it) },
+                onScale = onKeyboardScaleChange,
+                onCancel = onEditorCancel,
+                onDone = onEditorDone,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = STUDIO_TOP)
+                    .onSizeChanged { studioHeightPx = it.height }
+            )
         }
         if (showLanguageSwitcher) {
             Row(
@@ -890,9 +914,9 @@ private fun RowScope.GlassKey(
         KeyboardTheme.GLASS -> if (active) listOf(Color(0x7AFFFFFF), Color(0x34FFFFFF)) else listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))
         KeyboardTheme.FROST -> if (active) listOf(Color(0xE8FFFFFF), Color(0xA8FFFFFF)) else listOf(Color(0xB8FFFFFF), Color(0x70FFFFFF))
         KeyboardTheme.MONT -> if (active) {
-            listOf(Color(0xFF232326), Color(0xFF1A1A1D))
+            listOf(Color(0xFF2E2E33), Color(0xFF232327))
         } else {
-            listOf(Color(0xFF000000), Color(0xFF000000))
+            listOf(Color(0xFF141416), Color(0xFF101012))
         }
         KeyboardTheme.TITANIUM -> if (active) {
             listOf(Color(0xD8E5E9ED), Color(0xA87D8791), Color(0xCCBFC6CC))
@@ -908,7 +932,7 @@ private fun RowScope.GlassKey(
     }
     val fillColors = if (opaque && !amoled) colors.map { it.compositeOver(Color(0xFF090A0C)) } else colors
     val border = if (amoled) Color.White.copy(if (active) 1f else .72f) else when (theme) {
-        KeyboardTheme.MONT -> Color.White.copy(if (active) .85f else .20f)
+        KeyboardTheme.MONT -> if (active) Color.White.copy(.55f) else Color.Transparent
         KeyboardTheme.FROST -> Color.White.copy(if (active) .9f else .56f)
         KeyboardTheme.TITANIUM -> Color(0xFFF2F5F7).copy(if (active) .82f else .48f)
         KeyboardTheme.NOIR -> Color(0xFFFFF8EE).copy(if (active) .7f else .30f)

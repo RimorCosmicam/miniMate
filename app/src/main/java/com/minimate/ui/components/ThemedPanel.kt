@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -164,12 +165,14 @@ fun ThemedPanel(
 
         Box(panelModifier) {
             PanelSurface(theme, backdrop, originX, originY, canvasWidth, canvasHeight, shape)
-            Column(
-                Modifier.padding(
-                    horizontal = if (theme.material == PanelMaterial.MONT) 18.dp else 11.dp,
-                    vertical = if (theme.material == PanelMaterial.MONT) 14.dp else 9.dp
-                )
-            ) { content() }
+            CompositionLocalProvider(LocalPanelCornerScale provides cornerScaleFor(theme.material)) {
+                Column(
+                    Modifier.padding(
+                        horizontal = if (theme.material == PanelMaterial.MONT) 18.dp else 11.dp,
+                        vertical = if (theme.material == PanelMaterial.MONT) 14.dp else 9.dp
+                    )
+                ) { content() }
+            }
         }
     }
 }
