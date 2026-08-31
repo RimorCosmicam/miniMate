@@ -12,13 +12,12 @@ import com.minimate.touchpad.model.KeyboardTheme
 import com.minimate.touchpad.model.withKeyboardTheme
 import com.minimate.touchpad.model.KeyboardTrail
 import com.minimate.touchpad.model.MicrophonePlacement
-import com.minimate.touchpad.model.ShaderFamily
 import com.minimate.touchpad.model.ThemeFilter
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.WebcamResolution
 import com.minimate.touchpad.model.panelThemes
 import com.minimate.touchpad.model.sceneById
-import com.minimate.touchpad.model.scenesInFamily
+import com.minimate.touchpad.model.shaderScenes
 
 /**
  * Builds the command tree.
@@ -65,16 +64,21 @@ fun buildCommandMenu(
     val sceneBranch = MenuBranch(
         "Scene", listOf(
             MenuAction("Open Scene Studio") { onOpenSceneStudio() },
-            MenuBranch("Choose", ShaderFamily.entries.map { family ->
-                MenuBranch(family.label, scenesInFamily(family).map { option ->
-                    MenuAction(option.label) {
-                        onChange { current -> current.copy(
-                        shaderSceneId = option.id,
-                        shaderParams = option.defaults,
-                        shaderPaletteIndex = 0
-                    ) }
+            // Flat, not grouped by family. The bar shows three columns and the third is the
+            // setting itself, so "Scene > Choose > Family > scene" needed a fourth that does not
+            // exist: the families listed, and tapping one did nothing at all. Every scene is
+            // reachable in one tap here, and the families still group them in the Scene Studio,
+            // which has the room for it.
+            MenuBranch("Choose", shaderScenes.map { option ->
+                MenuAction(option.label) {
+                    onChange { current ->
+                        current.copy(
+                            shaderSceneId = option.id,
+                            shaderParams = option.defaults,
+                            shaderPaletteIndex = 0
+                        )
                     }
-                })
+                }
             }),
             MenuBranch("Palette", scene.palettes.mapIndexed { index, palette ->
                 MenuAction(palette.label) { onChange { current -> current.copy(shaderPaletteIndex = index) } }
