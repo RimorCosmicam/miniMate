@@ -101,11 +101,6 @@ internal class PitchShifter {
  */
 class MicrophoneEngine(private val sampleRate: Int) {
     private companion object {
-        const val TARGET_RMS = 3_600f
-        const val MAX_TARGET_RMS = 6_500f
-        const val PEAK_CEILING = .90f
-        const val MAX_NOISE_RMS_OUT = 550f
-        const val MAX_GAIN = 400f
         const val SPEECH_SNR = 2.0f
         const val SPEECH_ABSOLUTE_FLOOR = 8f
         const val SPEECH_HANGOVER_SECONDS = .60f
@@ -120,15 +115,18 @@ class MicrophoneEngine(private val sampleRate: Int) {
          * nothing else is happening, which is heard as being blasted with noise rather than as
          * sensitivity. Amplifying a noise floor never reveals anything underneath it.
          */
-        const val TOOL_TARGET_RMS = 2_600f
-        const val TOOL_MAX_GAIN = 60f
+        /**
+         * Fixed multipliers at trim 1.0. Measured speech on the phone array arrives at RMS in
+         * the low hundreds, so this lands it near -22 dBFS with headroom for peaks. The slider
+         * scales it from silent to 3x, and where the user leaves it is where it stays.
+         */
+        const val VOICE_BASE_GAIN = 11f
+        const val TOOL_BASE_GAIN = 26f
     }
 
     private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
     private var recentIndex = 0
     private var recentCount = 0
-    private var smoothedRms = 0f
-    private var peakEnvelope = 0f
     private var speechHoldSeconds = 0f
     private var currentGain = 1f
     private val ceiling = LIMIT_THRESHOLD * Short.MAX_VALUE
@@ -189,14 +187,6 @@ class MicrophoneEngine(private val sampleRate: Int) {
         for (index in 0 until recentCount) if (recentRms[index] < minimum) minimum = recentRms[index]
         val noiseRms = (minimum * 1.5f).coerceAtLeast(.5f)
 
-        val envelopeTau = if (blockRms > smoothedRms) .080f else .400f
-        smoothedRms += (blockRms - smoothedRms) * (1f - exp(-dt / envelopeTau))
-        peakEnvelope = if (blockPeak > peakEnvelope) {
-            peakEnvelope + (blockPeak - peakEnvelope) * (1f - exp(-dt / .05f))
-        } else {
-            peakEnvelope * exp(-dt / .5f)
-        }
-
         // Tool modes never gate. Their entire purpose is faint continuous sound, and a speech
         // detector would discard precisely what the listener is straining to hear.
         speechHoldSeconds = if (blockRms > noiseRms * SPEECH_SNR && blockRms > SPEECH_ABSOLUTE_FLOOR) {
@@ -206,17 +196,27 @@ class MicrophoneEngine(private val sampleRate: Int) {
         }
         val voiceActive = isTool || speechHoldSeconds > 0f
 
+        // Fixed gain, not automatic gain control.
+        //
+        // The last version anyone was happy with multiplied by the slider value and a gate
+        // envelope, and nothing else. The automatic level control added later was measured
+        // moving gain between 1.7x and 6.3x within a single second of continuous speech, and
+        // still applying 3-6x with the slider at zero. Gain that moves inside a word is
+        // amplitude modulation of the voice, which is heard as a hard, crispy edge, and no
+        // amount of retuning the time constants removes it — a level control that reacts fast
+        // enough to be useful is fast enough to be audible.
+        //
+        // So loudness is the user's decision and stays where they put it. The gate ducks between
+        // phrases so room tone is not held at speaking level, and the limiter catches peaks.
+        val base = if (isTool) TOOL_BASE_GAIN else VOICE_BASE_GAIN
         val targetGain = if (voiceActive) {
-            val aim = if (isTool) TOOL_TARGET_RMS else minOf(TARGET_RMS * trim.coerceIn(.25f, 3f), MAX_TARGET_RMS)
-            val wanted = aim * (if (isTool) trim.coerceIn(.25f, 3f) else 1f) / smoothedRms.coerceAtLeast(1f)
-            val peakLimit = (PEAK_CEILING * Short.MAX_VALUE / peakEnvelope.coerceAtLeast(1f)).coerceAtLeast(1f)
-            val noiseLimit = if (isTool) Float.MAX_VALUE else (MAX_NOISE_RMS_OUT / noiseRms).coerceAtLeast(1f)
-            wanted.coerceIn(1f, minOf(if (isTool) TOOL_MAX_GAIN else MAX_GAIN, peakLimit, noiseLimit))
+            base * trim.coerceIn(0f, 3f)
         } else {
-            NON_VOICE_LEVEL
+            base * trim.coerceIn(0f, 3f) * NON_VOICE_LEVEL
         }
 
-        val tau = if (targetGain < currentGain) .150f else .350f
+        // Smoothed only enough to keep the gate from stepping; the gain itself does not hunt.
+        val tau = if (targetGain < currentGain) .120f else .200f
         val previousGain = currentGain
         currentGain += (targetGain - currentGain) * (1f - exp(-dt / tau))
 
