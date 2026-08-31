@@ -41,7 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -60,9 +60,10 @@ private val Mustard = Color(0xFFD8A628)
 /**
  * The welcome's ground: interleaved diagonal bands, mustard and black.
  *
- * [split] pulls the two sets apart — mustard downward, black upward — until both have left the
- * display. The ground is drawn on nothing rather than over a black fill, so what shows through the
- * widening gaps is whatever is behind it. [invert] exchanges the two colours.
+ * [split] sends the whole ground away along the diagonal the bands are drawn on — both colours
+ * together, in the direction they already point, thinning as they run until nothing is left. The
+ * ground is drawn on nothing rather than over a black fill, so what shows through the widening
+ * gaps is whatever is behind it. [invert] exchanges the two colours.
  */
 @Composable
 private fun MustardDiagonals(
@@ -75,24 +76,32 @@ private fun MustardDiagonals(
         val spacing = 34.dp.toPx()
         val band = spacing * 0.5f
         val drift = travel * spacing
-        // Far enough that both sets are gone by the end, whatever the aspect ratio.
-        val exit = split * (size.height + size.width) * 1.1f
+
+        // The bands run down and to the right, so that is the way they leave: one direction, both
+        // colours, along the line they were already drawn on. The stroke thins as they run, which
+        // is what actually opens the ground up — a sheet of parallel lines sliding along its own
+        // axis looks perfectly still no matter how fast it is going.
+        val run = split * (size.width + size.height)
+        val away = Offset(run * 0.894f, run * 0.447f)
+        val stroke = band * (1f - split).coerceIn(0f, 1f)
+
+        if (stroke <= 0f) return@Canvas
 
         fun bands(color: Color, offset: Float) {
             var y = -size.width - spacing * 2f
             while (y < size.height + size.width + spacing * 2f) {
                 drawLine(
                     color,
-                    Offset(-size.width, y + offset),
-                    Offset(size.width * 2f, y + offset + size.width * 1.5f),
-                    band
+                    Offset(-size.width + away.x, y + offset + away.y),
+                    Offset(size.width * 2f + away.x, y + offset + size.width * 1.5f + away.y),
+                    stroke
                 )
                 y += spacing
             }
         }
 
-        bands(lerp(Mustard, Color.Black, invert), drift + exit)
-        bands(lerp(Color.Black, Mustard, invert), drift + band - exit)
+        bands(lerp(Mustard, Color.Black, invert), drift)
+        bands(lerp(Color.Black, Mustard, invert), drift + band)
     }
 }
 
@@ -138,7 +147,12 @@ fun Welcome(
         finishedListener = { if (it == 1f) onFinished() }
     )
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
+    // The gap's position has to be resolved against this box, not against whichever nested column
+    // happens to contain it — positionInParent() answered relative to the card's inner content, so
+    // the switcher came out near the origin and hung off the top-left corner.
+    var rootCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    BoxWithConstraints(modifier.fillMaxSize().onGloballyPositioned { rootCoords = it }) {
         val density = LocalDensity.current
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
@@ -146,7 +160,11 @@ fun Welcome(
         // Where the card is holding the switcher, and where it belongs afterwards. The rest
         // position is measured off the gap the card leaves for it, so the two never disagree.
         var pillSize by remember { mutableStateOf(IntSize.Zero) }
-        var berth by remember { mutableStateOf(Offset.Zero) }
+        var berthTopLeft by remember { mutableStateOf(Offset.Zero) }
+        var berthSize by remember { mutableStateOf(IntSize.Zero) }
+        // Centred in the gap, and recomputed if either measurement lands later than the other.
+        val restX = berthTopLeft.x + (berthSize.width - pillSize.width) / 2f
+        val restY = berthTopLeft.y + (berthSize.height - pillSize.height) / 2f
         val homeX = (targetX * widthPx - pillSize.width / 2f)
             .coerceIn(8f, (widthPx - pillSize.width - 8f).coerceAtLeast(8f))
         val homeY = (targetY * heightPx - pillSize.height / 2f)
@@ -193,7 +211,12 @@ fun Welcome(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (switcher) {
                         SwitcherStep(
-                            onBerth = { berth = it },
+                            onBerth = { child ->
+                                rootCoords?.let { root ->
+                                    berthTopLeft = root.localPositionOf(child, Offset.Zero)
+                                    berthSize = child.size
+                                }
+                            },
                             onOkay = { leaving = true }
                         )
                     } else {
@@ -210,13 +233,14 @@ fun Welcome(
         }
 
         // Drawn above the card so it can leave it, but resting in the gap the card set aside.
-        if (showingSwitcher) {
+        // Held back until that gap has been measured, so it never appears at the origin first.
+        if (showingSwitcher && berthSize.width > 0) {
             Box(
                 Modifier
                     .offset {
                         IntOffset(
-                            (berth.x + (homeX - berth.x) * journey).roundToInt(),
-                            (berth.y + (homeY - berth.y) * journey).roundToInt()
+                            (restX + (homeX - restX) * journey).roundToInt(),
+                            (restY + (homeY - restY) * journey).roundToInt()
                         )
                     }
                     .onSizeChanged { pillSize = it }
@@ -283,14 +307,14 @@ private fun ColumnScope.PermissionsStep(
 }
 
 @Composable
-private fun ColumnScope.SwitcherStep(onBerth: (Offset) -> Unit, onOkay: () -> Unit) {
+private fun ColumnScope.SwitcherStep(onBerth: (LayoutCoordinates) -> Unit, onOkay: () -> Unit) {
     Label("THE SWITCHER", .55f, 11)
     // The gap the switcher sits in. Reporting where it landed is what lets the pill be drawn
     // above the card and still appear to be inside it.
     Spacer(
         Modifier
             .height(36.dp)
-            .onGloballyPositioned { onBerth(it.positionInParent()) }
+            .onGloballyPositioned { onBerth(it) }
     )
     TourLine("ONE TAP", "Change mode")
     TourLine("TWO TAPS", "AMOLED black")
