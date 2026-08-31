@@ -41,6 +41,9 @@ private const val COMMON_UNIFORMS = """
     uniform float2 uResolution;
 """
 
+/** The exact source a filter compiles, so a test can check it without driving the UI. */
+internal fun filterShaderSource(filter: ThemeFilter): String = COMMON_UNIFORMS + shaderBodyFor(filter)
+
 private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     ThemeFilter.NONE -> "half4 main(float2 p) { return content.eval(p); }"
     ThemeFilter.CHROMATIC -> """
@@ -209,7 +212,7 @@ private fun StackedFilterLayers(filters: List<ThemeFilter>, index: Int, content:
 @Composable
 private fun ModernFilteredSurface(filter: ThemeFilter, modifier: Modifier, content: @Composable () -> Unit) {
     val shader = remember(filter) {
-        runCatching { RuntimeShader(COMMON_UNIFORMS + shaderBodyFor(filter)) }
+        runCatching { RuntimeShader(filterShaderSource(filter)) }
             .onFailure { Log.e("MiniMateFilter", "Shader for $filter failed to compile, falling back to overlay", it) }
             .getOrNull()
     }
