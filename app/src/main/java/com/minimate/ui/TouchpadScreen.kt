@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,7 +32,6 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.minimate.audio.LocalListen
 import com.minimate.bluetooth.BluetoothAudioBridge
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.bluetooth.WebcamCapture
@@ -46,7 +44,6 @@ import com.minimate.touchpad.model.AudioDeviceEqProfile
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.MicrophonePlacement
-import com.minimate.touchpad.model.SuperhumanPreset
 import com.minimate.touchpad.model.TouchpadSettings
 import com.minimate.touchpad.model.validColorway
 import com.minimate.ui.components.AudioModeOverlay
@@ -114,10 +111,8 @@ fun TouchpadScreen(
         settings.audioOutputDeviceKey,
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
-        settings.audioMicrophonePreset,
         settings.audioMicrophonePlacement,
-        settings.audioPlacementAuto,
-        settings.audioSuperhumanBands
+        settings.audioPlacementAuto
     ) {
         audioBridge.configure(
             settings.audioOutputEnabled,
@@ -126,44 +121,10 @@ fun TouchpadScreen(
             settings.audioOutputDeviceKey,
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
-            settings.audioMicrophonePreset,
-            settings.audioSuperhumanBands,
             settings.audioMicrophonePlacement,
             settings.audioPlacementAuto
         )
     }
-
-    // On-device listening runs independently of any desktop link: the tools are instruments to
-    // be heard immediately in the phone's own earphones, so they must work with nothing paired.
-    val localListen = remember { LocalListen(context) }
-    var listening by remember { mutableStateOf(false) }
-    LaunchedEffect(
-        listening,
-        settings.audioMicrophonePreset,
-        settings.audioSuperhumanBands,
-        settings.audioMicrophoneGain,
-        settings.audioListenVolume,
-        settings.audioOutputDeviceKey
-    ) {
-        localListen.preset = settings.audioMicrophonePreset
-        localListen.bands = settings.audioSuperhumanBands
-        localListen.placement = settings.audioMicrophonePlacement
-        localListen.placementAuto = settings.audioPlacementAuto
-        localListen.gain = settings.audioMicrophoneGain
-        localListen.listenVolume = settings.audioListenVolume
-        localListen.outputDeviceKey = settings.audioOutputDeviceKey.takeIf { it != "phone" }
-        if (listening && !localListen.isRunning) {
-            if (!localListen.start()) listening = false
-        } else if (listening) {
-            // Preset or routing changed while running: restart so the new capture profile and
-            // output device actually take effect.
-            localListen.stop()
-            localListen.start()
-        } else {
-            localListen.stop()
-        }
-    }
-    DisposableEffect(Unit) { onDispose { localListen.stop() } }
 
     LaunchedEffect(
         settings.webcamEnabled,
@@ -501,42 +462,8 @@ fun TouchpadScreen(
                 onOutputVolume = { volume ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputVolume = volume))
                 },
-                onOutputPreset = { preset ->
-                    val profile = AudioDeviceEqProfile(
-                        deviceKey = audioState.outputDeviceKey,
-                        deviceName = audioState.outputDeviceName,
-                        preset = preset,
-                        gains = preset.gains
-                    )
-                    touchpadEngine.updateSettings(
-                        settings.copy(audioDeviceEqProfiles = settings.audioDeviceEqProfiles.filterNot {
-                            it.deviceKey == profile.deviceKey
-                        } + profile)
-                    )
-                },
-                onOutputEqBand = { band, gain ->
-                    val gains = (settings.audioDeviceEqProfiles.firstOrNull {
-                        it.deviceKey == audioState.outputDeviceKey
-                    }?.gains ?: audioState.outputEqGains).toMutableList()
-                    while (gains.size < 9) gains += 0f
-                    gains[band.coerceIn(0, 8)] = gain
-                    val profile = AudioDeviceEqProfile(
-                        deviceKey = audioState.outputDeviceKey,
-                        deviceName = audioState.outputDeviceName,
-                        preset = AudioOutputPreset.CUSTOM,
-                        gains = gains.take(9)
-                    )
-                    touchpadEngine.updateSettings(
-                        settings.copy(audioDeviceEqProfiles = settings.audioDeviceEqProfiles.filterNot {
-                            it.deviceKey == profile.deviceKey
-                        } + profile)
-                    )
-                },
                 onMicrophoneGain = { gain ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneGain = gain))
-                },
-                onMicrophonePreset = { preset ->
-                    touchpadEngine.updateSettings(settings.copy(audioMicrophonePreset = preset))
                 },
                 onPlacement = { placement ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophonePlacement = placement))
@@ -546,17 +473,6 @@ fun TouchpadScreen(
                 },
                 placement = settings.audioMicrophonePlacement,
                 placementAuto = settings.audioPlacementAuto,
-                onListenToggled = { listening = it },
-                onSuperhumanPreset = { shape ->
-                    touchpadEngine.updateSettings(settings.copy(audioSuperhumanBands = shape.bands))
-                },
-                onListenVolume = { value ->
-                    touchpadEngine.updateSettings(settings.copy(audioListenVolume = value.coerceIn(0f, 1f)))
-                },
-                listenVolume = settings.audioListenVolume,
-                microphonePreset = settings.audioMicrophonePreset,
-                superhumanBands = settings.audioSuperhumanBands,
-                listening = listening
             )
         }
 

@@ -276,8 +276,6 @@ private fun MousePane(
                 )
             }
         }
-        item {
-            GlassCard(accent = GlassAccentMuted) {
         item { LiquidButton("Arrange clock", Icons.Default.OpenInFull, GlassAccent, onOpenEditor) }
     }
 }

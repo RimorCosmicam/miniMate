@@ -351,19 +351,6 @@ enum class AudioTransport(val label: String) {
 }
 
 /**
- * Microphone mode. Voice colouring and effects were removed: the subtle ones were inaudible and
- * the novelty ones were not worth the space. What remains is the plain microphone and the two
- * listening instruments.
- */
-enum class MicrophoneVoicePreset(val label: String) {
-    CLEAN("Clean"),
-    /** Contact listening: structure-borne sound rather than air. */
-    STETHO("Stetho"),
-    /** Extreme sensitivity with user-shaped spectrum, for faint and muffled sound. */
-    SUPERHUMAN("Super Human")
-}
-
-/**
  * Where the phone is while speaking. This is not a cosmetic label: it sets the microphone array's
  * beam width and the gain, both of which depend on distance. Held near the face the beam is
  * narrow, which rejects most of the room. Lying on a desk at arm's length the same narrow beam
@@ -372,42 +359,6 @@ enum class MicrophoneVoicePreset(val label: String) {
 enum class MicrophonePlacement(val label: String, val fieldDimension: Float, val gainScale: Float) {
     HANDHELD("Handheld", .75f, 1f),
     DESK("On desk", .35f, 2.1f)
-}
-
-/**
- * Centre frequencies for the Super Human band shaper, in Hz. Chosen around what actually survives
- * an obstruction: masonry and doors attenuate progressively with frequency, so speech through a
- * wall arrives as low-mid energy with the consonants gone. The lower bands are therefore where
- * the recoverable information is, and the upper bands are mostly there to be cut.
- */
-val SUPERHUMAN_BAND_HZ = listOf(90f, 200f, 450f, 950f, 2_000f, 4_500f)
-
-/** Default shape: lift what passes through an obstruction, suppress hiss above it. */
-val DEFAULT_SUPERHUMAN_BANDS = listOf(4f, 8f, 9f, 5f, -2f, -8f)
-
-/**
- * Ready-made band shapes for Super Human. Flat amplification of everything is just louder hiss —
- * usefulness comes from cutting the bands that carry only noise and keeping those that carry the
- * sound being listened for, which differs completely by what that sound is.
- */
-enum class SuperhumanPreset(val label: String, val bands: List<Float>, val hint: String) {
-    THROUGH_WALL(
-        "Through wall", listOf(5f, 11f, 9f, 1f, -8f, -14f),
-        "Obstructions kill highs first, so only low-mid energy survives"
-    ),
-    VOICES(
-        "Voices", listOf(-8f, -2f, 6f, 10f, 6f, -4f),
-        "Speech intelligibility sits between 450 Hz and 2 kHz"
-    ),
-    MACHINERY(
-        "Machinery", listOf(12f, 8f, 2f, -4f, -8f, -12f),
-        "Motors, pipes and structure carry low-frequency energy"
-    ),
-    DETAIL(
-        "Fine detail", listOf(-12f, -8f, -2f, 4f, 9f, 7f),
-        "Rustling, insects and small movement live up high"
-    ),
-    FLAT("Flat", listOf(0f, 0f, 0f, 0f, 0f, 0f), "No shaping, raw sensitivity")
 }
 
 enum class AudioOutputPreset(val label: String, val gains: List<Float>) {
@@ -489,17 +440,9 @@ data class TouchpadSettings(
     val audioOutputDeviceKey: String = "phone",
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
-    val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioMicrophonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
     /** Follow the gravity sensor instead of the manual choice above. */
     val audioPlacementAuto: Boolean = true,
-    val audioSuperhumanBands: List<Float> = DEFAULT_SUPERHUMAN_BANDS,
-    /**
-     * Playback level for on-device listening. Low by default and deliberately separate from
-     * microphone trim: the earphones sit centimetres from the microphone feeding them, so a
-     * loud default is an immediate feedback howl rather than a usable monitor.
-     */
-    val audioListenVolume: Float = .30f,
     val audioTransport: AudioTransport = AudioTransport.WIFI,
 
     // MiniMate Camera. Frames use the companion's active Wi-Fi link; the Mac

@@ -49,11 +49,9 @@ import com.minimate.bluetooth.AudioDeviceSummary
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
 import com.minimate.touchpad.model.MicrophonePlacement
-import com.minimate.touchpad.model.MicrophoneVoicePreset
-import com.minimate.touchpad.model.SuperhumanPreset
 
 private enum class AudioEditorTab(val label: String) {
-    OUTPUT("Output"), INPUT("Input"), TOOLS("Tools")
+    OUTPUT("Output"), INPUT("Input")
 }
 
 
@@ -64,21 +62,11 @@ fun AudioModeOverlay(
     onOutputDeviceSelected: (String) -> Unit,
     onMicrophoneEnabled: (Boolean) -> Unit,
     onOutputVolume: (Float) -> Unit,
-    onOutputPreset: (AudioOutputPreset) -> Unit,
-    onOutputEqBand: (Int, Float) -> Unit,
     onMicrophoneGain: (Float) -> Unit,
-    onMicrophonePreset: (MicrophoneVoicePreset) -> Unit,
-    onListenToggled: (Boolean) -> Unit,
     onPlacement: (MicrophonePlacement) -> Unit,
     onPlacementAuto: (Boolean) -> Unit,
     placement: MicrophonePlacement,
     placementAuto: Boolean,
-    onSuperhumanPreset: (SuperhumanPreset) -> Unit,
-    onListenVolume: (Float) -> Unit,
-    listenVolume: Float,
-    microphonePreset: MicrophoneVoicePreset,
-    superhumanBands: List<Float>,
-    listening: Boolean,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
@@ -91,37 +79,27 @@ fun AudioModeOverlay(
                 .align(Alignment.TopCenter)
                 .padding(start = 18.dp, end = 20.dp, top = 20.dp)
         )
-        // The cover display has a physical camera cutout in the bottom-right corner, roughly
-        // 84 dp tall by 198 dp wide on a 361 x 399 dp panel. Content is kept above it and made
-        // scrollable rather than allowed to extend underneath, where it cannot be seen or
-        // touched. The Tools tab is the tallest panel and was running straight into it.
+        // Two constraints on this column. The tab strip sits at the top and the panel was
+        // running underneath it, so the top padding clears the strip's full height rather than
+        // approximating it. The cover display also has a physical camera cutout in the
+        // bottom-right corner, roughly 84 dp tall on a 399 dp panel, so content stops above
+        // that and scrolls instead of extending somewhere it can be neither seen nor touched.
         Column(
             Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(.70f)
-                .padding(top = 58.dp, bottom = 96.dp)
+                .padding(top = 76.dp, bottom = 96.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (selectedTab) {
                 AudioEditorTab.OUTPUT -> OutputControls(
-                    state, onOutputEnabled, onOutputDeviceSelected, onOutputVolume,
-                    onOutputPreset, onOutputEqBand
+                    state, onOutputEnabled, onOutputDeviceSelected, onOutputVolume
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
                     state, onMicrophoneEnabled, onMicrophoneGain,
                     placement, onPlacement, placementAuto, onPlacementAuto
-                )
-                AudioEditorTab.TOOLS -> ToolsControls(
-                    preset = microphonePreset,
-                    bands = superhumanBands,
-                    listening = listening,
-                    listenVolume = listenVolume,
-                    onPreset = onMicrophonePreset,
-                    onBandPreset = onSuperhumanPreset,
-                    onListenVolume = onListenVolume,
-                    onListenToggled = onListenToggled
                 )
             }
             state.error?.let {
@@ -174,9 +152,7 @@ private fun OutputControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
     onDeviceSelected: (String) -> Unit,
-    onVolume: (Float) -> Unit,
-    onPreset: (AudioOutputPreset) -> Unit,
-    onBand: (Int, Float) -> Unit
+    onVolume: (Float) -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
@@ -192,7 +168,6 @@ private fun OutputControls(
             Spacer(Modifier.size(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(state.outputDeviceName, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("Independent tuning for this device", color = Color.White.copy(.46f), fontSize = 8.sp)
             }
             Switch(checked = state.outputEnabled, onCheckedChange = onEnabled, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White))
         }
@@ -206,53 +181,6 @@ private fun OutputControls(
             label = "VOLUME", value = state.outputVolume, range = 0f..1f,
             valueLabel = "${(state.outputVolume * 100).toInt()}%", enabled = state.outputEnabled, onValue = onVolume
         )
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            AudioOutputPreset.values().filter { it != AudioOutputPreset.CUSTOM }.forEach { preset ->
-                CompactChoice(preset.label, preset == state.outputPreset, state.outputEnabled) { onPreset(preset) }
-            }
-        }
-        EqualizerGraph(state.outputEqGains, state.outputEnabled, onBand)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("60", "120", "250", "500", "1k", "2k", "4k", "8k", "16k").forEach {
-                Text(it, color = Color.White.copy(.38f), fontSize = 6.5.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun EqualizerGraph(gains: List<Float>, enabled: Boolean, onBand: (Int, Float) -> Unit) {
-    Canvas(
-        Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(14.dp))
-            .background(Color.Black.copy(.34f))
-            .pointerInput(enabled, gains) {
-                fun update(x: Float, y: Float) {
-                    if (!enabled) return
-                    val band = ((x / size.width) * 9).toInt().coerceIn(0, 8)
-                    val gain = (12f - (y / size.height) * 24f).coerceIn(-12f, 12f)
-                    onBand(band, gain)
-                }
-                detectDragGestures(
-                    onDragStart = { update(it.x, it.y) },
-                    onDrag = { change, _ -> update(change.position.x, change.position.y) }
-                )
-            }
-    ) {
-        val zeroY = size.height / 2f
-        listOf(0f, .25f, .5f, .75f, 1f).forEach { fraction ->
-            drawLine(Color.White.copy(if (fraction == .5f) .18f else .06f), androidx.compose.ui.geometry.Offset(0f, size.height * fraction), androidx.compose.ui.geometry.Offset(size.width, size.height * fraction), 1f)
-        }
-        val points = (0 until 9).map { index ->
-            val x = size.width * (index + .5f) / 9f
-            val gain = gains.getOrElse(index) { 0f }.coerceIn(-12f, 12f)
-            val y = zeroY - gain / 24f * size.height
-            androidx.compose.ui.geometry.Offset(x, y)
-        }
-        points.zipWithNext().forEach { (start, end) -> drawLine(Color.White.copy(if (enabled) .88f else .25f), start, end, 3f) }
-        points.forEach { point ->
-            drawCircle(Color.White.copy(if (enabled) 1f else .3f), 5f, point)
-            drawCircle(Color.Black, 2f, point)
-        }
     }
 }
 
@@ -349,89 +277,6 @@ private fun MicrophoneControls(
             },
             color = Color.White.copy(.42f), fontSize = 7.sp
         )
-    }
-}
-
-/**
- * Listening instruments. These run entirely on the phone — its microphone straight back out of
- * its own USB-C output — so they work with nothing connected and without a wireless round trip
- * between hearing and moving the phone.
- */
-@Composable
-private fun ToolsControls(
-    preset: MicrophoneVoicePreset,
-    bands: List<Float>,
-    listening: Boolean,
-    listenVolume: Float,
-    onPreset: (MicrophoneVoicePreset) -> Unit,
-    onBandPreset: (SuperhumanPreset) -> Unit,
-    onListenVolume: (Float) -> Unit,
-    onListenToggled: (Boolean) -> Unit
-) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-            .background(Brush.linearGradient(listOf(Color(0xB319191B), Color(0x99101012))))
-            .border(1.dp, Color.White.copy(.20f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 11.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("LISTEN ON DEVICE", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "Phone mic to your earphones. No desktop needed.",
-                    color = Color.White.copy(.44f), fontSize = 7.sp
-                )
-            }
-            Switch(
-                checked = listening,
-                onCheckedChange = onListenToggled,
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
-            )
-        }
-
-        // Separate from microphone trim on purpose: the earphones sit centimetres from the
-        // microphone feeding them, so this starts low and is the first thing to reach for.
-        CompactAudioSlider(
-            label = "LISTEN VOLUME", value = listenVolume, range = 0f..1f,
-            valueLabel = "${(listenVolume * 100).toInt()}%", enabled = true, onValue = onListenVolume
-        )
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(MicrophoneVoicePreset.STETHO, MicrophoneVoicePreset.SUPERHUMAN).forEach { tool ->
-                Box(Modifier.weight(1f)) {
-                    CompactChoice(tool.label, preset == tool) {
-                        onPreset(if (preset == tool) MicrophoneVoicePreset.CLEAN else tool)
-                    }
-                }
-            }
-        }
-
-        Text(
-            when (preset) {
-                MicrophoneVoicePreset.STETHO ->
-                    "Contact listening: press the phone against a surface for structure-borne sound."
-                MicrophoneVoicePreset.SUPERHUMAN ->
-                    "Maximum sensitivity, no filtering, no gate. Pick what you are listening for."
-                else -> "Pick a tool. Both bypass noise suppression so faint sound survives."
-            },
-            color = Color.White.copy(.42f), fontSize = 7.sp
-        )
-
-        if (preset == MicrophoneVoicePreset.SUPERHUMAN) {
-            Text("LISTENING FOR", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                SuperhumanPreset.entries.forEach { shape ->
-                    CompactChoice(shape.label, bands == shape.bands) { onBandPreset(shape) }
-                }
-            }
-            SuperhumanPreset.entries.firstOrNull { it.bands == bands }?.let { active ->
-                Text(active.hint, color = Color.White.copy(.4f), fontSize = 7.sp)
-            }
-        }
     }
 }
 

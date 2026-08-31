@@ -56,7 +56,6 @@ import org.json.JSONObject
 import com.minimate.audio.MicrophoneEngine
 import com.minimate.audio.PlacementDetector
 import com.minimate.touchpad.model.MicrophonePlacement
-import com.minimate.touchpad.model.MicrophoneVoicePreset
 import com.minimate.touchpad.model.ThemeFilter
 
 /** Stable sentinel key for the phone's own built-in speaker/microphone. */
@@ -127,8 +126,6 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
      *  immediately instead of waiting for the current buffer to fill. */
     @Volatile private var activeRecorder: AudioRecord? = null
     @Volatile private var micGeneration = 0
-    @Volatile private var microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN
-    @Volatile private var superhumanBands: List<Float> = emptyList()
     @Volatile private var microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD
     @Volatile private var placementAuto: Boolean = true
     private val placementDetector = PlacementDetector(context)
@@ -164,14 +161,10 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputDeviceKey: String,
         outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
-        microphonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
-        superhumanBands: List<Float> = emptyList(),
         microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
         placementAuto: Boolean = true
     ) {
         this.placementAuto = placementAuto
-        this.microphonePreset = microphonePreset
-        this.superhumanBands = superhumanBands
         this.microphonePlacement = microphonePlacement
         val restartMicrophone = false
         deviceEqProfiles = outputProfiles
@@ -565,7 +558,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         }
                         Log.i(TAG, "placement changed to ${placement.name}, field=${placement.fieldDimension}")
                     }
-                    val adjusted = engine.process(samples, count, gain, microphonePreset, superhumanBands, placement.gainScale)
+                    val adjusted = engine.process(samples, count, gain, placement.gainScale)
                     for (index in 0 until count) {
                         val rawAbs = kotlin.math.abs(samples[index].toInt())
                         if (rawAbs > windowRawPeak) windowRawPeak = rawAbs
