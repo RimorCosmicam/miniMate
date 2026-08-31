@@ -93,9 +93,10 @@ fun CommandBar(
                 .fillMaxWidth()
                 .fillMaxHeight(.33f)
                 .background(Color.Black)
+                .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 10.dp)
         ) {
             MenuColumn(
-                nodes = root,
+                nodes = root + MenuAction("Close") { onDismiss() },
                 selectedIndex = firstIndex,
                 onSelect = { index ->
                     firstIndex = if (firstIndex == index) -1 else index
@@ -105,7 +106,6 @@ fun CommandBar(
             )
 
             if (first is MenuBranch) {
-                Hairline()
                 MenuColumn(
                     nodes = secondList,
                     selectedIndex = secondIndex,
@@ -115,7 +115,6 @@ fun CommandBar(
             }
 
             if (second is MenuBranch) {
-                Hairline()
                 MenuColumn(
                     nodes = thirdList,
                     selectedIndex = -1,
@@ -125,11 +124,6 @@ fun CommandBar(
             }
         }
     }
-}
-
-@Composable
-private fun Hairline() {
-    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(.35f)))
 }
 
 @Composable
@@ -143,12 +137,12 @@ private fun MenuColumn(
         modifier
             .fillMaxHeight()
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(end = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         nodes.forEachIndexed { index, node ->
             when (node) {
-                is MenuBranch -> MenuRow(node.label, index == selectedIndex, trailing = "›") { onSelect(index) }
+                is MenuBranch -> MenuRow(node.label, index == selectedIndex) { onSelect(index) }
                 is MenuAction -> MenuRow(node.label, false) { node.onInvoke() }
                 is MenuToggle -> MenuRow(node.label, node.value, trailing = if (node.value) "ON" else "OFF") {
                     node.onChange(!node.value)
@@ -161,7 +155,7 @@ private fun MenuColumn(
                     node.onSelect((node.selected + 1) % node.options.size.coerceAtLeast(1))
                 }
                 is MenuSlider -> {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 3.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 2.dp)) {
                         Row(Modifier.fillMaxWidth()) {
                             Label(node.label, Modifier.weight(1f))
                             Label(node.display, dim = true)
@@ -179,7 +173,7 @@ private fun MenuColumn(
                         )
                     }
                 }
-                is MenuInfo -> Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)) {
+                is MenuInfo -> Column(Modifier.fillMaxWidth().padding(vertical = 5.dp, horizontal = 2.dp)) {
                     Label(node.label)
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -187,8 +181,8 @@ private fun MenuColumn(
                         color = Color.White.copy(.62f),
                         fontFamily = Mont,
                         fontWeight = MenuWeight,
-                        fontSize = 8.sp,
-                        lineHeight = 11.sp
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
                     )
                 }
             }
@@ -196,17 +190,21 @@ private fun MenuColumn(
     }
 }
 
+/**
+ * A row states its own state through brightness alone. Chevrons and highlight fills were doing
+ * work the type already does: the selected item is simply the bright one, and the column that
+ * appeared beside it is the evidence that it opened.
+ */
 @Composable
 private fun MenuRow(label: String, active: Boolean, trailing: String? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (active) Color.White.copy(.14f) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(vertical = 7.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Label(label, Modifier.weight(1f))
+        Label(label, Modifier.weight(1f), dim = !active)
         trailing?.let { Label(it, dim = true) }
     }
 }
@@ -216,10 +214,10 @@ private fun Label(text: String, modifier: Modifier = Modifier, dim: Boolean = fa
     Text(
         text,
         modifier = modifier,
-        color = if (dim) Color.White.copy(.55f) else Color.White,
+        color = if (dim) Color.White.copy(.58f) else Color.White,
         fontFamily = Mont,
         fontWeight = MenuWeight,
-        fontSize = 10.sp,
+        fontSize = 15.sp,
         maxLines = 1
     )
 }

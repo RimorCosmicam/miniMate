@@ -165,8 +165,12 @@ val shaderScenes: List<ShaderScene> = listOf(
             float glow = clamp(lit + lit2, 0.0, 1.0);
             c += uC2 * mask * glow;
             c += uC3 * mask * isHead;
-            // Bloom bleeds a little light around a character without touching empty cells.
-            c += uC2 * glow * glow * uP2 * 0.16;
+            // Bloom has to follow the character's shape. Applying it to the cell instead paints
+            // a lit rectangle behind every glyph, which is the block that showed up around the
+            // text. Sampling the glyph at shrunk cell coordinates magnifies it, giving a dilated
+            // mask that bleeds light just outside the strokes and nowhere else.
+            float bleed = glyph(id, (cell - 0.5) * 0.68 + 0.5);
+            c += uC2 * bleed * glow * glow * uP2 * 0.16;
             c += uC3 * mask * isHead * uP3 * 0.35;
             return c;
         }

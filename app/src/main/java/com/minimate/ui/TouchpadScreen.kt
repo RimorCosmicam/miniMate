@@ -552,7 +552,25 @@ fun TouchpadScreen(
             )
         }
 
-        // Layer 8: Settings & Theme Manager Modal Sheet (3 Tabs)
+        // Layer 7: Scene Studio, live over the canvas it is editing.
+        if (showThemeTester) {
+            SceneStudioOverlay(
+                settings = settings,
+                onSettingsChange = touchpadEngine::updateSettings,
+                onPreviewTouchEvent = touchpadEngine::onPreviewTouchEvent,
+                onKeep = {
+                    themeTesterOriginal = null
+                    showThemeTester = false
+                },
+                onCancel = {
+                    themeTesterOriginal?.let(touchpadEngine::updateSettings)
+                    themeTesterOriginal = null
+                    showThemeTester = false
+                }
+            )
+        }
+
+        // Layer 8: Command bar
         if (showSettingsSheet) {
             CommandBar(
                 root = buildCommandMenu(
