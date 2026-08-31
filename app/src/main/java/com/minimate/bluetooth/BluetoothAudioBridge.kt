@@ -308,7 +308,13 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 it.play()
             }
         } else audioTrack!!
-        track.setVolume(_state.value.outputVolume)
+        // Volume was being pushed across to the platform on every 20 ms packet. It changes when
+        // someone moves the slider, not fifty times a second.
+        val volume = _state.value.outputVolume
+        if (volume != appliedOutputVolume) {
+            appliedOutputVolume = volume
+            track.setVolume(volume)
+        }
         when (frame.codec) {
             AudioBridgeProtocol.CODEC_PCM24 -> track.write(frame.payload, 0, frame.payload.size, AudioTrack.WRITE_BLOCKING)
             AudioBridgeProtocol.CODEC_IMA_ADPCM -> {
@@ -323,7 +329,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         }
     }
 
+    @Volatile private var appliedOutputVolume = Float.NaN
+
     private fun createAudioTrack(sampleRate: Int, encoding: Int): AudioTrack {
+        // A fresh track starts at its own default, so forget what was applied to the old one.
+        appliedOutputVolume = Float.NaN
         val min = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_STEREO, encoding)
         return AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
