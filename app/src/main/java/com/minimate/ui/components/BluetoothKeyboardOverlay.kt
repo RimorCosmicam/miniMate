@@ -53,6 +53,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.res.ResourcesCompat
+import com.minimate.R
+import com.minimate.ui.theme.Mont
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.KeyboardShortcut
@@ -75,12 +81,16 @@ private enum class KeyboardPanel(val label: String) {
     TYPE("Type"), SYMBOLS("123"), MAC("Mac"), SHORTCUTS("Shortcuts"), MEDIA("Media")
 }
 
+/** How long the release ring lives. Long enough to register, short enough not to trail typing. */
+private const val FLASH_NANOS = 190_000_000f
+
 private enum class KeyboardCustomizer(val label: String) {
     THEME("Themes"), TRAIL("Trail"), FONT("Font"), SIZE("Size")
 }
 
 private fun composeFont(font: KeyboardFont): FontFamily = when (font) {
     KeyboardFont.SYSTEM -> FontFamily.Default
+    KeyboardFont.MONT -> Mont
     KeyboardFont.MONO -> FontFamily.Monospace
     KeyboardFont.PIXEL -> FontFamily.Monospace
     KeyboardFont.SERIF -> FontFamily.Serif
@@ -92,9 +102,29 @@ private fun composeWeight(weight: KeyboardWeightSetting): FontWeight = when (wei
     KeyboardWeightSetting.BOLD -> FontWeight.Bold
 }
 
+/** Mont as a platform typeface, for the Canvas-drawn key grid. */
+@Composable
+private fun rememberKeyTypeface(font: KeyboardFont, weight: KeyboardWeightSetting): android.graphics.Typeface {
+    val context = LocalContext.current
+    return remember(font, weight) {
+        if (font == KeyboardFont.MONT) {
+            val resource = when (weight) {
+                KeyboardWeightSetting.LIGHT -> R.font.mont_light
+                KeyboardWeightSetting.REGULAR -> R.font.mont_regular
+                KeyboardWeightSetting.BOLD -> R.font.mont_black
+            }
+            runCatching { ResourcesCompat.getFont(context, resource) }.getOrNull()
+                ?: androidFont(font, weight)
+        } else androidFont(font, weight)
+    }
+}
+
 private fun androidFont(font: KeyboardFont, weight: KeyboardWeightSetting): android.graphics.Typeface {
     val family = when (font) {
         KeyboardFont.SYSTEM -> "sans-serif"
+        // Mont is a resource font and cannot be resolved by family name; the caller supplies the
+        // real typeface and this is only the fallback if that lookup fails.
+        KeyboardFont.MONT -> "sans-serif"
         KeyboardFont.MONO -> "monospace"
         KeyboardFont.PIXEL -> "monospace"
         KeyboardFont.SERIF -> "serif"
@@ -248,6 +278,21 @@ private fun SwipeTypingPanel(
     var surfaceSize by remember { mutableStateOf(IntSize.Zero) }
     var trail by remember { mutableStateOf<List<Offset>>(emptyList()) }
     val keys = remember(surfaceSize, density) { swipeKeyLayout(surfaceSize.width.toFloat(), density) }
+    val typeface = rememberKeyTypeface(font, fontWeight)
+
+    // A key with no travel and no highlight gives nothing back — you cannot tell a press that
+    // registered from one that missed. The held key lights while it is down, and leaves a ring
+    // behind it on release so a quick tap is still visible after the finger has gone.
+    var heldKey by remember { mutableStateOf<Rect?>(null) }
+    var flash by remember { mutableStateOf<Pair<Rect, Long>?>(null) }
+    var frameNanos by remember { mutableStateOf(0L) }
+    val animating = flash != null
+    LaunchedEffect(animating) {
+        while (animating) {
+            withFrameNanos { frameNanos = it }
+            flash?.let { if (frameNanos - it.second > FLASH_NANOS) flash = null }
+        }
+    }
 
     Box(
         Modifier.fillMaxWidth().height(121.dp).onSizeChanged { surfaceSize = it }
@@ -256,7 +301,7 @@ private fun SwipeTypingPanel(
             val keyBrush = if (amoled) Brush.verticalGradient(listOf(Color.Black, Color.Black)) else when (theme) {
                 KeyboardTheme.GLASS -> Brush.verticalGradient(listOf(Color.White.copy(.18f), Color.White.copy(.07f)))
                 KeyboardTheme.FROST -> Brush.verticalGradient(listOf(Color.White.copy(.88f), Color.White.copy(.58f)))
-                KeyboardTheme.PRISM -> Brush.horizontalGradient(listOf(Color(0x6659E8FF), Color(0x42FFFFFF), Color(0x666D5CFF), Color(0x66FF5FBD), Color(0x66FFC76A)))
+                KeyboardTheme.MONT -> Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF000000)))
                 KeyboardTheme.TITANIUM -> Brush.verticalGradient(listOf(Color(0xD8EEF2F5), Color(0x9A707983), Color(0xCCCDD3D8), Color(0x88616A73), Color(0xBDAEB6BD)))
                 KeyboardTheme.NOIR -> Brush.verticalGradient(listOf(Color(0xE5222427), Color(0xFA050607)))
                 KeyboardTheme.PORCELAIN -> Brush.verticalGradient(listOf(Color(0xFFFDF9EE), Color(0xFFE5DDCA)))
@@ -267,7 +312,7 @@ private fun SwipeTypingPanel(
             }
             val keyBorder = if (amoled) Color.White.copy(.74f) else when (theme) {
                 KeyboardTheme.FROST -> Color.White.copy(.62f)
-                KeyboardTheme.PRISM -> Color(0xFFBCEEFF).copy(.62f)
+                KeyboardTheme.MONT -> Color.White.copy(.20f)
                 KeyboardTheme.TITANIUM -> Color(0xFFF2F5F7).copy(.58f)
                 KeyboardTheme.NOIR -> Color(0xFFFFF8EE).copy(.34f)
                 KeyboardTheme.PORCELAIN -> Color(0xFF345B99).copy(.62f)
@@ -283,14 +328,36 @@ private fun SwipeTypingPanel(
                 color = textColor
                 textAlign = android.graphics.Paint.Align.CENTER
                 textSize = 12.sp.toPx()
-                typeface = androidFont(font, fontWeight)
+                this.typeface = typeface
                 isAntiAlias = font != KeyboardFont.PIXEL
             }
+            // Mont keys are square and hard-edged; everything else keeps the rounded cap.
+            val corner = CornerRadius(if (theme == KeyboardTheme.MONT) 0f else 9.dp.toPx())
             keys.forEach { key ->
-                drawRoundRect(keyBrush, key.rect.topLeft, key.rect.size, CornerRadius(9.dp.toPx()))
-                drawRoundRect(keyBorder, key.rect.topLeft, key.rect.size, CornerRadius(9.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+                drawRoundRect(keyBrush, key.rect.topLeft, key.rect.size, corner)
+                if (heldKey == key.rect) {
+                    drawRoundRect(Color.White.copy(.30f), key.rect.topLeft, key.rect.size, corner)
+                }
+                drawRoundRect(
+                    if (heldKey == key.rect) keyBorder.copy(alpha = 1f) else keyBorder,
+                    key.rect.topLeft, key.rect.size, corner,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())
+                )
                 val label = if (shifted && key.character != null) key.label.uppercase() else key.label
                 drawContext.canvas.nativeCanvas.drawText(label, key.rect.center.x, key.rect.center.y - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
+            }
+
+            flash?.let { (rect, startedAt) ->
+                val age = ((frameNanos - startedAt).toFloat() / FLASH_NANOS).coerceIn(0f, 1f)
+                val grow = age * 5f * density
+                drawRoundRect(
+                    Color.White.copy(alpha = (1f - age) * .55f),
+                    Offset(rect.left - grow, rect.top - grow),
+                    androidx.compose.ui.geometry.Size(rect.width + grow * 2f, rect.height + grow * 2f),
+                    corner,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx())
+                )
+                drawRoundRect(Color.White.copy(alpha = (1f - age) * .18f), rect.topLeft, rect.size, corner)
             }
             if (trail.size > 1) {
                 when (trailStyle) {
@@ -334,6 +401,7 @@ private fun SwipeTypingPanel(
                     var repeatJob: Job? = null
                     trail = listOf(down.position)
                     onPreview("")
+                    heldKey = downKey?.rect
 
                     if (downKey?.label == "⌫") {
                         onHaptic(); onKey(KeyboardKey("⌫", 0x2A))
@@ -376,6 +444,8 @@ private fun SwipeTypingPanel(
                         change.consume()
                     }
                     repeatJob?.cancel()
+                    heldKey = null
+                    if (!moved && downKey != null) flash = downKey.rect to System.nanoTime()
 
                     if (moved) {
                         val word = decodeSwipeWord(trail, keys, language)
@@ -804,8 +874,10 @@ private fun RowScope.GlassKey(
     val interaction = remember { MutableInteractionSource() }
     val repeatScope = rememberCoroutineScope()
     val pressed by interaction.collectIsPressedAsState()
-    val shape = RoundedCornerShape(if (compact) 8.dp else 9.dp)
     val theme = LocalKeyboardTheme.current
+    val shape = RoundedCornerShape(
+        if (theme == KeyboardTheme.MONT) 0.dp else if (compact) 8.dp else 9.dp
+    )
     val amoled = LocalKeyboardAmoled.current
     val font = LocalKeyboardFont.current
     val fontWeight = LocalKeyboardFontWeight.current
@@ -817,10 +889,10 @@ private fun RowScope.GlassKey(
     } else when (theme) {
         KeyboardTheme.GLASS -> if (active) listOf(Color(0x7AFFFFFF), Color(0x34FFFFFF)) else listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))
         KeyboardTheme.FROST -> if (active) listOf(Color(0xE8FFFFFF), Color(0xA8FFFFFF)) else listOf(Color(0xB8FFFFFF), Color(0x70FFFFFF))
-        KeyboardTheme.PRISM -> if (active) {
-            listOf(Color(0x805EEBFF), Color(0x58FFFFFF), Color(0x70FF6FCE))
+        KeyboardTheme.MONT -> if (active) {
+            listOf(Color(0xFF232326), Color(0xFF1A1A1D))
         } else {
-            listOf(Color(0x365EEBFF), Color(0x24FFFFFF), Color(0x32FF6FCE))
+            listOf(Color(0xFF000000), Color(0xFF000000))
         }
         KeyboardTheme.TITANIUM -> if (active) {
             listOf(Color(0xD8E5E9ED), Color(0xA87D8791), Color(0xCCBFC6CC))
@@ -836,7 +908,7 @@ private fun RowScope.GlassKey(
     }
     val fillColors = if (opaque && !amoled) colors.map { it.compositeOver(Color(0xFF090A0C)) } else colors
     val border = if (amoled) Color.White.copy(if (active) 1f else .72f) else when (theme) {
-        KeyboardTheme.PRISM -> if (active) Color.White.copy(.9f) else Color(0xFFBCEEFF).copy(.58f)
+        KeyboardTheme.MONT -> Color.White.copy(if (active) .85f else .20f)
         KeyboardTheme.FROST -> Color.White.copy(if (active) .9f else .56f)
         KeyboardTheme.TITANIUM -> Color(0xFFF2F5F7).copy(if (active) .82f else .48f)
         KeyboardTheme.NOIR -> Color(0xFFFFF8EE).copy(if (active) .7f else .30f)

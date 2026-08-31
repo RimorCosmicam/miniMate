@@ -24,6 +24,9 @@ import com.minimate.touchpad.model.scenesInFamily
  * screen this size: category, group, then the control itself. Anything that would need a fourth
  * level is either a studio that opens over the canvas, or does not belong in a menu.
  */
+/** Which floating panel a menu action refers to. */
+enum class PanelTarget { AUDIO, CAMERA }
+
 fun buildCommandMenu(
     settings: TouchpadSettings,
     onChange: (TouchpadSettings) -> Unit,
@@ -31,7 +34,7 @@ fun buildCommandMenu(
     onOpenKeyboardStudio: () -> Unit,
     onOpenEdgeStudio: () -> Unit,
     onOpenPillEditor: () -> Unit,
-    onEditPanels: () -> Unit,
+    onEditPanels: (PanelTarget) -> Unit,
     onPairNewDevice: () -> Unit,
     onRefreshDevices: () -> Unit,
     onDisconnect: () -> Unit,
@@ -123,7 +126,14 @@ fun buildCommandMenu(
                         onChange(settings.copy(panelThemeIndex = index))
                     }
                 }),
-                MenuAction("Move & resize") { onEditPanels() },
+                // Arranging a panel means arranging a specific one, and the panel has to be on
+                // screen to be dragged. Choosing here opens that page already in edit mode; the
+                // old single action turned on a mode with nothing visible to apply it to, which
+                // switched itself straight back off.
+                MenuBranch("Move & resize", listOf(
+                    MenuAction("Audio panel") { onEditPanels(PanelTarget.AUDIO) },
+                    MenuAction("Camera panel") { onEditPanels(PanelTarget.CAMERA) }
+                )),
                 MenuBranch("Reset", listOf(
                     MenuAction("Audio panel") {
                         onChange(settings.copy(audioPanelX = .5f, audioPanelY = .46f, audioPanelScale = 1f))
@@ -209,6 +219,9 @@ fun buildCommandMenu(
                         onChange(settings.copy(keyboardFont = KeyboardFont.entries[it]))
                     },
                     MenuToggle("Opaque", settings.keyboardOpaque) { onChange(settings.copy(keyboardOpaque = it)) },
+                    MenuToggle("Vibration", settings.keyboardHapticsEnabled) {
+                        onChange(settings.copy(keyboardHapticsEnabled = it))
+                    },
                     MenuSlider("Size", settings.keyboardScale, .8f..1.3f, "%.2f".format(settings.keyboardScale)) {
                         onChange(settings.copy(keyboardScale = it))
                     }

@@ -247,9 +247,7 @@ enum class ThemeFilter(val label: String, val description: String) {
     NEGATIVE("Negative", "A clean photographic color inversion"),
     POSTERIZE("Posterize", "Hard tonal bands with graphic screen-print contrast"),
     FILM_GRAIN("35mm Film", "Organic grain, gate weave, vignette, and warm highlights"),
-    MIRROR_PRISM("Mirror Prism", "Angular mirrored facets fracture the complete scene"),
-    LIQUID_GLASS("Liquid Glass", "Animated refraction bends the artwork like thick glass"),
-    NIGHT_VISION("Night Vision", "Green phosphor response, bloom, noise, and edge falloff")
+    MIRROR_PRISM("Mirror Prism", "Angular mirrored facets fracture the complete scene")
 }
 
 /**
@@ -316,7 +314,8 @@ data class KeyboardShortcut(
 enum class KeyboardTheme(val label: String) {
     GLASS("Glass"),
     FROST("Frost"),
-    PRISM("Prism"),
+    /** Hard black, square keys, Mont Black type. The command bar's aesthetic, as a keyboard. */
+    MONT("Mont"),
     TITANIUM("Titanium"),
     NOIR("Noir"),
     PORCELAIN("Porcelain"),
@@ -336,6 +335,7 @@ enum class KeyboardTrail(val label: String) {
 
 enum class KeyboardFont(val label: String) {
     SYSTEM("System"),
+    MONT("Mont"),
     MONO("Mono"),
     PIXEL("Pixel"),
     SERIF("Serif")
@@ -408,6 +408,8 @@ data class TouchpadSettings(
     val dragReleaseDelayMs: Long = 250L,
     val edgeMarginDp: Float = 12f,
     val hapticIntensity: HapticIntensity = HapticIntensity.CRISP,
+    /** Vibration on each key. On by default: a keyboard with no travel needs something to confirm. */
+    val keyboardHapticsEnabled: Boolean = true,
     
     // One active shader configuration. Theme Studio edits this directly.
     val backgroundTheme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,

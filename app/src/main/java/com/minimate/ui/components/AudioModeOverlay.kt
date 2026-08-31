@@ -73,6 +73,8 @@ fun AudioModeOverlay(
     panelLayout: PanelLayout,
     editingPanel: Boolean,
     onPanelLayoutChange: (PanelLayout) -> Unit,
+    /** Draws the scene behind the panel, so the glass materials have something to work on. */
+    backdrop: (@Composable (Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(AudioEditorTab.OUTPUT) }
@@ -89,7 +91,8 @@ fun AudioModeOverlay(
             theme = panelTheme,
             layout = panelLayout,
             editing = editingPanel,
-            onLayoutChange = onPanelLayoutChange
+            onLayoutChange = onPanelLayoutChange,
+            backdrop = backdrop
         ) {
             when (selectedTab) {
                 AudioEditorTab.OUTPUT -> OutputControls(

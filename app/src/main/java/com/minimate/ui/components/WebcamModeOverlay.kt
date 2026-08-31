@@ -62,6 +62,8 @@ fun WebcamModeOverlay(
     panelLayout: PanelLayout,
     editingPanel: Boolean,
     onPanelLayoutChange: (PanelLayout) -> Unit,
+    /** Draws the scene behind the panel, so the glass materials have something to work on. */
+    backdrop: (@Composable (Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(modifier.fillMaxSize()) {
@@ -82,7 +84,8 @@ fun WebcamModeOverlay(
             layout = panelLayout,
             editing = editingPanel,
             onLayoutChange = onPanelLayoutChange,
-            widthFraction = .72f
+            widthFraction = .72f,
+            backdrop = backdrop
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

@@ -5,27 +5,34 @@ package com.minimate.touchpad.model
  * over the canvas.
  *
  * Shared rather than per-screen on purpose: panels that each carry their own look read as
- * different apps stitched together. One theme choice applies everywhere, and position and size are
- * stored per panel because the camera cutout sits in one corner and what needs to stay clear of it
- * differs by panel.
+ * different apps stitched together. One material choice applies everywhere, and position and size
+ * are stored per panel because the camera cutout sits in one corner and what needs to stay clear
+ * of it differs by panel.
  */
 enum class PanelMaterial(val label: String) {
-    /** Frosted dark glass with a light hairline. The app's default chrome. */
-    GLASS("Glass"),
-    /** Flat opaque black. Highest contrast, cheapest to draw, no translucency. */
-    SOLID("Solid"),
-    /** Barely-there tint: mostly the scene, with just enough veil to read text. */
-    VEIL("Veil"),
-    /** Hard edges and a bright border, terminal-like. */
-    TERMINAL("Terminal"),
-    /** No background at all — text and controls directly over the scene. */
-    NONE("None")
+    /** Dark chrome with a light hairline. What the panels have always been. */
+    DEFAULT("Default"),
+
+    /**
+     * The command bar's aesthetic, applied to a window: black at ninety-five percent, Mont Black
+     * in white, no border and no corner rounding. State is carried by brightness alone.
+     */
+    MONT("Mont"),
+
+    /**
+     * Real glass. Samples the scene behind the panel and refracts it at the rim, where a thick
+     * pane bends light hardest, splitting it slightly into colour as it goes.
+     */
+    LIQUID_GLASS("Liquid Glass"),
+
+    /** Real frosted glass: the scene behind, blurred, under a light veil. */
+    FROSTED("Frosted")
 }
 
 data class PanelTheme(
     val label: String,
     val material: PanelMaterial,
-    /** ARGB. Tint of the panel body; alpha is honoured. */
+    /** ARGB. Tint laid over the panel body; alpha is honoured. */
     val background: Long,
     /** ARGB. Border and hairline colour. */
     val stroke: Long,
@@ -35,15 +42,14 @@ data class PanelTheme(
 )
 
 /**
- * The five presets. Deliberately restrained and matched to the lo-fi scene palettes rather than
- * competing with them — a panel is something to read, not the thing being looked at.
+ * One entry per material. Deliberately restrained and matched to the lo-fi scene palettes rather
+ * than competing with them — a panel is something to read, not the thing being looked at.
  */
 val panelThemes: List<PanelTheme> = listOf(
-    PanelTheme("Graphite", PanelMaterial.GLASS, 0xB319191B, 0x38FFFFFF, 0xFFFFFFFF, 22),
-    PanelTheme("Ink", PanelMaterial.SOLID, 0xF0000000, 0x4DFFFFFF, 0xFFFFFFFF, 14),
-    PanelTheme("Mist", PanelMaterial.VEIL, 0x59101014, 0x24FFFFFF, 0xFFF2F6FA, 26),
-    PanelTheme("Terminal", PanelMaterial.TERMINAL, 0xE0020806, 0xFF6ED6DD, 0xFF6ED6DD, 4),
-    PanelTheme("Bare", PanelMaterial.NONE, 0x00000000, 0x00000000, 0xFFFFFFFF, 0)
+    PanelTheme("Default", PanelMaterial.DEFAULT, 0xB319191B, 0x38FFFFFF, 0xFFFFFFFF, 22),
+    PanelTheme("Mont", PanelMaterial.MONT, 0xF2000000, 0x00000000, 0xFFFFFFFF, 0),
+    PanelTheme("Liquid Glass", PanelMaterial.LIQUID_GLASS, 0x1FFFFFFF, 0x59FFFFFF, 0xFFFFFFFF, 26),
+    PanelTheme("Frosted", PanelMaterial.FROSTED, 0x3D0E0F12, 0x2EFFFFFF, 0xFFF4F7FA, 20)
 )
 
 fun panelThemeAt(index: Int): PanelTheme = panelThemes.getOrElse(index) { panelThemes.first() }

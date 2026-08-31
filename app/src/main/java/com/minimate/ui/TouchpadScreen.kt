@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothAudioBridge
@@ -65,6 +66,8 @@ import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.CommandBar
+import com.minimate.ui.components.PanelTarget
+import com.minimate.ui.theme.Mont
 import com.minimate.ui.components.buildCommandMenu
 import com.minimate.ui.components.SceneStudioOverlay
 import com.minimate.ui.components.WebcamModeOverlay
@@ -95,6 +98,29 @@ fun TouchpadScreen(
     var isDimMode by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var editingPanels by remember { mutableStateOf(false) }
+
+    val activeScene = sceneById(settings.shaderSceneId)
+    val activePalette = activeScene.palettes
+        .getOrElse(settings.shaderPaletteIndex) { activeScene.palettes.first() }
+    // One definition of "the scene", used for the background and again as the backdrop the glass
+    // panel materials sample. Filters are included: a pane of glass over an inverted scene has to
+    // show the inverted scene, not the original.
+    val sceneBackdrop: @Composable (Modifier) -> Unit = { canvasModifier ->
+        ThemeFilterStack(filters = settings.themeFilters, modifier = canvasModifier) {
+            SceneShaderCanvas(
+                scene = activeScene,
+                params = settings.shaderParams.takeIf { it.size == activeScene.params.size }
+                    ?: activeScene.defaults,
+                palette = activePalette.stops,
+                touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
+                animationSpeed = settings.backgroundAnimation.speed,
+                touchStrength = settings.shaderTouchStrength,
+                aberration = settings.shaderAberration,
+                grain = settings.shaderGrain,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
     var showPairingDialog by remember { mutableStateOf(false) }
     var showScreenEditor by remember { mutableStateOf(false) }
     var showThemeTester by remember { mutableStateOf(false) }
@@ -283,26 +309,7 @@ fun TouchpadScreen(
             cornerMaterial = settings.edgeCornerMaterial,
             modifier = Modifier.fillMaxSize()
         ) {
-            val activeScene = sceneById(settings.shaderSceneId)
-            val activePalette = activeScene.palettes
-                .getOrElse(settings.shaderPaletteIndex) { activeScene.palettes.first() }
-            ThemeFilterStack(
-                filters = settings.themeFilters,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                SceneShaderCanvas(
-                    scene = activeScene,
-                    params = settings.shaderParams.takeIf { it.size == activeScene.params.size }
-                        ?: activeScene.defaults,
-                    palette = activePalette.stops,
-                    touchPoints = if (settings.fingerEffectsEnabled) shaderTouchPoints else emptyList(),
-                    animationSpeed = settings.backgroundAnimation.speed,
-                    touchStrength = settings.shaderTouchStrength,
-                    aberration = settings.shaderAberration,
-                    grain = settings.shaderGrain,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            sceneBackdrop(Modifier.fillMaxSize())
             // AMOLED dim rides above the scene so it darkens the filtered result rather than
             // being amplified by whatever filter stack is active.
             if (dimRatio > 0f) {
@@ -458,7 +465,11 @@ fun TouchpadScreen(
                     }
                 },
                 onHaptic = {
-                    touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+                    // The keyboard's own switch, separate from the trackpad's, because a nudge
+                    // per keystroke is a much heavier stream of vibration than a click per tap.
+                    if (settings.keyboardHapticsEnabled) {
+                        touchpadEngine.hapticEngine.playClick(settings.hapticIntensity)
+                    }
                 }
             )
         }
@@ -492,6 +503,7 @@ fun TouchpadScreen(
                 panelTheme = panelThemeAt(settings.panelThemeIndex),
                 panelLayout = PanelLayout(settings.audioPanelX, settings.audioPanelY, settings.audioPanelScale),
                 editingPanel = editingPanels,
+                backdrop = sceneBackdrop,
                 onPanelLayoutChange = { layout ->
                     touchpadEngine.updateSettings(
                         settings.copy(
@@ -527,6 +539,7 @@ fun TouchpadScreen(
                 panelTheme = panelThemeAt(settings.panelThemeIndex),
                 panelLayout = PanelLayout(settings.cameraPanelX, settings.cameraPanelY, settings.cameraPanelScale),
                 editingPanel = editingPanels,
+                backdrop = sceneBackdrop,
                 onPanelLayoutChange = { layout ->
                     touchpadEngine.updateSettings(
                         settings.copy(
@@ -606,8 +619,13 @@ fun TouchpadScreen(
                         showSettingsSheet = false
                         showScreenEditor = true
                     },
-                    onEditPanels = {
+                    onEditPanels = { target ->
                         showSettingsSheet = false
+                        showKeyboard = false
+                        when (target) {
+                            PanelTarget.AUDIO -> { showWebcam = false; showAudio = true }
+                            PanelTarget.CAMERA -> { showAudio = false; showWebcam = true }
+                        }
                         editingPanels = true
                     },
                     onPairNewDevice = { showSettingsSheet = false; showPairingDialog = true },
@@ -684,20 +702,20 @@ fun TouchpadScreen(
             }
         )
 
-        if (editingPanels) {
-            if (showAudio || showWebcam) {
-                Box(
-                    Modifier.align(Alignment.BottomCenter).padding(bottom = 108.dp)
-                        .clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(.82f))
-                        .border(1.dp, Color.White.copy(.4f), RoundedCornerShape(14.dp))
-                        .clickable { editingPanels = false }
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text("Drag to move · pinch to resize · tap to finish", color = Color.White, fontSize = 9.sp)
-                }
-            } else {
-                // Nothing to arrange on this page, so the mode ends rather than lingering unseen.
-                editingPanels = false
+        if (editingPanels && (showAudio || showWebcam)) {
+            Box(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 108.dp)
+                    .background(Color.Black.copy(.95f))
+                    .clickable { editingPanels = false }
+                    .padding(horizontal = 18.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    "DRAG TO MOVE · PINCH TO SIZE · TAP TO FINISH",
+                    color = Color.White,
+                    fontFamily = Mont,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp
+                )
             }
         }
 
