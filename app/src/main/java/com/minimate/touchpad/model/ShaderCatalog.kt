@@ -85,28 +85,39 @@ val shaderScenes: List<ShaderScene> = listOf(
         listOf(
             param("density", "Density", 12f, 60f, 28f),
             param("speed", "Fall speed", .2f, 2.5f, 1f),
-            param("trail", "Trail length", .3f, 3f, 1.2f),
-            param("flicker", "Glyph churn", 0f, 1f, .5f)
+            param("trail", "Trail length", .2f, 2.5f, 1f),
+            param("flicker", "Glyph churn", 0f, 2f, .8f)
         ),
         LOFI,
         """
         float3 scene(float2 p, float2 uv, float t){
             float cols = uP0;
-            float2 g = float2(uv.x * cols, uv.y * cols * 1.6);
+            float rows = cols * 1.7;
+            float2 g = float2(uv.x * cols, uv.y * rows);
             float col = floor(g.x);
-            float seed = hash(float2(col, 3.0));
-            float fall = t * uP1 * (0.6 + seed * 0.9);
-            float y = g.y + fall;
-            float row = floor(y);
-            float2 cell = float2(fract(g.x), fract(y));
-            float id = floor(hash(float2(col, row + floor(t * uP3 * 6.0))) * 64.0);
+            float row = floor(g.y);
+            float2 cell = fract(g);
+
+            float seed = hash(float2(col, 7.0));
+            float trail = max(uP2 * 14.0, 1.0);
+
+            // A single drop per column, falling. Its row index grows with time, entering above
+            // the top edge and leaving below the bottom, so the column is dark except where the
+            // drop currently is. Adding time to the sampled row instead — which is what this
+            // first did — scrolls the whole grid upward and lights every row at once.
+            float head = fract(seed + t * uP1 * 0.14 * (0.55 + seed * 0.9)) * (rows + trail * 2.0) - trail;
+            float behind = head - row;
+            float lit = behind >= 0.0 ? exp(-behind / trail) : 0.0;
+            float isHead = smoothstep(1.4, 0.0, abs(behind));
+
+            // Characters mutate where they sit. Keying the glyph to a scrolling coordinate makes
+            // them ride along with the drop, which reads as sliding paper rather than rain.
+            float id = floor(hash(float2(col, row + floor(t * uP3 * 9.0))) * 64.0);
             float mask = glyph(id, cell);
-            float head = fract(-y * 0.06 + seed);
-            float tail = exp(-head * 6.0 / max(uP2, 0.05));
+
             float3 c = uC0;
-            c = mix(c, uC2, mask * tail);
-            c = mix(c, uC3, mask * smoothstep(0.92, 1.0, 1.0 - head) * 1.4);
-            c += uC1 * tail * 0.10;
+            c = mix(c, uC2, mask * lit);
+            c = mix(c, uC3, mask * isHead);
             return c;
         }
         """
@@ -125,21 +136,33 @@ val shaderScenes: List<ShaderScene> = listOf(
         """
         float3 scene(float2 p, float2 uv, float t){
             float cols = uP0;
-            float2 g = float2(uv.x * cols, uv.y * cols * 1.5);
+            float rows = cols * 1.6;
+            float2 g = float2(uv.x * cols, uv.y * rows);
             float col = floor(g.x);
+            float row = floor(g.y);
+            float2 cell = fract(g);
+
             float seed = hash(float2(col, 11.0));
-            float y = g.y + t * uP1 * (0.5 + seed);
-            float2 cell = float2(fract(g.x), fract(y));
-            float id = floor(hash(float2(col, floor(y))) * 64.0);
+            float trail = 16.0;
+            float head = fract(seed + t * uP1 * 0.11 * (0.5 + seed)) * (rows + trail * 2.0) - trail;
+            float behind = head - row;
+            float lit = behind >= 0.0 ? exp(-behind / trail) : 0.0;
+            float isHead = smoothstep(1.6, 0.0, abs(behind));
+
+            // A second, dimmer drop offset down the column so the field never looks sparse.
+            float head2 = fract(seed * 1.7 + 0.5 + t * uP1 * 0.08 * (0.5 + seed)) * (rows + trail * 2.0) - trail;
+            float behind2 = head2 - row;
+            float lit2 = behind2 >= 0.0 ? exp(-behind2 / (trail * 0.7)) * 0.45 : 0.0;
+
+            float id = floor(hash(float2(col, row + floor(t * 6.0))) * 64.0);
             float mask = glyph(id, cell);
-            float head = fract(-y * 0.05 + seed);
-            float tail = exp(-head * 4.0);
-            float haze = fbm(float2(uv.x * 3.0, uv.y * 2.0 - t * 0.1));
-            float3 c = mix(uC0, uC1, haze * 0.5);
-            c = mix(c, uC2, mask * tail);
-            c = mix(c, uC3, mask * smoothstep(0.9, 1.0, 1.0 - head));
-            c += uC2 * tail * uP2 * 0.25;
-            c = mix(c, uC3 * 0.6, haze * uP3 * 0.18);
+
+            float haze = fbm(float2(uv.x * 3.0, uv.y * 2.0 - t * 0.08));
+            float3 c = mix(uC0, uC1, haze * 0.35);
+            c = mix(c, uC2, mask * clamp(lit + lit2, 0.0, 1.0));
+            c = mix(c, uC3, mask * isHead);
+            c += uC2 * lit * uP2 * 0.22;
+            c = mix(c, uC3 * 0.5, haze * uP3 * 0.12);
             return c;
         }
         """
@@ -159,18 +182,28 @@ val shaderScenes: List<ShaderScene> = listOf(
         float3 scene(float2 p, float2 uv, float t){
             float m = abs(p.x);
             float fold = smoothstep(uP2, uP2 + 0.02, m);
-            float2 q = float2(m, uv.y);
             float cols = uP0;
-            float2 g = float2(q.x * cols, q.y * cols * 1.5);
+            float rows = cols * 1.6;
+            float2 g = float2(m * cols, uv.y * rows);
             float col = floor(g.x);
-            float y = g.y + t * uP1 * (0.5 + hash(float2(col, 5.0)));
-            float mask = glyph(floor(hash(float2(col, floor(y))) * 64.0), float2(fract(g.x), fract(y)));
-            float tail = exp(-fract(-y * 0.05) * 5.0);
+            float row = floor(g.y);
+            float2 cell = fract(g);
+
+            float seed = hash(float2(col, 5.0));
+            float trail = 13.0;
+            float head = fract(seed + t * uP1 * 0.13 * (0.5 + seed)) * (rows + trail * 2.0) - trail;
+            float behind = head - row;
+            float lit = behind >= 0.0 ? exp(-behind / trail) : 0.0;
+            float isHead = smoothstep(1.4, 0.0, abs(behind));
+
+            float id = floor(hash(float2(col, row + floor(t * 7.0))) * 64.0);
+            float mask = glyph(id, cell);
             float dim = mix(1.0, 1.0 - m * 1.4, uP3);
+
             float3 c = uC0;
-            c = mix(c, uC2, mask * tail * fold * dim);
-            c = mix(c, uC3, mask * tail * tail * fold * 0.6);
-            c += uC1 * (1.0 - fold) * 0.25;
+            c = mix(c, uC2, mask * lit * fold * dim);
+            c = mix(c, uC3, mask * isHead * fold);
+            c += uC1 * (1.0 - fold) * 0.22;
             return c;
         }
         """
