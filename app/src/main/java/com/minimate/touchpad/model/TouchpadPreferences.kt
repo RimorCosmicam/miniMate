@@ -183,7 +183,7 @@ class TouchpadPreferences(context: Context) {
                 abstractSubthemeIndex = json.optInt("abstractSubthemeIndex", 1).coerceIn(0, 9),
                 // These were being written but never read, so every restart quietly reset the
                 // scene to the default rather than restoring what was chosen.
-                shaderSceneId = json.optString("shaderSceneId", "paradise").ifEmpty { "paradise" },
+                shaderSceneId = json.optString("shaderSceneId", "parallax_sky").ifEmpty { "parallax_sky" },
                 shaderParams = json.optJSONArray("shaderParams")?.let { values ->
                     List(values.length()) { values.optDouble(it, 0.0).toFloat() }
                 }.orEmpty(),
@@ -205,18 +205,18 @@ class TouchpadPreferences(context: Context) {
                     EdgeControlSide.valueOf(json.optString("edgeControlSide", "LEFT"))
                 }.getOrDefault(EdgeControlSide.LEFT),
                 edgeRailMaterial = runCatching {
-                    EdgeControlMaterial.valueOf(json.optString("edgeRailMaterial", "CLEAR_GLASS"))
-                }.getOrDefault(EdgeControlMaterial.CLEAR_GLASS),
+                    EdgeControlMaterial.valueOf(json.optString("edgeRailMaterial", "CRYSTAL"))
+                }.getOrDefault(EdgeControlMaterial.CRYSTAL),
                 edgeRailScale = json.optDouble(
                     "edgeRailScale",
-                    runCatching { EdgeControlSize.valueOf(json.optString("edgeRailSize", "STANDARD")).scale.toDouble() }.getOrDefault(1.0)
+                    runCatching { EdgeControlSize.valueOf(json.optString("edgeRailSize", "STANDARD")).scale.toDouble() }.getOrDefault(1.32)
                 ).toFloat().coerceIn(.65f, 1.8f),
                 edgeCornerMaterial = runCatching {
-                    EdgeControlMaterial.valueOf(json.optString("edgeCornerMaterial", "CLEAR_GLASS"))
-                }.getOrDefault(EdgeControlMaterial.CLEAR_GLASS),
+                    EdgeControlMaterial.valueOf(json.optString("edgeCornerMaterial", "CRYSTAL"))
+                }.getOrDefault(EdgeControlMaterial.CRYSTAL),
                 edgeCornerScale = json.optDouble(
                     "edgeCornerScale",
-                    runCatching { EdgeControlSize.valueOf(json.optString("edgeCornerSize", "STANDARD")).scale.toDouble() }.getOrDefault(1.0)
+                    runCatching { EdgeControlSize.valueOf(json.optString("edgeCornerSize", "STANDARD")).scale.toDouble() }.getOrDefault(1.28)
                 ).toFloat().coerceIn(.65f, 1.8f),
                 keyboardShortcuts = json.optJSONArray("keyboardShortcuts")?.let { values ->
                     buildList {

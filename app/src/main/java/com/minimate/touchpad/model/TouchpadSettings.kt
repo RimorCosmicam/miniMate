@@ -429,7 +429,7 @@ data class TouchpadSettings(
     val themeFilters: List<ThemeFilter> = emptyList(),
     val abstractShaderTheme: AbstractShaderTheme = AbstractShaderTheme.OCEANIC,
     /** Selected scene from the shader catalog, its per-scene control values, and its palette. */
-    val shaderSceneId: String = "paradise",
+    val shaderSceneId: String = "parallax_sky",
     val shaderParams: List<Float> = emptyList(),
     val shaderPaletteIndex: Int = 0,
     val shaderTouchStrength: Float = 1f,
@@ -458,10 +458,13 @@ data class TouchpadSettings(
     val edgeScrollEnabled: Boolean = true,
     val edgeRightClickEnabled: Boolean = true,
     val edgeControlSide: EdgeControlSide = EdgeControlSide.LEFT,
-    val edgeRailMaterial: EdgeControlMaterial = EdgeControlMaterial.CLEAR_GLASS,
-    val edgeRailScale: Float = 1f,
-    val edgeCornerMaterial: EdgeControlMaterial = EdgeControlMaterial.CLEAR_GLASS,
-    val edgeCornerScale: Float = 1f,
+    // The sizes and material settled on by hand on the device, rather than the round numbers
+    // they started from. The rail and the corner are sized separately because they are gripped
+    // differently — one is swept along, the other is hit.
+    val edgeRailMaterial: EdgeControlMaterial = EdgeControlMaterial.CRYSTAL,
+    val edgeRailScale: Float = 1.32f,
+    val edgeCornerMaterial: EdgeControlMaterial = EdgeControlMaterial.CRYSTAL,
+    val edgeCornerScale: Float = 1.28f,
 
     // User-editable Mac chords exposed by the keyboard's Shortcuts panel.
     val keyboardShortcuts: List<KeyboardShortcut> = DEFAULT_KEYBOARD_SHORTCUTS,
