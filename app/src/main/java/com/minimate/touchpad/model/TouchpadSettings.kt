@@ -432,8 +432,6 @@ data class TouchpadSettings(
     val hapticIntensity: HapticIntensity = HapticIntensity.CRISP,
     /** Vibration on each key. On by default: a keyboard with no travel needs something to confirm. */
     val keyboardHapticsEnabled: Boolean = true,
-    /** The pill's three gestures are explained once, because nothing on screen implies them. */
-    val pillTourSeen: Boolean = false,
     /**
      * Whether the welcome has been dismissed. Deliberately not derived from whether a permission
      * happens to be missing: that made granting one dismiss the introduction mid-read, and made

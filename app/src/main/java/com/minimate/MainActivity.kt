@@ -20,8 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import com.minimate.ui.components.PermissionItem
 import com.minimate.ui.components.ClockBatteryOverlay
-import com.minimate.ui.components.SwitcherIntro
-import com.minimate.ui.components.WelcomeScreen
+import com.minimate.ui.components.Welcome
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -98,31 +97,7 @@ class MainActivity : ComponentActivity() {
                 val bluetoothState by hidManager.uiState.collectAsState()
                 val batteryPercentage by batteryReporter.batteryLevel.collectAsState()
 
-                // The welcome screen owns the first run, and leaves when it is dismissed rather
-                // than the moment the last permission lands — granting one used to close the
-                // introduction out from under whoever was reading it.
                 val settings by touchpadEngine.settings.collectAsState()
-
-                if (!settings.onboardingSeen) {
-                    WelcomeScreen(
-                        permissions = permissionState(permissionTick),
-                        platform = settings.hostPlatform,
-                        onPlatform = { chosen ->
-                            touchpadEngine.updateSettings(
-                                touchpadEngine.settings.value.copy(hostPlatform = chosen)
-                            )
-                        },
-                        onGrant = { checkAndRequestPermissions() },
-                        onDone = {
-                            touchpadEngine.updateSettings(
-                                touchpadEngine.settings.value.copy(onboardingSeen = true)
-                            )
-                            startBluetoothServicesIfAllowed()
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    return@MinimateTheme
-                }
 
                 // The app is composed and running underneath the introduction, so when the ground
                 // pulls apart what is revealed is the real thing already in motion rather than a
@@ -136,12 +111,20 @@ class MainActivity : ComponentActivity() {
                         bluetoothState = bluetoothState,
                         batteryPercentage = batteryPercentage,
                         onRequestPermissions = { checkAndRequestPermissions() },
-                        pillVisible = settings.pillTourSeen,
+                        pillVisible = settings.onboardingSeen,
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    if (!settings.pillTourSeen) {
-                        SwitcherIntro(
+                    if (!settings.onboardingSeen) {
+                        Welcome(
+                            permissions = permissionState(permissionTick),
+                            platform = settings.hostPlatform,
+                            onPlatform = { chosen ->
+                                touchpadEngine.updateSettings(
+                                    touchpadEngine.settings.value.copy(hostPlatform = chosen)
+                                )
+                            },
+                            onGrant = { checkAndRequestPermissions() },
                             pill = {
                                 ClockBatteryOverlay(
                                     clockStyle = settings.clockStyle,
@@ -165,8 +148,9 @@ class MainActivity : ComponentActivity() {
                             targetY = settings.clockPositionY,
                             onFinished = {
                                 touchpadEngine.updateSettings(
-                                    touchpadEngine.settings.value.copy(pillTourSeen = true)
+                                    touchpadEngine.settings.value.copy(onboardingSeen = true)
                                 )
+                                startBluetoothServicesIfAllowed()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
