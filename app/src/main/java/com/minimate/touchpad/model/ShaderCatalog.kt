@@ -1493,43 +1493,48 @@ val shaderScenes: List<ShaderScene> = listOf(
 
     ShaderScene(
         "warp_jump", "Warp Jump", ShaderFamily.STARS,
-        "Held at speed, stars drawn out into light.",
+        "Stars torn past, accelerating away from the point ahead.",
         listOf(
-            param("lanes", "Star lanes", 20f, 90f, 46f),
-            param("speed", "Speed", .05f, 1f, .45f),
-            param("stretch", "Stretch", .2f, 2f, 1f),
-            param("bright", "Brightness", .2f, 2f, .9f)
+            param("count", "Stars", 16f, 64f, 40f),
+            param("speed", "Speed", .1f, 1.5f, .5f),
+            param("stretch", "Streak", .3f, 3f, 1.2f),
+            param("bright", "Brightness", .2f, 2f, 1f)
         ),
         NIGHT,
         """
+        float seg(float2 p, float2 a, float2 b){
+            float2 pa = p - a, ba = b - a;
+            return length(pa - ba * clamp(dot(pa, ba) / max(dot(ba, ba), 0.000001), 0.0, 1.0));
+        }
+
         float3 scene(float2 p, float2 uv, float t){
-            float radius = max(length(p), 0.004);
-            float angle = atan(p.y, p.x);
             float3 c = uC0;
 
-            // Stars are laid out in angle against log-radius, so travelling forward is one plain
-            // constant slide along a single axis — which is why they pull apart as they near the
-            // edge rather than moving at one uniform rate. The speed is held, not cycled: a jump
-            // that keeps stopping and restarting is a effect playing at you, not a journey.
-            float lr = log(radius);
-            for (int layer = 0; layer < 3; layer++){
-                float fl = float(layer);
-                float2 q = float2(angle / 6.2831 * uP0, lr * 2.6 - t * uP1 * 4.5 + fl * 19.0);
-                float2 id = floor(q);
-                float2 f = fract(q) - 0.5;
+            // Every star gets its own bearing and its own place in the run, and is drawn as the
+            // line it covered this frame. The previous version laid them out on a grid in angle
+            // against log-radius, which put them in concentric rings — and rings sweeping outward
+            // is a tunnel, not a jump.
+            for (int i = 0; i < 64; i++){
+                float fi = float(i);
+                if (fi >= uP0) break;
 
-                float mag = pow(hash(id + fl * 3.1), 4.5);
-                if (mag > 0.004){
-                    // Stretching along the radial axis alone turns a point into a streak.
-                    float stretch = 1.0 + uP1 * uP2 * 26.0;
-                    float d = length(float2(f.x * 2.6, f.y / stretch));
-                    // Nothing accumulates at the vanishing point. A star near the centre is still
-                    // far off, so it arrives faint and short and grows as it comes past — the
-                    // previous version let every lane pile into the middle and burn out white.
-                    float emerging = smoothstep(0.0, 0.20, radius) * smoothstep(0.0, 0.06, radius);
-                    float3 tint = starColor(clamp(hash(id + 7.3) * 0.5 + uP1 * 0.5, 0.0, 1.0));
-                    c += tint * psf(d, 0.05 + mag * 0.05) * mag * emerging * uP3;
-                }
+                float phase = fract(t * uP1 * 0.4 + hash(float2(fi, 1.7)));
+                float bearing = hash(float2(fi, 2.3)) * 6.2831;
+                float2 dir = float2(cos(bearing), sin(bearing));
+
+                // Distance grows exponentially, so a star creeps while it is far off and tears
+                // past at the end. That change of pace is the whole sensation.
+                float far = 0.014 * exp(phase * 4.6);
+                float near = 0.014 * exp(max(phase - 0.05 * uP2, 0.0) * 4.6);
+
+                float d = seg(p, dir * near, dir * far);
+                float mag = pow(hash(float2(fi, 3.1)), 1.8);
+                // In at the vanishing point, gone at the edge.
+                float fade = smoothstep(0.0, 0.10, phase) * smoothstep(1.0, 0.86, phase);
+                float3 tint = starColor(clamp(hash(float2(fi, 4.5)) * 0.5 + uP1 * 0.4, 0.0, 1.0));
+
+                c += tint * exp(-d * 300.0) * mag * fade * uP3;
+                c += tint * exp(-d * 70.0) * mag * fade * uP3 * 0.10;
             }
             return c;
         }
@@ -1541,9 +1546,9 @@ val shaderScenes: List<ShaderScene> = listOf(
         "constellations", "Constellations", ShaderFamily.STARS,
         "Orion, the Plough, Cassiopeia and the Northern Cross.",
         listOf(
-            param("size", "Size", .12f, .34f, .20f),
+            param("size", "Size", .30f, .62f, .46f),
             param("weight", "Line weight", .0008f, .008f, .0025f),
-            param("fade", "Fade cycle", 0f, 1.5f, .35f),
+            param("hold", "Time each", .02f, .3f, .07f),
             param("field", "Background stars", 4f, 16f, 9f)
         ),
         NIGHT,
@@ -1654,20 +1659,27 @@ val shaderScenes: List<ShaderScene> = listOf(
             return float2(d, s);
         }
 
-        /** One figure, placed and turned, its lines and stars resolved into colour. */
+        /** One figure, resolved into colour. */
         float3 figure(float2 hit, float scale, float fade){
             // The line width is given in screen terms and divided into local space, so a figure
             // does not draw with thicker strokes simply because it is larger.
             float width = uP1 / scale;
-            float3 c = mix(uC2, uC3, 0.30) * smoothstep(width, 0.0, hit.x) * fade * 0.9;
-            c += mix(uC3, float3(1.0), 0.5) * hit.y * (0.35 + fade * 0.65);
+            float3 c = mix(uC2, uC3, 0.30) * smoothstep(width, 0.0, hit.x) * fade;
+            c += mix(uC3, float3(1.0), 0.5) * hit.y * fade;
             return c;
+        }
+
+        float2 pick(float2 q, float which){
+            if (which < 0.5) return orion(q);
+            if (which < 1.5) return plough(q);
+            if (which < 2.5) return cassiopeia(q);
+            return cygnus(q);
         }
 
         float3 scene(float2 p, float2 uv, float t){
             float3 c = uC0 + uC1 * fbm(p * 3.0) * 0.05;
 
-            // The sky the figures are picked out of.
+            // The sky the figure is picked out of.
             float2 g = p * uP3;
             float2 cell = floor(g);
             float2 f = fract(g) - 0.5;
@@ -1682,23 +1694,16 @@ val shaderScenes: List<ShaderScene> = listOf(
                 }
             }
 
-            // Each figure keeps its own slow cycle, so the sky is always partly joined up and
-            // never shows the same arrangement twice.
-            float drift = t * 0.02;
-            float scale = uP0;
+            // One figure at a time, filling the display, handing over to the next. Four of them at
+            // a fifth of the size each was four things too small to recognise rather than one
+            // anybody could name.
+            float cycle = t * uP2;
+            float phase = fract(cycle);
+            float which = mod(floor(cycle), 4.0);
+            float2 q = p / uP0;
 
-            float2 q0 = rot(p - float2(-0.21 + sin(drift) * 0.012, 0.24), 0.10) / scale;
-            c += figure(orion(q0), scale, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 0.0)));
-
-            float2 q1 = rot(p - float2(0.23, 0.30 + cos(drift) * 0.012), -0.18) / scale;
-            c += figure(plough(q1), scale, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 1.9)));
-
-            float2 q2 = rot(p - float2(-0.24, -0.28), 0.22) / (scale * 0.9);
-            c += figure(cassiopeia(q2), scale * 0.9, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 3.4)));
-
-            float2 q3 = rot(p - float2(0.25, -0.26 + sin(drift * 1.3) * 0.012), -0.08) / scale;
-            c += figure(cygnus(q3), scale, 0.35 + 0.65 * (0.5 + 0.5 * sin(t * uP2 + 5.1)));
-
+            c += figure(pick(q, which), uP0, smoothstep(1.0, 0.82, phase) * smoothstep(0.0, 0.14, phase));
+            c += figure(pick(q, mod(which + 1.0, 4.0)), uP0, smoothstep(0.86, 1.0, phase));
             return c;
         }
         """,
@@ -1707,12 +1712,12 @@ val shaderScenes: List<ShaderScene> = listOf(
 
     ShaderScene(
         "meteors", "Meteor Shower", ShaderFamily.STARS,
-        "A sky worth watching, and plenty falling through it.",
+        "A still sky, cut by something moving very fast.",
         listOf(
-            param("rate", "Fall rate", .3f, 3f, 1.2f),
-            param("trail", "Trail length", .15f, 1.2f, .55f),
+            param("rate", "Fall rate", .3f, 3f, 1.1f),
+            param("trail", "Trail length", .15f, 1.2f, .60f),
             param("radiant", "Direction", -3.14f, 3.14f, -2.4f),
-            param("spread", "Spread", 0f, 1.2f, .40f)
+            param("spread", "Spread", 0f, 1.2f, .35f)
         ),
         NIGHT,
         """
@@ -1722,49 +1727,50 @@ val shaderScenes: List<ShaderScene> = listOf(
         }
 
         float3 scene(float2 p, float2 uv, float t){
-            // A denser, livelier field than before. If the sky between events is dull there is
-            // nothing to watch, and a meteor shower is mostly the waiting.
-            float3 c = uC0 + uC1 * fbm(p * 2.8) * 0.06;
-            float2 g = p * 16.0;
+            // A clean sky. The earlier haze wash sat under everything and turned the whole frame
+            // muddy, which no amount of work on the meteors themselves was going to fix.
+            float3 c = uC0;
+            float2 g = p * 15.0;
             float2 cell = floor(g);
             float2 f = fract(g) - 0.5;
             for (int j = 0; j < 9; j++){
                 float fj = float(j);
                 float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
                 float2 id = cell + o;
-                float mag = pow(hash(id + 0.7), 5.0);
+                float mag = pow(hash(id + 0.7), 5.5);
                 if (mag > 0.003){
                     float2 d = f - o + (hash2(id) - 0.5) * 0.8;
-                    float twinkle = 0.78 + 0.22 * sin(t * (1.6 + hash(id) * 5.0) + hash(id) * 30.0);
-                    c += starColor(hash(id + 4.2)) * psf(length(d), 0.010 + mag * 0.02) * mag * twinkle;
+                    float twinkle = 0.80 + 0.20 * sin(t * (1.6 + hash(id) * 5.0) + hash(id) * 30.0);
+                    c += starColor(hash(id + 4.2)) * psf(length(d), 0.009 + mag * 0.016) * mag * twinkle;
                 }
             }
 
-            for (int i = 0; i < 10; i++){
+            for (int i = 0; i < 8; i++){
                 float fi = float(i);
-                // Flooring the clock hands each slot a fresh meteor every pass, so they never
-                // settle into a loop the eye can learn.
-                float clock = t * uP0 * 0.22 + fi * 0.41;
+                float clock = t * uP0 * 0.30 + fi * 0.53;
                 float life = fract(clock);
                 float2 seed = hash2(float2(fi, floor(clock)));
 
                 float aim = uP2 + (seed.x - 0.5) * uP3;
                 float2 dir = float2(cos(aim), sin(aim));
-                // Across the direction of travel, not scattered anywhere in a box twice the size
-                // of the display. The path is laid over the visible field and entered from just
-                // outside it, so a meteor crosses the screen instead of mostly missing it.
-                float2 across = float2(-dir.y, dir.x) * (seed.y - 0.5) * 0.95;
-                float2 head = across - dir * 0.75 + dir * life * 1.5;
-                float trail = uP1 * (0.55 + seed.y * 0.6);
+                float2 across = float2(-dir.y, dir.x) * (seed.y - 0.5) * 1.0;
+                float2 head = across - dir * 0.8 + dir * life * 1.6;
+                float trail = uP1 * (0.5 + seed.y * 0.5);
                 float2 tail = head - dir * trail;
 
                 float d = seg(p, tail, head);
-                // Bright and tight at the head, wide and dim behind.
                 float along = clamp(dot(p - tail, dir) / max(trail, 0.001), 0.0, 1.0);
-                float fade = smoothstep(0.0, 0.08, life) * smoothstep(1.0, 0.72, life);
-                float3 tint = starColor(0.4 + seed.y * 0.55);
-                c += tint * exp(-d * (170.0 - along * 110.0)) * along * along * fade * 1.5;
-                c += float3(1.0) * psf(length(p - head), 0.006) * fade * 1.1;
+                float fade = smoothstep(0.0, 0.06, life) * smoothstep(1.0, 0.70, life);
+
+                // A hairline that stays a hairline. The previous one widened toward the head and
+                // carried a fat round glow on the end, which is what made it a tadpole; a meteor is
+                // a scratch of light, brightest at the front and thinning to nothing behind.
+                float taper = pow(along, 2.5);
+                float3 tint = starColor(0.45 + seed.y * 0.5);
+                c += tint * exp(-d * 900.0) * taper * fade * 2.2;
+                c += tint * exp(-d * 260.0) * taper * fade * 0.45;
+                // Just enough bloom at the very tip to read as heat, not as a head.
+                c += float3(1.0) * exp(-length(p - head) * 190.0) * fade * 0.9;
             }
             return c;
         }
@@ -1800,10 +1806,13 @@ val shaderScenes: List<ShaderScene> = listOf(
                 }
             }
 
-            // One event at a time, somewhere new each time.
-            float clock = t * uP0;
+            // Two events running half a cycle apart. One is always still fading while the next is
+            // building, so the sky never cuts back to empty — the reset was the one thing wrong
+            // with it, and it was an artefact of there being a single event to reset.
+            for (int e = 0; e < 2; e++){
+            float clock = t * uP0 + float(e) * 0.5;
             float life = fract(clock);
-            float2 seed = hash2(float2(floor(clock), 5.0));
+            float2 seed = hash2(float2(floor(clock), 5.0 + float(e) * 13.0));
             float2 at = (seed - 0.5) * 0.55;
             float2 d = p - at;
             float r = length(d);
@@ -1839,6 +1848,7 @@ val shaderScenes: List<ShaderScene> = listOf(
 
             // What is left inside the shell, glowing on for a while after.
             c += mix(uC2, uC3, 0.4) * exp(-pow(r / max(shell, 0.02), 2.0)) * gone * dying * 0.30;
+            }
             return c;
         }
         """,

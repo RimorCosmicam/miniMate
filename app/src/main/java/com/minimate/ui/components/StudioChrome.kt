@@ -65,7 +65,9 @@ internal fun StudioPanel(
 ) {
     Column(
         modifier
-            .fillMaxWidth(.78f)
+            // Full width. A studio that stops three quarters of the way across leaves a strip
+            // of dead screen beside every row it contains.
+            .fillMaxWidth()
             .heightIn(max = maxHeight)
             .background(StudioBackground)
             .padding(start = 22.dp, top = 16.dp, end = 14.dp, bottom = 12.dp),
