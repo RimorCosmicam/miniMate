@@ -64,7 +64,6 @@ import com.minimate.ui.components.HudToast
 import com.minimate.ui.components.LiveCalibrationMode
 import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
-import com.minimate.ui.components.PillTourCard
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.CommandBar
 import com.minimate.ui.components.CommandContext
@@ -755,14 +754,6 @@ fun TouchpadScreen(
                     fontSize = 10.sp
                 )
             }
-        }
-
-        // Shown once, on top of everything, over the pill it is describing.
-        if (!settings.pillTourSeen) {
-            PillTourCard(
-                onAcknowledge = { touchpadEngine.updateSettings(settings.copy(pillTourSeen = true)) },
-                modifier = Modifier.fillMaxSize()
-            )
         }
 
         // Layer 10: Minimal HUD Toast Feedback

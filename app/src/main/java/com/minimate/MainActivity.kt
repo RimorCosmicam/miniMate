@@ -18,6 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import com.minimate.ui.components.PermissionItem
+import com.minimate.ui.components.ClockBatteryOverlay
+import com.minimate.ui.components.SwitcherIntro
 import com.minimate.ui.components.WelcomeScreen
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
@@ -99,6 +101,7 @@ class MainActivity : ComponentActivity() {
                 // than the moment the last permission lands — granting one used to close the
                 // introduction out from under whoever was reading it.
                 val settings by touchpadEngine.settings.collectAsState()
+
                 if (!settings.onboardingSeen) {
                     WelcomeScreen(
                         permissions = permissionState(permissionTick),
@@ -108,6 +111,42 @@ class MainActivity : ComponentActivity() {
                                 touchpadEngine.settings.value.copy(onboardingSeen = true)
                             )
                             startBluetoothServicesIfAllowed()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    return@MinimateTheme
+                }
+
+                // Second step, on the same ground: the switcher is shown in the card and then
+                // travels to the corner it will live in, so its position is learned by watching
+                // it arrive rather than by hunting for it afterwards.
+                if (!settings.pillTourSeen) {
+                    SwitcherIntro(
+                        pill = {
+                            ClockBatteryOverlay(
+                                clockStyle = settings.clockStyle,
+                                positionXFraction = .5f,
+                                positionYFraction = .5f,
+                                clockScale = settings.clockScale,
+                                screenWidthPx = 0f,
+                                screenHeightPx = 0f,
+                                show24Hour = settings.show24HourFormat,
+                                showSeconds = settings.showSeconds,
+                                showBattery = settings.showBatteryPercentage,
+                                batteryPercentage = batteryPercentage,
+                                bluetoothState = bluetoothState,
+                                amoledMode = false,
+                                onTap = {},
+                                onDoubleTap = {},
+                                onLongPress = {}
+                            )
+                        },
+                        targetX = settings.clockPositionX,
+                        targetY = settings.clockPositionY,
+                        onFinished = {
+                            touchpadEngine.updateSettings(
+                                touchpadEngine.settings.value.copy(pillTourSeen = true)
+                            )
                         },
                         modifier = Modifier.fillMaxSize()
                     )

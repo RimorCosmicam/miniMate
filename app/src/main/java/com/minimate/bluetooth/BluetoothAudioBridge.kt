@@ -67,6 +67,16 @@ data class AudioDeviceSummary(val key: String, val name: String)
 private val PHONE_OUTPUT = AudioDeviceSummary(PHONE_DEVICE_KEY, "Phone")
 private val PHONE_INPUT = AudioDeviceSummary(PHONE_DEVICE_KEY, "Phone")
 
+/**
+ * True when the phone is being asked to play out of its own speaker.
+ *
+ * The microphone is a few centimetres from that speaker with nothing between them, so anything the
+ * Mac sends is picked straight back up and returned — a loop that builds on itself within a second
+ * or two. Routing the output to headphones or a connected device breaks the path.
+ */
+val AudioBridgeState.speakerWouldFeedBack: Boolean
+    get() = outputEnabled && selectedOutputKey == PHONE_DEVICE_KEY
+
 data class AudioBridgeState(
     val listening: Boolean = false,
     val connected: Boolean = false,
@@ -165,11 +175,15 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         this.microphonePlacement = microphonePlacement
         val restartMicrophone = false
         deviceEqProfiles = outputProfiles
+        // Playing out of the phone's own speaker puts the loop back into its own microphone, so
+        // the two cannot both be live. Refused here rather than only discouraged in the UI: the
+        // howl builds within a second or two and is unpleasant enough to be worth preventing.
+        val speakerOnPhone = outputEnabled && outputDeviceKey == PHONE_DEVICE_KEY
         _state.update {
             val profile = outputProfiles.firstOrNull { profile -> profile.deviceKey == it.outputDeviceKey }
             it.copy(
                 outputEnabled = outputEnabled,
-                microphoneEnabled = microphoneEnabled,
+                microphoneEnabled = microphoneEnabled && !speakerOnPhone,
                 outputVolume = outputVolume.coerceIn(0f, 1f),
                 selectedOutputKey = outputDeviceKey,
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,

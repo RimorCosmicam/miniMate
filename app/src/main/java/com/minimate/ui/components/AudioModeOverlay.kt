@@ -45,6 +45,7 @@ import com.minimate.bluetooth.AudioBridgeState
 import com.minimate.bluetooth.AudioDeviceSummary
 import com.minimate.touchpad.model.AudioTransport
 import com.minimate.touchpad.model.AudioOutputPreset
+import com.minimate.bluetooth.speakerWouldFeedBack
 import com.minimate.touchpad.model.PanelLayout
 import com.minimate.touchpad.model.PanelTheme
 import com.minimate.touchpad.model.MicrophonePlacement
@@ -245,12 +246,22 @@ private fun MicrophoneControls(
             }
             MontToggle(
                 checked = state.microphoneEnabled,
-                onChange = onEnabled
+                onChange = onEnabled,
+                enabled = !state.speakerWouldFeedBack
+            )
+        }
+        if (state.speakerWouldFeedBack) {
+            Text(
+                "Blocked while the phone is the speaker — its microphone would pick up its own " +
+                    "output and howl. Send the sound to headphones or a paired device instead.",
+                color = Color.White.copy(.52f),
+                fontSize = 8.sp,
+                lineHeight = 11.sp
             )
         }
         LinearProgressIndicator(
             progress = state.microphoneLevel,
-            modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+            modifier = Modifier.fillMaxWidth().height(3.dp),
             color = Color.White,
             trackColor = Color.White.copy(.10f)
         )

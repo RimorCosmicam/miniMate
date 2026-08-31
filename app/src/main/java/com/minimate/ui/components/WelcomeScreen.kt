@@ -29,12 +29,49 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import com.minimate.ui.theme.Mont
 
 /** One thing the app needs, and whether it has it yet. */
 data class PermissionItem(val label: String, val detail: String, val granted: Boolean)
 
 private val Mustard = Color(0xFFD8A628)
+
+/** The welcome's ground, shared by both of its steps so the second is not a different place. */
+@Composable
+private fun MustardDiagonals(travel: Float, modifier: Modifier = Modifier) {
+    Box(modifier.background(Color.Black)) {
+        Canvas(Modifier.fillMaxSize()) {
+            // Drawn past both edges so they never end anywhere you can see, and offset by exactly
+            // one period so the loop has no seam.
+            val spacing = 34.dp.toPx()
+            val bandWidth = 15.dp.toPx()
+            val drop = travel * spacing
+            var y = -size.width - spacing
+            while (y < size.height + spacing) {
+                drawLine(
+                    Mustard,
+                    Offset(-size.width, y + drop),
+                    Offset(size.width * 2f, y + drop + size.width * 1.5f),
+                    bandWidth
+                )
+                y += spacing
+            }
+        }
+    }
+}
 
 /**
  * The first thing anyone sees.
@@ -58,24 +95,8 @@ fun WelcomeScreen(
     )
     val everythingGranted = permissions.all { it.granted }
 
-    Box(modifier.fillMaxSize().background(Color.Black)) {
-        Canvas(Modifier.fillMaxSize()) {
-            // Diagonals, drawn past both edges so they never end anywhere you can see, and offset
-            // by one full period so the loop has no seam.
-            val spacing = 34.dp.toPx()
-            val bandWidth = 15.dp.toPx()
-            val drop = travel * spacing
-            var y = -size.width - spacing
-            while (y < size.height + spacing) {
-                drawLine(
-                    Mustard,
-                    Offset(-size.width, y + drop),
-                    Offset(size.width * 2f, y + drop + size.width * 1.5f),
-                    bandWidth
-                )
-                y += spacing
-            }
-        }
+    Box(modifier.fillMaxSize()) {
+        MustardDiagonals(travel, Modifier.fillMaxSize())
 
         Column(
             Modifier
@@ -158,20 +179,59 @@ fun WelcomeScreen(
 }
 
 /**
- * The one thing that is not discoverable.
+ * The switcher, introduced where it can be seen.
  *
- * Every other control is visible on the screen it belongs to, but the pill carries three separate
- * gestures and looks like a clock. Shown once, over the trackpad it is describing, so the reader
- * can see the thing being talked about while they read about it.
+ * On the welcome's own ground rather than over the trackpad, with the real thing sitting inside
+ * the card next to what it does — three gestures on an object that looks like a clock is the one
+ * part of this app nobody could work out by looking at it.
+ *
+ * On Okay it travels to the corner it will live in rather than cutting there. Watching it go is
+ * what tells you where to look for it afterwards; a jump leaves you hunting for it later.
  */
 @Composable
-fun PillTourCard(onAcknowledge: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize().background(Color.Black.copy(.45f))) {
+fun SwitcherIntro(
+    pill: @Composable () -> Unit,
+    targetX: Float,
+    targetY: Float,
+    onFinished: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "switcherIntro")
+    val travel by transition.animateFloat(
+        0f, 1f, infiniteRepeatable(tween(5200, easing = LinearEasing)), label = "stripes"
+    )
+
+    var leaving by remember { mutableStateOf(false) }
+    val journey by animateFloatAsState(
+        targetValue = if (leaving) 1f else 0f,
+        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+        label = "journey",
+        finishedListener = { if (it == 1f) onFinished() }
+    )
+
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }
+        val heightPx = with(density) { maxHeight.toPx() }
+
+        // Where the card holds it, and where it belongs. The pill is drawn once and moved between
+        // the two, so what arrives in the corner is the same object that was being explained.
+        var pillSize by remember { mutableStateOf(IntSize.Zero) }
+        val restX = widthPx * .5f - pillSize.width / 2f
+        val restY = heightPx * .34f
+        val homeX = (targetX * widthPx - pillSize.width / 2f)
+            .coerceIn(8f, (widthPx - pillSize.width - 8f).coerceAtLeast(8f))
+        val homeY = (targetY * heightPx - pillSize.height / 2f)
+            .coerceIn(8f, (heightPx - pillSize.height - 8f).coerceAtLeast(8f))
+
+        MustardDiagonals(travel, Modifier.fillMaxSize().alpha(1f - journey))
+
         Column(
             Modifier
                 .fillMaxWidth()
                 .align(Alignment.Center)
                 .padding(horizontal = 18.dp)
+                .alpha(1f - journey)
                 .background(Color.Black.copy(MONT_SURFACE_ALPHA))
                 .padding(start = 22.dp, top = 20.dp, end = 18.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -183,6 +243,8 @@ fun PillTourCard(onAcknowledge: () -> Unit, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Black,
                 fontSize = 11.sp
             )
+            // Room for the pill, which is drawn above the card so it can leave it later.
+            Spacer(Modifier.height(34.dp))
             TourLine("ONE TAP", "Change mode")
             TourLine("TWO TAPS", "AMOLED black")
             TourLine("HOLD", "Open settings")
@@ -192,7 +254,7 @@ fun PillTourCard(onAcknowledge: () -> Unit, modifier: Modifier = Modifier) {
                 "OKAY",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onAcknowledge)
+                    .clickable(enabled = !leaving) { leaving = true }
                     .padding(vertical = 6.dp),
                 color = Color.White,
                 fontFamily = Mont,
@@ -200,6 +262,17 @@ fun PillTourCard(onAcknowledge: () -> Unit, modifier: Modifier = Modifier) {
                 fontSize = 15.sp
             )
         }
+
+        Box(
+            Modifier
+                .offset {
+                    IntOffset(
+                        (restX + (homeX - restX) * journey).roundToInt(),
+                        (restY + (homeY - restY) * journey).roundToInt()
+                    )
+                }
+                .onSizeChanged { pillSize = it }
+        ) { pill() }
     }
 }
 
