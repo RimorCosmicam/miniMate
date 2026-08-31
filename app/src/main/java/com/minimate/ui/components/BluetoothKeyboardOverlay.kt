@@ -744,7 +744,6 @@ fun BluetoothKeyboardOverlay(
                 fontWeight = fontWeight,
                 opaque = opaque,
                 scale = keyboardScale,
-                height = keyboardHeight,
                 onSection = { customizer = it },
                 onTheme = { onHaptic(); onThemeChange(it) },
                 onTrail = { onHaptic(); onTrailChange(it) },
