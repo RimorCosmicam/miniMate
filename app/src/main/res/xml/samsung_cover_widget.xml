@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Samsung's own provider descriptor. Standard Android has no way to say which display a widget is
+  for, so the Flip's cover screen only offers widgets that declare themselves here as sub_screen —
+  which is why the app's widgets were absent from it while being perfectly present on the inner one.
+-->
+<samsung-appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    display="sub_screen" />

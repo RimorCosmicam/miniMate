@@ -5,6 +5,7 @@
     android:minHeight="110dp"
     android:targetCellWidth="2"
     android:targetCellHeight="2"
-    android:resizeMode="none"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
     android:description="@string/widget_small_description"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen|keyguard" />

@@ -108,32 +108,42 @@
             android:foregroundServiceType="microphone|connectedDevice"
             android:stopWithTask="false" />
         <!--
-             Two faces of the same widget. Android has no way to say "cover screen only" — a
-             widget is offered wherever the launcher offers widgets — so both are declared as
-             ordinary home-screen widgets and it is the cover screen's own widget support that
-             decides whether they can be placed there.
+             Two faces of the same widget, offered on the cover screen as well as the inner one.
+             The second meta-data is what makes that possible: standard Android cannot say which
+             display a widget belongs to, and the Flip's cover screen lists only providers that
+             declare themselves to Samsung as sub_screen.
+
+             Exported because the system binds these from outside the app. The toggle intent is
+             deliberately not in the filter — it is delivered to an explicit component through a
+             PendingIntent this app creates, so it needs no exported action to arrive, and leaving
+             it out keeps the microphone and camera off any surface another app could reach.
         -->
         <receiver
             android:name=".widget.MinimateSmallWidget"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.minimate.widget.TOGGLE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_small_info" />
+            <meta-data
+                android:name="com.samsung.android.appwidget.provider"
+                android:resource="@xml/samsung_cover_widget" />
         </receiver>
 
         <receiver
             android:name=".widget.MinimateBarWidget"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_bar_info" />
+            <meta-data
+                android:name="com.samsung.android.appwidget.provider"
+                android:resource="@xml/samsung_cover_widget" />
         </receiver>
 
     </application>

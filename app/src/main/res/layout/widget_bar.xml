@@ -48,25 +48,25 @@
 
         <ImageView
             android:id="@+id/widget_speaker"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="16dp"
             android:src="@drawable/ic_widget_speaker"
             android:contentDescription="Speaker" />
 
         <ImageView
             android:id="@+id/widget_mic"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="16dp"
             android:src="@drawable/ic_widget_mic"
             android:contentDescription="Microphone" />
 
         <ImageView
             android:id="@+id/widget_camera"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="16dp"
             android:src="@drawable/ic_widget_camera"
             android:contentDescription="Camera" />
     </LinearLayout>
