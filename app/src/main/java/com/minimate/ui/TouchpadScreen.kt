@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.minimate.bluetooth.BluetoothAudioBridge
 import com.minimate.bluetooth.BluetoothHidManager
 import com.minimate.bluetooth.WebcamCapture
