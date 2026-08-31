@@ -181,7 +181,7 @@ private fun KeyboardCustomizerTop(
     maxHeight: Dp = 150.dp,
     modifier: Modifier = Modifier
 ) {
-    StudioPanel("Keyboard Studio", onCancel, onDone, modifier, maxHeight) {
+    StudioPanel(onCancel, onDone, modifier, maxHeight) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             KeyboardCustomizer.entries.forEach { item ->
                 StudioChip(item.label, section == item, Modifier.weight(1f)) { onSection(item) }

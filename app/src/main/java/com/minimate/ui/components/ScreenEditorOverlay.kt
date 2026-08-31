@@ -101,7 +101,6 @@ fun ScreenEditorOverlay(
         // bottom-anchored panel sat directly underneath it. Anchored top-left instead, using the
         // same glass chrome as every other studio rather than a bespoke navy-and-cyan card.
         StudioPanel(
-            title = "Pill Layout",
             onCancel = onClose,
             onDone = onClose,
             modifier = Modifier.align(Alignment.TopStart)

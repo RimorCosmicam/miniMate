@@ -8,14 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -46,7 +43,6 @@ internal val StudioBackground = Color.Black.copy(alpha = MONT_SURFACE_ALPHA)
 
 @Composable
 internal fun StudioPanel(
-    title: String,
     onCancel: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
@@ -63,22 +59,34 @@ internal fun StudioPanel(
             .fillMaxWidth(.78f)
             .heightIn(max = maxHeight)
             .background(StudioBackground)
-            .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 14.dp),
+            .padding(start = 22.dp, top = 16.dp, end = 14.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        // One line. The name of the studio is enough to say where you are, and what is selected
-        // is already legible from the chips below being the bright ones.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            StudioLabel(title.uppercase(), Modifier.weight(1f), dim = true, size = 11)
-            StudioLabel("CANCEL", dim = true, modifier = Modifier.clickable(onClick = onCancel).padding(6.dp))
-            Spacer(Modifier.width(10.dp))
-            StudioLabel("DONE", modifier = Modifier.clickable(onClick = onDone).padding(6.dp))
-        }
+        // No header at all. A panel that opens over the thing it edits does not need to announce
+        // which panel it is, and the row that used to say so was costing the first line of the
+        // list. Cancel and Done end the list instead, the same way Close ends the command bar's.
         Column(
             Modifier.verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(9.dp)
-        ) { content() }
+        ) {
+            content()
+            StudioRow("CANCEL", dim = true, onClick = onCancel)
+            StudioRow("DONE", dim = false, onClick = onDone)
+        }
     }
+}
+
+/** A full-width row, like the command bar's. */
+@Composable
+private fun StudioRow(label: String, dim: Boolean, onClick: () -> Unit) {
+    StudioLabel(
+        label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 7.dp, horizontal = 2.dp),
+        dim = dim
+    )
 }
 
 /**

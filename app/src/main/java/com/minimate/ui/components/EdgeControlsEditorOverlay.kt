@@ -55,7 +55,6 @@ fun EdgeControlsEditorOverlay(
 
     Box(modifier.fillMaxSize()) {
         StudioPanel(
-            title = "Buttons Studio",
             onCancel = onCancel,
             onDone = onDone,
             // Low and to the side. The right-click corner sits at the top edge and the scroll

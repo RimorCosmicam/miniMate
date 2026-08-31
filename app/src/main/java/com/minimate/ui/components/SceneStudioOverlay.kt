@@ -75,7 +75,6 @@ fun SceneStudioOverlay(
         Box(Modifier.fillMaxSize().pointerInteropFilter { onPreviewTouchEvent(it) })
 
         StudioPanel(
-            title = "Scene Studio",
             onCancel = onCancel,
             onDone = onKeep,
             modifier = Modifier.align(Alignment.TopStart)
