@@ -59,6 +59,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.res.ResourcesCompat
 import com.minimate.R
 import com.minimate.ui.theme.Mont
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.BrightnessLow
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.KeyboardShortcut
@@ -766,19 +777,29 @@ private object ConsumerUsage {
 @Composable
 private fun MediaPanel(onSend: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        GlassKey("☀ −", 1f, repeatable = true) { onSend(ConsumerUsage.BRIGHTNESS_DOWN) }
+        GlassKey("Brightness down", 1f, repeatable = true, icon = Icons.Default.BrightnessLow) {
+            onSend(ConsumerUsage.BRIGHTNESS_DOWN)
+        }
         GlassKey("Display", 1.25f, selected = true) {}
-        GlassKey("☀ +", 1f, repeatable = true) { onSend(ConsumerUsage.BRIGHTNESS_UP) }
+        GlassKey("Brightness up", 1f, repeatable = true, icon = Icons.Default.BrightnessHigh) {
+            onSend(ConsumerUsage.BRIGHTNESS_UP)
+        }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        GlassKey("|◀", 1f) { onSend(ConsumerUsage.PREVIOUS_TRACK) }
-        GlassKey("▶ Ⅱ", 1.25f, selected = true) { onSend(ConsumerUsage.PLAY_PAUSE) }
-        GlassKey("▶|", 1f) { onSend(ConsumerUsage.NEXT_TRACK) }
+        GlassKey("Previous", 1f, icon = Icons.Default.SkipPrevious) { onSend(ConsumerUsage.PREVIOUS_TRACK) }
+        GlassKey("Play or pause", 1.25f, selected = true, icon = Icons.Default.PlayArrow) {
+            onSend(ConsumerUsage.PLAY_PAUSE)
+        }
+        GlassKey("Next", 1f, icon = Icons.Default.SkipNext) { onSend(ConsumerUsage.NEXT_TRACK) }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        GlassKey("Vol −", 1f, repeatable = true) { onSend(ConsumerUsage.VOLUME_DOWN) }
-        GlassKey("Mute", 1.25f) { onSend(ConsumerUsage.MUTE) }
-        GlassKey("Vol +", 1f, repeatable = true) { onSend(ConsumerUsage.VOLUME_UP) }
+        GlassKey("Volume down", 1f, repeatable = true, icon = Icons.Default.VolumeDown) {
+            onSend(ConsumerUsage.VOLUME_DOWN)
+        }
+        GlassKey("Mute", 1.25f, icon = Icons.Default.VolumeOff) { onSend(ConsumerUsage.MUTE) }
+        GlassKey("Volume up", 1f, repeatable = true, icon = Icons.Default.VolumeUp) {
+            onSend(ConsumerUsage.VOLUME_UP)
+        }
     }
     Spacer(Modifier.height(37.dp))
 }
@@ -892,6 +913,13 @@ private fun RowScope.GlassKey(
     selected: Boolean = false,
     compact: Boolean = false,
     repeatable: Boolean = false,
+    /**
+     * Drawn instead of the label when present. Transport and brightness controls were spelled with
+     * whatever glyphs happened to resemble the symbol — an arrow and a bar for play/pause, a sun
+     * for brightness — which renders in whatever the system font decides, at whatever weight it
+     * decides. A real vector icon is the same shape on every device and at every key size.
+     */
+    icon: ImageVector? = null,
     onLongPress: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -969,7 +997,14 @@ private fun RowScope.GlassKey(
     Box(Modifier.weight(weight).height((if (compact) 28.dp else 37.dp) * scale).clip(shape)
         .background(Brush.verticalGradient(fillColors)).border(1.dp, border, shape).then(actionModifier),
         contentAlignment = Alignment.Center) {
-        if (label.isNotEmpty() && font == KeyboardFont.PIXEL) {
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = foreground,
+                modifier = Modifier.size((if (compact) 14.dp else 17.dp) * scale)
+            )
+        } else if (label.isNotEmpty() && font == KeyboardFont.PIXEL) {
             Canvas(Modifier.fillMaxSize()) {
                 val paint = android.graphics.Paint().apply {
                     isAntiAlias = false
