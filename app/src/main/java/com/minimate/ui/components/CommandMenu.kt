@@ -41,7 +41,14 @@ enum class CommandContext { TRACKPAD, AUDIO, CAMERA, KEYBOARD }
 fun buildCommandMenu(
     context: CommandContext,
     settings: TouchpadSettings,
-    onChange: (TouchpadSettings) -> Unit,
+    /**
+     * Applies a change to the settings as they are at the moment it runs.
+     *
+     * Deliberately a transform rather than a finished object: the menu is assembled from one
+     * snapshot, so handing back `settings.copy(...)` wrote that whole snapshot again and quietly
+     * reverted anything else that had moved in between.
+     */
+    onChange: ((TouchpadSettings) -> TouchpadSettings) -> Unit,
     onOpenSceneStudio: () -> Unit,
     onOpenKeyboardStudio: () -> Unit,
     onOpenEdgeStudio: () -> Unit,
@@ -60,18 +67,16 @@ fun buildCommandMenu(
             MenuBranch("Choose", ShaderFamily.entries.map { family ->
                 MenuBranch(family.label, scenesInFamily(family).map { option ->
                     MenuAction(option.label) {
-                        onChange(
-                            settings.copy(
-                                shaderSceneId = option.id,
-                                shaderParams = option.defaults,
-                                shaderPaletteIndex = 0
-                            )
-                        )
+                        onChange { current -> current.copy(
+                        shaderSceneId = option.id,
+                        shaderParams = option.defaults,
+                        shaderPaletteIndex = 0
+                    ) }
                     }
                 })
             }),
             MenuBranch("Palette", scene.palettes.mapIndexed { index, palette ->
-                MenuAction(palette.label) { onChange(settings.copy(shaderPaletteIndex = index)) }
+                MenuAction(palette.label) { onChange { current -> current.copy(shaderPaletteIndex = index) } }
             }),
             MenuBranch("Tune", scene.params.mapIndexed { index, param ->
                 val values = settings.shaderParams.takeIf { it.size == scene.params.size } ?: scene.defaults
@@ -81,10 +86,17 @@ fun buildCommandMenu(
                     param.min..param.max,
                     "%.2f".format(values.getOrElse(index) { param.default })
                 ) { next ->
-                    val updated = values.toMutableList()
-                    while (updated.size < scene.params.size) updated += 0f
-                    updated[index] = next
-                    onChange(settings.copy(shaderParams = updated))
+                    onChange { current ->
+                        // Read from the settings as they are now. Building this list from the copy
+                        // captured when the menu was assembled meant moving one control wrote back
+                        // every other control's older value along with it, so they undid each other.
+                        val base = current.shaderParams.takeIf { it.size == scene.params.size }
+                            ?: scene.defaults
+                        val updated = base.toMutableList()
+                        while (updated.size < scene.params.size) updated += 0f
+                        updated[index] = next
+                        current.copy(shaderParams = updated)
+                    }
                 }
             }),
             MenuBranch("Filters", ThemeFilter.entries.map { filter ->
@@ -93,38 +105,36 @@ fun buildCommandMenu(
                     if (filter == ThemeFilter.NONE) settings.themeFilters.isEmpty()
                     else filter in settings.themeFilters
                 ) {
-                    onChange(
-                        settings.copy(
-                            themeFilters = when {
-                                filter == ThemeFilter.NONE -> emptyList()
-                                filter in settings.themeFilters -> settings.themeFilters - filter
-                                else -> settings.themeFilters + filter
-                            }
-                        )
-                    )
+                    onChange { current -> current.copy(
+                    themeFilters = when {
+                        filter == ThemeFilter.NONE -> emptyList()
+                        filter in settings.themeFilters -> settings.themeFilters - filter
+                        else -> settings.themeFilters + filter
+                    }
+                ) }
                 }
             }),
             MenuBranch("Look", listOf(
                 MenuSlider(
                     "Aberration", settings.shaderAberration, 0f..2f,
                     "%.1f".format(settings.shaderAberration)
-                ) { onChange(settings.copy(shaderAberration = it)) },
+                ) { onChange { current -> current.copy(shaderAberration = it) } },
                 MenuSlider(
                     "Grain", settings.shaderGrain, 0f..1f,
                     "%.2f".format(settings.shaderGrain)
-                ) { onChange(settings.copy(shaderGrain = it)) }
+                ) { onChange { current -> current.copy(shaderGrain = it) } }
             )),
             MenuBranch("Motion", buildList {
                 BackgroundAnimation.entries.forEach { motion ->
                     add(MenuToggle(motion.label, settings.backgroundAnimation == motion) {
-                        onChange(settings.copy(backgroundAnimation = motion))
+                        onChange { current -> current.copy(backgroundAnimation = motion) }
                     })
                 }
                 add(
                     MenuSlider(
                         "Touch", settings.shaderTouchStrength, 0f..2f,
                         "%.1f".format(settings.shaderTouchStrength)
-                    ) { onChange(settings.copy(shaderTouchStrength = it)) }
+                    ) { onChange { current -> current.copy(shaderTouchStrength = it) } }
                 )
             })
         )
@@ -134,7 +144,7 @@ fun buildCommandMenu(
         "Panels", listOf(
             MenuBranch("Theme", panelThemes.mapIndexed { index, theme ->
                 MenuToggle(theme.label, index == settings.panelThemeIndex) {
-                    onChange(settings.copy(panelThemeIndex = index))
+                    onChange { current -> current.copy(panelThemeIndex = index) }
                 }
             }),
             // Arranging a panel means arranging a specific one, and the panel has to be on
@@ -147,10 +157,10 @@ fun buildCommandMenu(
             )),
             MenuBranch("Reset", listOf(
                 MenuAction("Audio panel") {
-                    onChange(settings.copy(audioPanelX = .5f, audioPanelY = .46f, audioPanelScale = 1f))
+                    onChange { current -> current.copy(audioPanelX = .5f, audioPanelY = .46f, audioPanelScale = 1f) }
                 },
                 MenuAction("Camera panel") {
-                    onChange(settings.copy(cameraPanelX = .5f, cameraPanelY = .46f, cameraPanelScale = 1f))
+                    onChange { current -> current.copy(cameraPanelX = .5f, cameraPanelY = .46f, cameraPanelScale = 1f) }
                 }
             ))
         )
@@ -160,57 +170,57 @@ fun buildCommandMenu(
         "Trackpad", listOf(
             MenuBranch("Movement", listOf(
                 MenuSlider("Speed", settings.trackingSpeed, .4f..2.5f, "%.2f".format(settings.trackingSpeed)) {
-                    onChange(settings.copy(trackingSpeed = it))
+                    onChange { current -> current.copy(trackingSpeed = it) }
                 },
                 MenuSlider("Acceleration", settings.acceleration, .5f..2.5f, "%.2f".format(settings.acceleration)) {
-                    onChange(settings.copy(acceleration = it))
+                    onChange { current -> current.copy(acceleration = it) }
                 },
                 MenuToggle("Invert vertical", settings.invertCursorY) {
-                    onChange(settings.copy(invertCursorY = it))
+                    onChange { current -> current.copy(invertCursorY = it) }
                 }
             )),
             MenuBranch("Scrolling", listOf(
                 MenuSlider("Speed", settings.scrollSpeed, .1f..2f, "%.2f".format(settings.scrollSpeed)) {
-                    onChange(settings.copy(scrollSpeed = it))
+                    onChange { current -> current.copy(scrollSpeed = it) }
                 },
                 MenuToggle("Natural", settings.naturalScrolling) {
-                    onChange(settings.copy(naturalScrolling = it))
+                    onChange { current -> current.copy(naturalScrolling = it) }
                 },
                 MenuToggle("Momentum", settings.momentumScrolling) {
-                    onChange(settings.copy(momentumScrolling = it))
+                    onChange { current -> current.copy(momentumScrolling = it) }
                 }
             )),
             MenuBranch("Gestures", listOf(
-                MenuToggle("Tap to click", settings.tapToClick) { onChange(settings.copy(tapToClick = it)) },
+                MenuToggle("Tap to click", settings.tapToClick) { onChange { current -> current.copy(tapToClick = it) } },
                 MenuToggle("Two-finger right click", settings.twoFingerRightClick) {
-                    onChange(settings.copy(twoFingerRightClick = it))
+                    onChange { current -> current.copy(twoFingerRightClick = it) }
                 },
                 MenuToggle("Double-tap drag", settings.doubleTapDrag) {
-                    onChange(settings.copy(doubleTapDrag = it))
+                    onChange { current -> current.copy(doubleTapDrag = it) }
                 },
                 MenuChoice(
                     "Haptics",
                     HapticIntensity.entries.map { it.name.lowercase().replaceFirstChar(Char::uppercase) },
                     settings.hapticIntensity.ordinal
-                ) { index -> onChange(settings.copy(hapticIntensity = HapticIntensity.entries[index])) }
+                ) { index -> onChange { current -> current.copy(hapticIntensity = HapticIntensity.entries[index]) } }
             )),
             MenuBranch("Edges", listOf(
                 MenuToggle("Scroll rail", settings.edgeScrollEnabled) {
-                    onChange(settings.copy(edgeScrollEnabled = it))
+                    onChange { current -> current.copy(edgeScrollEnabled = it) }
                 },
                 MenuToggle("Corner right click", settings.edgeRightClickEnabled) {
-                    onChange(settings.copy(edgeRightClickEnabled = it))
+                    onChange { current -> current.copy(edgeRightClickEnabled = it) }
                 },
                 MenuChoice(
                     "Rail side",
                     EdgeControlSide.entries.map { it.label },
                     settings.edgeControlSide.ordinal
-                ) { index -> onChange(settings.copy(edgeControlSide = EdgeControlSide.entries[index])) },
+                ) { index -> onChange { current -> current.copy(edgeControlSide = EdgeControlSide.entries[index]) } },
                 MenuChoice(
                     "Rail material",
                     EdgeControlMaterial.entries.map { it.label },
                     settings.edgeRailMaterial.ordinal
-                ) { index -> onChange(settings.copy(edgeRailMaterial = EdgeControlMaterial.entries[index])) },
+                ) { index -> onChange { current -> current.copy(edgeRailMaterial = EdgeControlMaterial.entries[index]) } },
                 MenuAction("Open Buttons Studio") { onOpenEdgeStudio() }
             ))
         )
@@ -221,24 +231,24 @@ fun buildCommandMenu(
             MenuAction("Open Keyboard Studio") { onOpenKeyboardStudio() },
             MenuBranch("Look", listOf(
                 MenuChoice("Theme", KeyboardTheme.entries.map { it.label }, settings.keyboardTheme.ordinal) {
-                    onChange(settings.withKeyboardTheme(KeyboardTheme.entries[it]))
+                    onChange { current -> current.withKeyboardTheme(KeyboardTheme.entries[it]) }
                 },
                 MenuChoice("Trail", KeyboardTrail.entries.map { it.label }, settings.keyboardTrail.ordinal) {
-                    onChange(settings.copy(keyboardTrail = KeyboardTrail.entries[it]))
+                    onChange { current -> current.copy(keyboardTrail = KeyboardTrail.entries[it]) }
                 },
                 MenuChoice("Font", KeyboardFont.entries.map { it.label }, settings.keyboardFont.ordinal) {
-                    onChange(settings.copy(keyboardFont = KeyboardFont.entries[it]))
+                    onChange { current -> current.copy(keyboardFont = KeyboardFont.entries[it]) }
                 },
-                MenuToggle("Opaque", settings.keyboardOpaque) { onChange(settings.copy(keyboardOpaque = it)) },
+                MenuToggle("Opaque", settings.keyboardOpaque) { onChange { current -> current.copy(keyboardOpaque = it) } },
                 MenuToggle("Vibration", settings.keyboardHapticsEnabled) {
-                    onChange(settings.copy(keyboardHapticsEnabled = it))
+                    onChange { current -> current.copy(keyboardHapticsEnabled = it) }
                 },
                 MenuSlider("Size", settings.keyboardScale, .8f..1.3f, "%.2f".format(settings.keyboardScale)) {
-                    onChange(settings.copy(keyboardScale = it))
+                    onChange { current -> current.copy(keyboardScale = it) }
                 }
             )),
             MenuChoice("Language", KeyboardLanguage.entries.map { it.label }, settings.keyboardLanguage.ordinal) {
-                onChange(settings.copy(keyboardLanguage = KeyboardLanguage.entries[it]))
+                onChange { current -> current.copy(keyboardLanguage = KeyboardLanguage.entries[it]) }
             }
         )
     )
@@ -246,14 +256,14 @@ fun buildCommandMenu(
     val audioBranch = MenuBranch(
         "Audio", listOf(
             MenuToggle("Microphone", settings.audioMicrophoneEnabled) {
-                onChange(settings.copy(audioMicrophoneEnabled = it))
+                onChange { current -> current.copy(audioMicrophoneEnabled = it) }
             },
             MenuSlider("Mic gain", settings.audioMicrophoneGain, 0f..3f, "%.1fx".format(settings.audioMicrophoneGain)) {
-                onChange(settings.copy(audioMicrophoneGain = it))
+                onChange { current -> current.copy(audioMicrophoneGain = it) }
             },
             MenuBranch("Position", buildList {
                 add(MenuToggle("Auto", settings.audioPlacementAuto) {
-                    onChange(settings.copy(audioPlacementAuto = it))
+                    onChange { current -> current.copy(audioPlacementAuto = it) }
                 })
                 MicrophonePlacement.entries.forEach { placement ->
                     add(
@@ -261,38 +271,36 @@ fun buildCommandMenu(
                             placement.label,
                             !settings.audioPlacementAuto && settings.audioMicrophonePlacement == placement
                         ) {
-                            onChange(
-                                settings.copy(
-                                    audioPlacementAuto = false,
-                                    audioMicrophonePlacement = placement
-                                )
-                            )
+                            onChange { current -> current.copy(
+                            audioPlacementAuto = false,
+                            audioMicrophonePlacement = placement
+                        ) }
                         }
                     )
                 }
             }),
             MenuToggle("Speaker", settings.audioOutputEnabled) {
-                onChange(settings.copy(audioOutputEnabled = it))
+                onChange { current -> current.copy(audioOutputEnabled = it) }
             },
             MenuSlider("Volume", settings.audioOutputVolume, 0f..1f, "${(settings.audioOutputVolume * 100).toInt()}%") {
-                onChange(settings.copy(audioOutputVolume = it))
+                onChange { current -> current.copy(audioOutputVolume = it) }
             }
         )
     )
 
     val cameraBranch = MenuBranch(
         "Camera", listOf(
-            MenuToggle("Enabled", settings.webcamEnabled) { onChange(settings.copy(webcamEnabled = it)) },
+            MenuToggle("Enabled", settings.webcamEnabled) { onChange { current -> current.copy(webcamEnabled = it) } },
             MenuBranch("Capture", listOf(
                 MenuChoice("Size", WebcamResolution.entries.map { it.label }, settings.webcamResolution.ordinal) {
-                    onChange(settings.copy(webcamResolution = WebcamResolution.entries[it]))
+                    onChange { current -> current.copy(webcamResolution = WebcamResolution.entries[it]) }
                 },
                 MenuChoice(
                     "Frame rate",
                     listOf("15", "20", "24", "30"),
                     listOf(15, 20, 24, 30).indexOf(settings.webcamFps).coerceAtLeast(0)
-                ) { index -> onChange(settings.copy(webcamFps = listOf(15, 20, 24, 30)[index])) },
-                MenuToggle("Mirror", settings.webcamMirror) { onChange(settings.copy(webcamMirror = it)) }
+                ) { index -> onChange { current -> current.copy(webcamFps = listOf(15, 20, 24, 30)[index]) } },
+                MenuToggle("Mirror", settings.webcamMirror) { onChange { current -> current.copy(webcamMirror = it) } }
             )),
             MenuInfo(
                 "Heat",
@@ -304,10 +312,10 @@ fun buildCommandMenu(
     val pillBranch = MenuBranch(
         "Pill", listOf(
             MenuAction("Move & size") { onOpenPillEditor() },
-            MenuToggle("24-hour", settings.show24HourFormat) { onChange(settings.copy(show24HourFormat = it)) },
-            MenuToggle("Seconds", settings.showSeconds) { onChange(settings.copy(showSeconds = it)) },
+            MenuToggle("24-hour", settings.show24HourFormat) { onChange { current -> current.copy(show24HourFormat = it) } },
+            MenuToggle("Seconds", settings.showSeconds) { onChange { current -> current.copy(showSeconds = it) } },
             MenuToggle("Battery", settings.showBatteryPercentage) {
-                onChange(settings.copy(showBatteryPercentage = it))
+                onChange { current -> current.copy(showBatteryPercentage = it) }
             }
         )
     )

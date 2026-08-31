@@ -58,6 +58,8 @@ private enum class StudioTab(val label: String) {
 fun SceneStudioOverlay(
     settings: TouchpadSettings,
     onSettingsChange: (TouchpadSettings) -> Unit,
+    /** Applies a change against the settings as they are when it runs, not as they were composed. */
+    onLiveChange: ((TouchpadSettings) -> TouchpadSettings) -> Unit,
     onPreviewTouchEvent: (MotionEvent) -> Boolean,
     onKeep: () -> Unit,
     onCancel: () -> Unit,
@@ -134,10 +136,19 @@ fun SceneStudioOverlay(
                                     value = value.coerceIn(param.min, param.max),
                                     range = param.min..param.max,
                                     onChange = { next ->
-                                        val updated = values.toMutableList()
-                                        while (updated.size < scene.params.size) updated += 0f
-                                        updated[index] = next
-                                        onSettingsChange(settings.copy(shaderParams = updated))
+                                        // Built from the settings as they are now. Using the list
+                                        // captured when this row was composed wrote every other
+                                        // control's older value back alongside this one, so moving
+                                        // a second slider undid the first.
+                                        onLiveChange { current ->
+                                            val base = current.shaderParams
+                                                .takeIf { it.size == scene.params.size }
+                                                ?: scene.defaults
+                                            val updated = base.toMutableList()
+                                            while (updated.size < scene.params.size) updated += 0f
+                                            updated[index] = next
+                                            current.copy(shaderParams = updated)
+                                        }
                                     },
                                     modifier = Modifier.weight(1f).height(22.dp)
                                 )

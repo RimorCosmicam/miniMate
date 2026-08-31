@@ -579,6 +579,9 @@ fun TouchpadScreen(
             SceneStudioOverlay(
                 settings = settings,
                 onSettingsChange = touchpadEngine::updateSettings,
+                onLiveChange = { transform ->
+                    touchpadEngine.updateSettings(transform(touchpadEngine.settings.value))
+                },
                 onPreviewTouchEvent = touchpadEngine::onPreviewTouchEvent,
                 onKeep = {
                     themeTesterOriginal = null
@@ -624,7 +627,10 @@ fun TouchpadScreen(
                         else -> CommandContext.TRACKPAD
                     },
                     settings = settings,
-                    onChange = touchpadEngine::updateSettings,
+                    // Applied against the live settings, not the copy this menu was built from.
+                    onChange = { transform ->
+                        touchpadEngine.updateSettings(transform(touchpadEngine.settings.value))
+                    },
                     onOpenSceneStudio = {
                         themeTesterOriginal = settings
                         showSettingsSheet = false
