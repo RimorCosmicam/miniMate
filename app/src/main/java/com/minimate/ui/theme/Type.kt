@@ -9,16 +9,20 @@ import androidx.compose.ui.unit.sp
 import com.minimate.R
 
 /**
- * Mont, the app's typeface, in the three weights available: Light, Regular and Black.
+ * Mont, the app's typeface, across five weights.
  *
- * Compose resolves a requested weight to the nearest supplied one, so asking for Medium or
- * SemiBold lands on Regular and asking for Bold lands on Black. That is the intended behaviour
- * here rather than a compromise — the family has no middle weights, and the jump from Regular to
- * Black is what gives the interface its contrast.
+ * Compose picks the nearest supplied weight for anything not listed, so Medium resolves to
+ * SemiBold and Bold resolves to Black. With SemiBold present the middle of the range no longer
+ * collapses onto Regular, which is what made headings and body text read alike.
+ *
+ * Thin is genuinely thin at small sizes on a cover display — worth reserving for large type and
+ * for surfaces where the text is decorative rather than something to be read at a glance.
  */
 val Mont = FontFamily(
+    Font(R.font.mont_thin, FontWeight.Thin),
     Font(R.font.mont_light, FontWeight.Light),
     Font(R.font.mont_regular, FontWeight.Normal),
+    Font(R.font.mont_semibold, FontWeight.SemiBold),
     Font(R.font.mont_black, FontWeight.Black)
 )
 
