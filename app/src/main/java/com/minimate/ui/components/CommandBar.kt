@@ -27,15 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.minimate.R
+import com.minimate.ui.theme.Mont
 
-/** Mont Black, the menu's only typeface. */
-val MenuFont = FontFamily(Font(R.font.mont_black, FontWeight.Black))
+/** The menu is set entirely in Mont Black. */
 private val MenuWeight = FontWeight.Black
 
 /** Nodes of the command tree. Depth is capped at three by construction: the third level is a leaf. */
@@ -188,7 +185,7 @@ private fun MenuColumn(
                     Text(
                         node.body,
                         color = Color.White.copy(.62f),
-                        fontFamily = MenuFont,
+                        fontFamily = Mont,
                         fontWeight = MenuWeight,
                         fontSize = 8.sp,
                         lineHeight = 11.sp
@@ -220,7 +217,7 @@ private fun Label(text: String, modifier: Modifier = Modifier, dim: Boolean = fa
         text,
         modifier = modifier,
         color = if (dim) Color.White.copy(.55f) else Color.White,
-        fontFamily = MenuFont,
+        fontFamily = Mont,
         fontWeight = MenuWeight,
         fontSize = 10.sp,
         maxLines = 1
