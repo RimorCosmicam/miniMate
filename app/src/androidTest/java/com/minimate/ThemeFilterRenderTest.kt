@@ -38,11 +38,30 @@ class ThemeFilterRenderTest {
         }
     }
 
+    /**
+     * The same check with the resolution never supplied.
+     *
+     * This is the actual shape of the bug that blacked out CRT, kaleidoscope, fisheye and mirror
+     * prism: the uniform was being written to the shader after its RenderEffect already existed,
+     * so it never arrived, and every filter that divides by it collapsed. A filter must degrade to
+     * an unfiltered frame when it does not know how big it is, never to black.
+     */
+    @Test
+    fun noFilterRendersBlackBeforeItsSizeArrives() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val report = ThemeFilter.entries.map { it to brightnessThrough(it, withResolution = false) }
+        val dark = report.filter { (_, lit) -> lit < 0.02f }
+        check(dark.isEmpty()) {
+            "these filters go black when the layer size has not reached them yet:\n" +
+                report.joinToString("\n") { (f, lit) -> "  ${f.name} = %.4f".format(lit) }
+        }
+    }
+
     /** Mean luminance of a mid-grey, clearly-lit test image put through the filter. */
-    private fun brightnessThrough(filter: ThemeFilter): Float {
+    private fun brightnessThrough(filter: ThemeFilter, withResolution: Boolean = true): Float {
         val shader = RuntimeShader(filterShaderSource(filter)).apply {
             setFloatUniform("uTime", 3.25f)
-            setFloatUniform("uResolution", size.toFloat(), size.toFloat())
+            if (withResolution) setFloatUniform("uResolution", size.toFloat(), size.toFloat())
         }
         val reader = ImageReader.newInstance(
             size, size, PixelFormat.RGBA_8888, 2,

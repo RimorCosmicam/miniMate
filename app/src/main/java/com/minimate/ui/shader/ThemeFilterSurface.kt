@@ -55,6 +55,15 @@ private const val COMMON_UNIFORMS = """
     half4 tapUV(float2 uv) { return tap(uv * uResolution); }
 
     float rnd(float2 seed) { return fract(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453); }
+
+    /**
+     * True before the layer's size has reached the shader. Every filter that divides by the
+     * resolution has to bail out here: dividing pixel coordinates by zero sends the sampled
+     * coordinate to infinity, and a lookup at infinity is transparent, which composites to a
+     * completely black screen. That is one bug, not six, and it took out CRT, kaleidoscope,
+     * fisheye and mirror prism together.
+     */
+    bool sizeUnknown() { return uResolution.x < 2.0 || uResolution.y < 2.0; }
 """
 
 /** The exact source a filter compiles, so a test can check it without driving the UI. */
@@ -73,6 +82,7 @@ private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     """
     ThemeFilter.CRT -> """
         half4 main(float2 p) {
+            if (sizeUnknown()) return content.eval(p);
             float2 uv=p/uResolution,q=uv-.5;float r2=dot(q,q);float2 curved=(.5+q*(1.0+r2*.22))*uResolution;
             half4 c=tap(curved);float scan=.74+.26*sin(p.y*3.14159);float stripe=mod(floor(p.x),3.0);
             half3 mask=stripe<1.0?half3(1.0,.66,.58):(stripe<2.0?half3(.58,1.0,.66):half3(.66,.58,1.0));
@@ -150,6 +160,7 @@ private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     """
     ThemeFilter.KALEIDOSCOPE -> """
         half4 main(float2 p) {
+            if (sizeUnknown()) return content.eval(p);
             float2 uv=p/uResolution;float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);
             float r=length(q),a=atan(q.y,q.x);a=abs(fract(a/6.283185*8.0+.5)-.5)*6.283185/8.0;
             float2 sampleP=(.5+float2(cos(a),sin(a))*r/float2(uResolution.x/uResolution.y,1.0))*uResolution;
@@ -158,6 +169,7 @@ private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     """
     ThemeFilter.FISHEYE -> """
         half4 main(float2 p) {
+            if (sizeUnknown()) return content.eval(p);
             float2 uv=p/uResolution;float2 q=uv-.5;float r2=dot(q,q);
             float2 sampleP=(.5+q*(1.0+r2*1.4+r2*r2))*uResolution;
             return tap(sampleP);
@@ -187,6 +199,7 @@ private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     """
     ThemeFilter.FILM_GRAIN -> """
         half4 main(float2 p) {
+            if (sizeUnknown()) return content.eval(p);
             half4 c=tap(p);float2 uv=p/uResolution;
             float grain=fract(sin(dot(p+floor(uTime*24),float2(12.9898,78.233)))*43758.5453)-.5;
             float vig=1.0-smoothstep(.3,.75,length(uv-.5));
@@ -195,6 +208,7 @@ private fun shaderBodyFor(filter: ThemeFilter): String = when (filter) {
     """
     ThemeFilter.MIRROR_PRISM -> """
         half4 main(float2 p) {
+            if (sizeUnknown()) return content.eval(p);
             float2 uv=p/uResolution;float2 q=(uv-.5)*float2(uResolution.x/uResolution.y,1.0);
             float a=atan(q.y,q.x),r=length(q);a=abs(fract(a/6.283185*6.0+.5)-.5)*6.283185/6.0;
             float2 sampleP=(.5+float2(cos(a),sin(a))*abs(fract(r*3.0)-.5)*.62/float2(uResolution.x/uResolution.y,1.0))*uResolution;
