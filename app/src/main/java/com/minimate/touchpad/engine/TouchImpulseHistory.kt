@@ -6,10 +6,10 @@ package com.minimate.touchpad.engine
  */
 internal class TouchImpulseHistory(
     private val capacity: Int = 8,
-    // The last eight released contacts are scene memory, not short-lived cursor particles.
-    // They remain until newer contacts replace them so themes can keep dents, currents,
-    // scrambled cells, planted objects, and other persistent changes.
-    private val retentionSeconds: Float = Float.POSITIVE_INFINITY
+    // A released contact is an impulse that decays, not a permanent mark. Keeping them forever
+    // left a fixed disturbance everywhere the screen had ever been touched; they are dropped once
+    // their visual decay has run out, slightly after it is no longer visible.
+    private val retentionSeconds: Float = 1.8f
 ) {
     private val history = LinkedHashMap<Int, TouchPoint>()
     private val activePointers = mutableMapOf<Int, Int>()

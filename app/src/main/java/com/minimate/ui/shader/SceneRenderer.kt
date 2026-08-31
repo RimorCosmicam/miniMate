@@ -54,7 +54,7 @@ uniform float3 uC1;
 uniform float3 uC2;
 uniform float3 uC3;
 uniform float2 uTouches[8];
-uniform float uTouchStarts[8];
+uniform float uTouchAges[8];
 uniform float uTouchActive[8];
 uniform float uTouchCount;
 uniform float uTouchStrength;
@@ -90,28 +90,18 @@ float glyph(float id, float2 g){
 float2 touchWarp(float2 q){
     for(int i=0;i<8;i++){
         if(float(i) < uTouchCount){
-            float age = max(0.0, uNow - uTouchStarts[i]);
+            float age = uTouchAges[i];
             float2 d = q - uTouches[i];
             float l = max(length(d), 0.008);
-            float life = max(uTouchActive[i], exp(-age * 1.5));
-            float wave = sin(l * 42.0 - age * 7.0) * exp(-l * 7.0) * life;
-            q += d / l * wave * 0.012 * uTouchStrength;
+            // Held contacts stay at full strength; released ones fade over about a second.
+            float life = max(uTouchActive[i], exp(-age * 2.6));
+            float wave = sin(l * 40.0 - age * 8.0) * exp(-l * 6.0) * life;
+            q += d / l * wave * 0.030 * uTouchStrength;
         }
     }
     return q;
 }
 
-float touchGlow(float2 q){
-    float m = 0.0;
-    for(int i=0;i<8;i++){
-        if(float(i) < uTouchCount){
-            float age = max(0.0, uNow - uTouchStarts[i]);
-            float life = max(uTouchActive[i], exp(-age * 1.2));
-            m += exp(-distance(q, uTouches[i]) * 9.0) * life;
-        }
-    }
-    return clamp(m, 0.0, 1.5) * uTouchStrength;
-}
 """
 
 private const val FOOTER = """
@@ -122,7 +112,6 @@ half4 main(float2 fragCoord){
     float2 wp = touchWarp(p);
     float2 wuv = uv + (wp - p);
     float3 c = scene(wp, wuv, uTime);
-    c += uC3 * touchGlow(p) * 0.30;
     // Gentle corner falloff. Keeps the cover display's rounded corners from looking cropped.
     float r = length(p);
     c *= 1.0 - 0.22 * r * r;
@@ -247,18 +236,21 @@ private fun SceneAgsl(
             runtime.setFloatUniform("uC$i", c[0], c[1], c[2])
         }
 
+        val nowSeconds = android.os.SystemClock.elapsedRealtime() / 1000f
         val points = touchPoints.takeLast(8)
         val positions = FloatArray(16) { -10f }
-        val starts = FloatArray(8)
+        val ages = FloatArray(8) { 99f }
         val active = FloatArray(8)
         points.forEachIndexed { index, point ->
             positions[index * 2] = (point.x / size.width - 0.5f) * (size.width / minOf(size.width, size.height))
             positions[index * 2 + 1] = (point.y / size.height - 0.5f) * (size.height / minOf(size.width, size.height))
-            starts[index] = point.startedAtSeconds
+            // Stamped with elapsedRealtime, so the age has to be measured against the same clock.
+            // Comparing it to animation time made every released touch read as brand new.
+            ages[index] = (nowSeconds - point.startedAtSeconds).coerceAtLeast(0f)
             active[index] = if (point.active) 1f else 0f
         }
         runtime.setFloatUniform("uTouches", positions)
-        runtime.setFloatUniform("uTouchStarts", starts)
+        runtime.setFloatUniform("uTouchAges", ages)
         runtime.setFloatUniform("uTouchActive", active)
         runtime.setFloatUniform("uTouchCount", points.size.toFloat())
 
