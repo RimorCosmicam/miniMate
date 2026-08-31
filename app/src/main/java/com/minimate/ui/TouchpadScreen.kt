@@ -66,6 +66,7 @@ import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.CommandBar
+import com.minimate.ui.components.CommandContext
 import com.minimate.ui.components.MONT_SURFACE_ALPHA
 import com.minimate.ui.components.PanelTarget
 import com.minimate.ui.theme.Mont
@@ -612,6 +613,12 @@ fun TouchpadScreen(
         if (showSettingsSheet) {
             CommandBar(
                 root = buildCommandMenu(
+                    context = when {
+                        showAudio -> CommandContext.AUDIO
+                        showWebcam -> CommandContext.CAMERA
+                        showKeyboard -> CommandContext.KEYBOARD
+                        else -> CommandContext.TRACKPAD
+                    },
                     settings = settings,
                     onChange = touchpadEngine::updateSettings,
                     onOpenSceneStudio = {
@@ -695,6 +702,9 @@ fun TouchpadScreen(
             amoledMode = isDimMode,
             onTap = {
                 touchpadEngine.hapticEngine.playModeTransition(settings.hapticIntensity)
+                // The bar lists what the page in front of it can do, so it cannot survive a change
+                // of page — it would be offering the previous screen's controls.
+                showSettingsSheet = false
                 when {
                     showWebcam -> {
                         showWebcam = false

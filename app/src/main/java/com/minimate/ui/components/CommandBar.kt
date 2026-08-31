@@ -5,13 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -82,7 +83,11 @@ fun CommandBar(
     val second = secondList.getOrNull(secondIndex)
     val thirdList = (second as? MenuBranch)?.children.orEmpty()
 
-    Box(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        // A third of the display is the ceiling, not the height. Filling it regardless meant a
+        // short menu drew a black band with its list ending partway down and nothing under it;
+        // the bar is now exactly as tall as what it has to say, up to that limit.
+        val ceiling = maxHeight * .33f
         // Tapping away closes, so the bar never traps the screen.
         Box(Modifier.fillMaxSize().clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onDismiss() })
 
@@ -90,7 +95,7 @@ fun CommandBar(
             Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .fillMaxHeight(.33f)
+                .heightIn(max = ceiling)
                 // Just short of opaque, so the scene reads faintly behind the bar.
                 .background(Color.Black.copy(alpha = MONT_SURFACE_ALPHA))
                 .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 10.dp)
@@ -135,7 +140,6 @@ private fun MenuColumn(
 ) {
     Column(
         modifier
-            .fillMaxHeight()
             .verticalScroll(rememberScrollState())
             .padding(end = 16.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp)
