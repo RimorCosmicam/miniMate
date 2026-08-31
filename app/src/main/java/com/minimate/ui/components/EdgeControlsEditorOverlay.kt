@@ -59,14 +59,17 @@ fun EdgeControlsEditorOverlay(
             subtitle = "Live edge controls",
             onCancel = onCancel,
             onDone = onDone,
-            modifier = Modifier.align(Alignment.TopStart)
+            // Low and to the side. The right-click corner sits at the top edge and the scroll
+            // rail runs the full height, so a panel anchored to the top covers the very controls
+            // being resized; the bottom margin keeps it clear of the camera cutout as well.
+            modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 96.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 EdgeEditorTarget.entries.forEach { option ->
                     StudioChip(option.label, target == option, Modifier.weight(1f)) { target = option }
                 }
             }
-            Text("Optics", color = Color.White.copy(.55f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+            StudioLabel("OPTICS", dim = true, size = 11)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 EdgeControlMaterial.entries.forEach { material ->
                     val selected = if (target == EdgeEditorTarget.RAIL) settings.edgeRailMaterial == material else settings.edgeCornerMaterial == material
@@ -78,15 +81,16 @@ fun EdgeControlsEditorOverlay(
                     }
                 }
             }
+            // The two carry their own size. Editing one never moves the other.
             val scale = if (target == EdgeEditorTarget.RAIL) settings.edgeRailScale else settings.edgeCornerScale
-            StudioSizeSlider(scale) { next ->
+            StudioSizeSlider("${target.label} size", scale) { next ->
                 onSettingsChange(
                     if (target == EdgeEditorTarget.RAIL) settings.copy(edgeRailScale = next)
                     else settings.copy(edgeCornerScale = next)
                 )
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Pair layout", color = Color.White.copy(.55f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                StudioLabel("SIDE", dim = true, size = 11)
                 Spacer(Modifier.width(8.dp))
                 EdgeControlSide.entries.forEach { side ->
                     Box(Modifier.weight(1f).padding(horizontal = 2.dp)) {
@@ -101,11 +105,11 @@ fun EdgeControlsEditorOverlay(
 }
 
 @Composable
-private fun StudioSizeSlider(value: Float, onChange: (Float) -> Unit) {
+private fun StudioSizeSlider(label: String, value: Float, onChange: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Size", color = Color.White.copy(.55f), fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
-            Text("${(value * 100f).roundToInt()}%", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+            StudioLabel(label.uppercase(), dim = true, size = 11)
+            StudioLabel("${(value * 100f).roundToInt()}%", size = 11)
         }
         Slider(
             value = value.coerceIn(.65f, 1.8f),

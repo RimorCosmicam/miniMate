@@ -585,6 +585,27 @@ fun TouchpadScreen(
             )
         }
 
+        // Layer 7b: Buttons Studio, live over the rail and corner it is editing.
+        //
+        // This was imported and never rendered. Opening it switched the rail and corner on — that
+        // is what `|| showEdgeThemeEditor` above does — so the controls appeared and the editor
+        // itself did not, which looked exactly like sliders that had stopped working.
+        if (showEdgeThemeEditor) {
+            EdgeControlsEditorOverlay(
+                settings = settings,
+                onSettingsChange = touchpadEngine::updateSettings,
+                onCancel = {
+                    edgeThemeEditorOriginal?.let(touchpadEngine::updateSettings)
+                    edgeThemeEditorOriginal = null
+                    showEdgeThemeEditor = false
+                },
+                onDone = {
+                    edgeThemeEditorOriginal = null
+                    showEdgeThemeEditor = false
+                }
+            )
+        }
+
         // Layer 8: Command bar
         if (showSettingsSheet) {
             CommandBar(
