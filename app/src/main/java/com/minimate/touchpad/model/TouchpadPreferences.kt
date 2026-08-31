@@ -83,6 +83,7 @@ class TouchpadPreferences(context: Context) {
                 })
                 put("keyboardTheme", settings.keyboardTheme.name)
                 put("keyboardLanguage", settings.keyboardLanguage.name)
+                put("hostPlatform", settings.hostPlatform.name)
                 put("keyboardTrail", settings.keyboardTrail.name)
                 put("keyboardFont", settings.keyboardFont.name)
                 put("keyboardFontWeight", settings.keyboardFontWeight.name)
@@ -238,6 +239,9 @@ class TouchpadPreferences(context: Context) {
                 keyboardTheme = runCatching {
                     KeyboardTheme.valueOf(json.optString("keyboardTheme", "MONT"))
                 }.getOrDefault(KeyboardTheme.MONT),
+                hostPlatform = runCatching {
+                    HostPlatform.valueOf(json.optString("hostPlatform", "MAC"))
+                }.getOrDefault(HostPlatform.MAC),
                 keyboardLanguage = runCatching {
                     KeyboardLanguage.valueOf(json.optString("keyboardLanguage", "ENGLISH"))
                 }.getOrDefault(KeyboardLanguage.ENGLISH),

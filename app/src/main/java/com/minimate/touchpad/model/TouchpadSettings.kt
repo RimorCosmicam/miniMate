@@ -358,6 +358,17 @@ enum class KeyboardFontWeight(val label: String) {
     BOLD("Bold")
 }
 
+/**
+ * Which machine is on the other end.
+ *
+ * The HID usages are identical either way — what Apple calls Command and Option, the standard
+ * calls GUI and Alt — so this changes what the modifiers are called, not what they send.
+ */
+enum class HostPlatform(val label: String, val guiKey: String, val altKey: String, val ctrlKey: String) {
+    MAC("macOS", "\u2318", "\u2325", "\u2303"),
+    WINDOWS("Windows", "Win", "Alt", "Ctrl")
+}
+
 enum class KeyboardLanguage(val label: String, val shortLabel: String) {
     ENGLISH("English", "EN"),
     PORTUGUESE_BR("Português (Brasil)", "PT")
@@ -478,6 +489,7 @@ data class TouchpadSettings(
     val keyboardShortcuts: List<KeyboardShortcut> = DEFAULT_KEYBOARD_SHORTCUTS,
     val keyboardTheme: KeyboardTheme = KeyboardTheme.MONT,
     val keyboardLanguage: KeyboardLanguage = KeyboardLanguage.ENGLISH,
+    val hostPlatform: HostPlatform = HostPlatform.MAC,
     val keyboardTrail: KeyboardTrail = KeyboardTrail.AURORA,
     val keyboardFont: KeyboardFont = KeyboardFont.MONT,
     val keyboardFontWeight: KeyboardFontWeight = KeyboardFontWeight.BOLD,

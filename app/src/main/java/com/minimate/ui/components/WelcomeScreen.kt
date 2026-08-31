@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +43,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
+import com.minimate.touchpad.model.HostPlatform
 import com.minimate.ui.theme.Mont
 
 /** One thing the app needs, and whether it has it yet. */
@@ -58,7 +60,13 @@ private val Mustard = Color(0xFFD8A628)
  * through the widening gaps is whatever is behind it.
  */
 @Composable
-private fun MustardDiagonals(travel: Float, split: Float, modifier: Modifier = Modifier) {
+private fun MustardDiagonals(
+    travel: Float,
+    split: Float,
+    /** 0 leaves the bands as they are; 1 has the two colours exchanged. */
+    invert: Float = 0f,
+    modifier: Modifier = Modifier
+) {
     Canvas(modifier) {
         val spacing = 34.dp.toPx()
         val band = spacing * 0.5f
@@ -79,14 +87,16 @@ private fun MustardDiagonals(travel: Float, split: Float, modifier: Modifier = M
             }
         }
 
-        bands(Mustard, drift + exit)
-        bands(Color.Black, drift + band - exit)
+        bands(lerp(Mustard, Color.Black, invert), drift + exit)
+        bands(lerp(Color.Black, Mustard, invert), drift + band - exit)
     }
 }
 
 @Composable
 fun WelcomeScreen(
     permissions: List<PermissionItem>,
+    platform: HostPlatform,
+    onPlatform: (HostPlatform) -> Unit,
     onGrant: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier
@@ -96,9 +106,16 @@ fun WelcomeScreen(
         0f, 1f, infiniteRepeatable(tween(5200, easing = LinearEasing)), label = "stripes"
     )
     val everythingGranted = permissions.all { it.granted }
+    // Windows turns the ground inside out. It says nothing about Windows; it is simply the most
+    // obvious thing the screen can do to acknowledge that the answer changed.
+    val inverted by animateFloatAsState(
+        targetValue = if (platform == HostPlatform.WINDOWS) 1f else 0f,
+        animationSpec = tween(durationMillis = 260),
+        label = "platformInvert"
+    )
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
-        MustardDiagonals(travel, 0f, Modifier.fillMaxSize())
+        MustardDiagonals(travel, 0f, inverted, Modifier.fillMaxSize())
 
         Column(
             Modifier
@@ -161,7 +178,40 @@ fun WelcomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "SENDS TO",
+                        color = Color.White,
+                        fontFamily = Mont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Names the modifier keys. Both send the same codes.",
+                        color = Color.White.copy(.42f),
+                        fontFamily = Mont,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 9.sp
+                    )
+                }
+                HostPlatform.entries.forEach { option ->
+                    Text(
+                        option.label.uppercase(),
+                        modifier = Modifier
+                            .clickable { onPlatform(option) }
+                            .padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+                        color = Color.White.copy(if (option == platform) 1f else .38f),
+                        fontFamily = Mont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
 
             // Text alone, like every other commitment in this app. It stays dim until there is
             // nothing left to grant, so it reads as the end of the list rather than a way past it.

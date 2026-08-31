@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.KeyboardShortcut
+import com.minimate.touchpad.model.HostPlatform
 import com.minimate.touchpad.model.KeyboardLanguage
 import com.minimate.touchpad.model.KeyboardFont
 import com.minimate.touchpad.model.KeyboardFontWeight as KeyboardWeightSetting
@@ -89,7 +90,7 @@ private const val MOD_OPTION = 0x04
 private const val MOD_COMMAND = 0x08
 
 private enum class KeyboardPanel(val label: String) {
-    TYPE("Type"), SYMBOLS("123"), MAC("Mac"), SHORTCUTS("Shortcuts"), MEDIA("Media")
+    TYPE("Type"), SYMBOLS("123"), MAC("System"), SHORTCUTS("Shortcuts"), MEDIA("Media")
 }
 
 /** How long the release ring lives. Long enough to register, short enough not to trail typing. */
@@ -486,9 +487,10 @@ private fun SwipeTypingPanel(
         )
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        GlassKey("⌃", .82f, ctrl, onClick = onCtrl)
-        GlassKey("⌥", .82f, option, onClick = onOption)
-        GlassKey("⌘", .9f, command, onClick = onCommand)
+        val host = LocalHostPlatform.current
+        GlassKey(host.ctrlKey, .82f, ctrl, onClick = onCtrl)
+        GlassKey(host.altKey, .82f, option, onClick = onOption)
+        GlassKey(host.guiKey, .9f, command, onClick = onCommand)
         GlassKey(language.shortLabel, 4.2f, onLongPress = onSpaceLongPress) { onKey(KeyboardKey("Space", 0x2C)) }
         GlassKey("↵", 1.15f, repeatable = true) { onKey(KeyboardKey("Return", 0x28)) }
     }
@@ -570,6 +572,9 @@ private val LocalKeyboardScale = staticCompositionLocalOf { 1f }
 /** Row height only. Key width follows the display, so this shortens without narrowing. */
 private val LocalKeyboardHeight = staticCompositionLocalOf { 1f }
 
+/** The machine on the other end, which decides what the modifiers are called. */
+private val LocalHostPlatform = staticCompositionLocalOf { HostPlatform.MAC }
+
 private data class KeyboardKey(val label: String, val usage: Int, val requiredModifier: Int = 0, val weight: Float = 1f)
 
 private fun letterRow(text: String) = text.map { char ->
@@ -606,6 +611,7 @@ fun BluetoothKeyboardOverlay(
     onThemeChange: (KeyboardTheme) -> Unit,
     language: KeyboardLanguage,
     onLanguageChange: (KeyboardLanguage) -> Unit,
+    hostPlatform: HostPlatform,
     trail: KeyboardTrail,
     onTrailChange: (KeyboardTrail) -> Unit,
     font: KeyboardFont,
@@ -656,7 +662,8 @@ fun BluetoothKeyboardOverlay(
         LocalKeyboardTrail provides trail,
         LocalKeyboardOpaque provides opaque,
         LocalKeyboardScale provides keyboardScale,
-        LocalKeyboardHeight provides keyboardHeight
+        LocalKeyboardHeight provides keyboardHeight,
+        LocalHostPlatform provides hostPlatform
     ) {
     BoxWithConstraints(modifier.fillMaxSize()
         .background(if (amoledMode) Color.Black else Color.Transparent)
@@ -835,8 +842,9 @@ private fun TypingPanel(
         GlassKey("⌫", 1.3f, repeatable = true) { onKey(KeyboardKey("⌫", 0x2A)) }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        GlassKey("⌃", .82f, ctrl, onClick = onCtrl); GlassKey("⌥", .82f, option, onClick = onOption)
-        GlassKey("⌘", .9f, command, onClick = onCommand); GlassKey("", 4.2f, onLongPress = onSpaceLongPress) { onKey(KeyboardKey("Space", 0x2C)) }
+        val host = LocalHostPlatform.current
+        GlassKey(host.ctrlKey, .82f, ctrl, onClick = onCtrl); GlassKey(host.altKey, .82f, option, onClick = onOption)
+        GlassKey(host.guiKey, .9f, command, onClick = onCommand); GlassKey("", 4.2f, onLongPress = onSpaceLongPress) { onKey(KeyboardKey("Space", 0x2C)) }
         GlassKey("↵", 1.15f, repeatable = true) { onKey(KeyboardKey("Return", 0x28)) }
     }
 }
@@ -848,7 +856,8 @@ private fun MacPanel(
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         GlassKey("⌘ Command", 1f, command, onClick = onCommand); GlassKey("⌥ Option", 1f, option, onClick = onOption)
-        GlassKey("⌃ Control", 1f, ctrl, onClick = onCtrl); GlassKey("⇧ Shift", 1f, shifted, onClick = onShift)
+        val host = LocalHostPlatform.current
+        GlassKey("${host.ctrlKey} Control", 1f, ctrl, onClick = onCtrl); GlassKey("⇧ Shift", 1f, shifted, onClick = onShift)
     }
     KeyRow((1..6).map { KeyboardKey("F$it", 0x39 + it) }, false, onKey)
     KeyRow((7..12).map { KeyboardKey("F$it", 0x39 + it) }, false, onKey)
@@ -873,7 +882,8 @@ private fun ShortcutPanel(
         val key = shortcutKeys[keyIndex]
         val chord = chordLabel(modifiers, key.label)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("⌘" to MOD_COMMAND, "⌥" to MOD_OPTION, "⌃" to MOD_CTRL, "⇧" to MOD_SHIFT).forEach { (label, bit) ->
+            val host = LocalHostPlatform.current
+            listOf(host.guiKey to MOD_COMMAND, host.altKey to MOD_OPTION, host.ctrlKey to MOD_CTRL, "⇧" to MOD_SHIFT).forEach { (label, bit) ->
                 GlassKey(label, 1f, modifiers and bit != 0) { onHaptic(); modifiers = modifiers xor bit }
             }
             GlassKey("Cancel", 1.5f) { onHaptic(); creating = false }

@@ -106,6 +106,12 @@ class MainActivity : ComponentActivity() {
                 if (!settings.onboardingSeen) {
                     WelcomeScreen(
                         permissions = permissionState(permissionTick),
+                        platform = settings.hostPlatform,
+                        onPlatform = { chosen ->
+                            touchpadEngine.updateSettings(
+                                touchpadEngine.settings.value.copy(hostPlatform = chosen)
+                            )
+                        },
                         onGrant = { checkAndRequestPermissions() },
                         onDone = {
                             touchpadEngine.updateSettings(

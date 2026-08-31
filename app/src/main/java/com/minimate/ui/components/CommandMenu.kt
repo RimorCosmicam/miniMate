@@ -5,6 +5,7 @@ import com.minimate.touchpad.model.EdgeControlMaterial
 import com.minimate.touchpad.model.EdgeControlSide
 import com.minimate.touchpad.model.HapticIntensity
 import com.minimate.touchpad.model.KeyboardFont
+import com.minimate.touchpad.model.HostPlatform
 import com.minimate.touchpad.model.KeyboardLanguage
 import com.minimate.touchpad.model.ClockStyle
 import com.minimate.touchpad.model.KeyboardTheme
@@ -247,6 +248,9 @@ fun buildCommandMenu(
                     onChange { current -> current.copy(keyboardScale = it) }
                 }
             )),
+            MenuChoice("Sends to", HostPlatform.entries.map { it.label }, settings.hostPlatform.ordinal) {
+                onChange { current -> current.copy(hostPlatform = HostPlatform.entries[it]) }
+            },
             MenuChoice("Language", KeyboardLanguage.entries.map { it.label }, settings.keyboardLanguage.ordinal) {
                 onChange { current -> current.copy(keyboardLanguage = KeyboardLanguage.entries[it]) }
             }
