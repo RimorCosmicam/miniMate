@@ -12,6 +12,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -117,52 +118,54 @@ class MainActivity : ComponentActivity() {
                     return@MinimateTheme
                 }
 
-                // Second step, on the same ground: the switcher is shown in the card and then
-                // travels to the corner it will live in, so its position is learned by watching
-                // it arrive rather than by hunting for it afterwards.
-                if (!settings.pillTourSeen) {
-                    SwitcherIntro(
-                        pill = {
-                            ClockBatteryOverlay(
-                                clockStyle = settings.clockStyle,
-                                positionXFraction = .5f,
-                                positionYFraction = .5f,
-                                clockScale = settings.clockScale,
-                                screenWidthPx = 0f,
-                                screenHeightPx = 0f,
-                                show24Hour = settings.show24HourFormat,
-                                showSeconds = settings.showSeconds,
-                                showBattery = settings.showBatteryPercentage,
-                                batteryPercentage = batteryPercentage,
-                                bluetoothState = bluetoothState,
-                                amoledMode = false,
-                                onTap = {},
-                                onDoubleTap = {},
-                                onLongPress = {}
-                            )
-                        },
-                        targetX = settings.clockPositionX,
-                        targetY = settings.clockPositionY,
-                        onFinished = {
-                            touchpadEngine.updateSettings(
-                                touchpadEngine.settings.value.copy(pillTourSeen = true)
-                            )
-                        },
+                // The app is composed and running underneath the introduction, so when the ground
+                // pulls apart what is revealed is the real thing already in motion rather than a
+                // screen that starts loading once the transition is over.
+                Box(Modifier.fillMaxSize()) {
+                    TouchpadScreen(
+                        touchpadEngine = touchpadEngine,
+                        hidManager = hidManager,
+                        audioBridge = audioBridge,
+                        webcamCapture = webcamCapture,
+                        bluetoothState = bluetoothState,
+                        batteryPercentage = batteryPercentage,
+                        onRequestPermissions = { checkAndRequestPermissions() },
+                        pillVisible = settings.pillTourSeen,
                         modifier = Modifier.fillMaxSize()
                     )
-                    return@MinimateTheme
-                }
 
-                TouchpadScreen(
-                    touchpadEngine = touchpadEngine,
-                    hidManager = hidManager,
-                    audioBridge = audioBridge,
-                    webcamCapture = webcamCapture,
-                    bluetoothState = bluetoothState,
-                    batteryPercentage = batteryPercentage,
-                    onRequestPermissions = { checkAndRequestPermissions() },
-                    modifier = Modifier.fillMaxSize()
-                )
+                    if (!settings.pillTourSeen) {
+                        SwitcherIntro(
+                            pill = {
+                                ClockBatteryOverlay(
+                                    clockStyle = settings.clockStyle,
+                                    positionXFraction = .5f,
+                                    positionYFraction = .5f,
+                                    clockScale = settings.clockScale,
+                                    screenWidthPx = 0f,
+                                    screenHeightPx = 0f,
+                                    show24Hour = settings.show24HourFormat,
+                                    showSeconds = settings.showSeconds,
+                                    showBattery = settings.showBatteryPercentage,
+                                    batteryPercentage = batteryPercentage,
+                                    bluetoothState = bluetoothState,
+                                    amoledMode = false,
+                                    onTap = {},
+                                    onDoubleTap = {},
+                                    onLongPress = {}
+                                )
+                            },
+                            targetX = settings.clockPositionX,
+                            targetY = settings.clockPositionY,
+                            onFinished = {
+                                touchpadEngine.updateSettings(
+                                    touchpadEngine.settings.value.copy(pillTourSeen = true)
+                                )
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
             }
         }
     }

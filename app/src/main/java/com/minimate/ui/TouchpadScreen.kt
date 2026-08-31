@@ -92,6 +92,11 @@ fun TouchpadScreen(
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
     onRequestPermissions: () -> Unit,
+    /**
+     * Held back while the switcher is still being introduced, so the one flying out of the card is
+     * the only one on screen and lands exactly where this one appears.
+     */
+    pillVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val settings by touchpadEngine.settings.collectAsState()
@@ -695,7 +700,7 @@ fun TouchpadScreen(
         // One pill, one gesture contract in every primary mode and editor:
         // tap advances Trackpad -> Keyboard -> Audio -> Webcam -> Trackpad,
         // double-tap toggles true-black AMOLED rendering, and hold opens Settings.
-        ClockBatteryOverlay(
+        if (pillVisible) ClockBatteryOverlay(
             clockStyle = if (isDimMode || showKeyboard || showAudio || showWebcam || showThemeTester) {
                 com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL
             } else settings.clockStyle,

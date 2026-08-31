@@ -49,39 +49,41 @@ data class PermissionItem(val label: String, val detail: String, val granted: Bo
 
 private val Mustard = Color(0xFFD8A628)
 
-/** The welcome's ground, shared by both of its steps so the second is not a different place. */
+/**
+ * The welcome's ground: interleaved diagonal bands, mustard and black, sharing one definition so
+ * the second step is not a different place from the first.
+ *
+ * [split] pulls the two sets apart — mustard downward, black upward — until both have left the
+ * display entirely. The ground is drawn on nothing rather than over a black fill, so what shows
+ * through the widening gaps is whatever is behind it.
+ */
 @Composable
-private fun MustardDiagonals(travel: Float, modifier: Modifier = Modifier) {
-    Box(modifier.background(Color.Black)) {
-        Canvas(Modifier.fillMaxSize()) {
-            // Drawn past both edges so they never end anywhere you can see, and offset by exactly
-            // one period so the loop has no seam.
-            val spacing = 34.dp.toPx()
-            val bandWidth = 15.dp.toPx()
-            val drop = travel * spacing
-            var y = -size.width - spacing
-            while (y < size.height + spacing) {
+private fun MustardDiagonals(travel: Float, split: Float, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val spacing = 34.dp.toPx()
+        val band = spacing * 0.5f
+        val drift = travel * spacing
+        // Far enough that both sets are gone by the end, whatever the aspect ratio.
+        val exit = split * (size.height + size.width) * 1.1f
+
+        fun bands(color: Color, offset: Float) {
+            var y = -size.width - spacing * 2f
+            while (y < size.height + size.width + spacing * 2f) {
                 drawLine(
-                    Mustard,
-                    Offset(-size.width, y + drop),
-                    Offset(size.width * 2f, y + drop + size.width * 1.5f),
-                    bandWidth
+                    color,
+                    Offset(-size.width, y + offset),
+                    Offset(size.width * 2f, y + offset + size.width * 1.5f),
+                    band
                 )
                 y += spacing
             }
         }
+
+        bands(Mustard, drift + exit)
+        bands(Color.Black, drift + band - exit)
     }
 }
 
-/**
- * The first thing anyone sees.
- *
- * Mustard diagonals running down behind a single black card, the name split across the two ends of
- * the Mont range — the lightest weight over the heaviest — and the permissions as a plain list
- * that states what it wants and why. Nothing here is a dialog: the same black surface, the same
- * type and the same all-or-nothing colour as the rest of the app, so the first screen is not the
- * one screen that looks like somebody else built it.
- */
 @Composable
 fun WelcomeScreen(
     permissions: List<PermissionItem>,
@@ -95,8 +97,8 @@ fun WelcomeScreen(
     )
     val everythingGranted = permissions.all { it.granted }
 
-    Box(modifier.fillMaxSize()) {
-        MustardDiagonals(travel, Modifier.fillMaxSize())
+    Box(modifier.fillMaxSize().background(Color.Black)) {
+        MustardDiagonals(travel, 0f, Modifier.fillMaxSize())
 
         Column(
             Modifier
@@ -204,7 +206,7 @@ fun SwitcherIntro(
     var leaving by remember { mutableStateOf(false) }
     val journey by animateFloatAsState(
         targetValue = if (leaving) 1f else 0f,
-        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
         label = "journey",
         finishedListener = { if (it == 1f) onFinished() }
     )
@@ -224,14 +226,14 @@ fun SwitcherIntro(
         val homeY = (targetY * heightPx - pillSize.height / 2f)
             .coerceIn(8f, (heightPx - pillSize.height - 8f).coerceAtLeast(8f))
 
-        MustardDiagonals(travel, Modifier.fillMaxSize().alpha(1f - journey))
+        MustardDiagonals(travel, journey, Modifier.fillMaxSize())
 
         Column(
             Modifier
                 .fillMaxWidth()
                 .align(Alignment.Center)
                 .padding(horizontal = 18.dp)
-                .alpha(1f - journey)
+                .alpha(1f - (journey / 0.30f).coerceAtMost(1f))
                 .background(Color.Black.copy(MONT_SURFACE_ALPHA))
                 .padding(start = 22.dp, top = 20.dp, end = 18.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
