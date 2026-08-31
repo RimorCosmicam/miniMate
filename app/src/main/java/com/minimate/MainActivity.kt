@@ -15,6 +15,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.minimate.ui.components.PermissionItem
+import com.minimate.ui.components.WelcomeScreen
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -46,9 +52,15 @@ class MainActivity : ComponentActivity() {
     private var lastVolDownTime = 0L
     private var bluetoothServicesStarted = false
 
+    /** Bumped when the system dialogs return, so the welcome list re-reads what was granted. */
+    private var permissionTick by mutableIntStateOf(0)
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { startBluetoothServicesIfAllowed() }
+    ) {
+        permissionTick++
+        startBluetoothServicesIfAllowed()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,12 +92,26 @@ class MainActivity : ComponentActivity() {
         touchpadEngine = TouchpadEngine(this, hidManager)
         webcamCapture = WebcamCapture(this, audioBridge)
 
-        checkAndRequestPermissions()
-
         setContent {
             MinimateTheme {
                 val bluetoothState by hidManager.uiState.collectAsState()
                 val batteryPercentage by batteryReporter.batteryLevel.collectAsState()
+
+                // The welcome screen owns the first run. Firing the system dialogs from onCreate
+                // put them over a trackpad nobody had been introduced to yet.
+                var welcomed by rememberSaveable { mutableStateOf(!needsAnyPermission()) }
+                if (!welcomed) {
+                    WelcomeScreen(
+                        permissions = permissionState(permissionTick),
+                        onGrant = { checkAndRequestPermissions() },
+                        onDone = {
+                            welcomed = true
+                            startBluetoothServicesIfAllowed()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    return@MinimateTheme
+                }
 
                 TouchpadScreen(
                     touchpadEngine = touchpadEngine,
@@ -145,6 +171,27 @@ class MainActivity : ComponentActivity() {
         }
         return false
     }
+
+    /** Everything the app asks for, with what it is for and whether it has been granted yet. */
+    private fun permissionState(@Suppress("UNUSED_PARAMETER") tick: Int): List<PermissionItem> {
+        fun granted(permission: String) =
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+        return buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(PermissionItem("Bluetooth", "Acts as your Mac's mouse and keyboard",
+                    granted(Manifest.permission.BLUETOOTH_CONNECT) &&
+                        granted(Manifest.permission.BLUETOOTH_ADVERTISE) &&
+                        granted(Manifest.permission.BLUETOOTH_SCAN)))
+            }
+            add(PermissionItem("Microphone", "Sends your voice to the Mac",
+                granted(Manifest.permission.RECORD_AUDIO)))
+            add(PermissionItem("Camera", "Sends a picture to the Mac",
+                granted(Manifest.permission.CAMERA)))
+        }
+    }
+
+    private fun needsAnyPermission(): Boolean = permissionState(0).any { !it.granted }
 
     private fun checkAndRequestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
