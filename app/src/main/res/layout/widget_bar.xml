@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The wide face: the name set the way the welcome sets it, the lightest weight over the heaviest,
+  then the three toggles laid out along the rest of the bar.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_card"
+    android:gravity="center_vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="mini"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:fontFamily="@font/mont_thin"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mate"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:fontFamily="@font/mont_black"
+            android:includeFontPadding="false" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="14dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end">
+
+        <ImageView
+            android:id="@+id/widget_speaker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:src="@drawable/ic_widget_speaker"
+            android:contentDescription="Speaker" />
+
+        <ImageView
+            android:id="@+id/widget_mic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:src="@drawable/ic_widget_mic"
+            android:contentDescription="Microphone" />
+
+        <ImageView
+            android:id="@+id/widget_camera"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:src="@drawable/ic_widget_camera"
+            android:contentDescription="Camera" />
+    </LinearLayout>
+</LinearLayout>

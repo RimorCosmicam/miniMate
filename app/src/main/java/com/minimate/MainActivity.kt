@@ -91,6 +91,7 @@ class MainActivity : ComponentActivity() {
         batteryReporter = BatteryReporter(this)
         touchpadEngine = TouchpadEngine(this, hidManager)
         webcamCapture = WebcamCapture(this, audioBridge)
+        (application as MinimateApp).activeEngine = touchpadEngine
 
         setContent {
             MinimateTheme {
@@ -305,6 +306,11 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        // Cleared so a widget tap after this activity is gone writes settings and stops there,
+        // rather than reaching into an engine whose session has ended.
+        if ((application as MinimateApp).activeEngine === touchpadEngine) {
+            (application as MinimateApp).activeEngine = null
+        }
         super.onDestroy()
         touchpadEngine.close()
         webcamCapture.close()
