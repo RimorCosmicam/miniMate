@@ -7,16 +7,11 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.minimate.touchpad.model.EdgeControlSide
@@ -60,13 +55,19 @@ private const val EDGE_REFRACTION_SHADER = """
         float2 opticalOffset = railNormal * railBend * railMask + cornerNormal * cornerBend * cornerMask;
 
         float mask = max(railMask, cornerMask);
+        half4 original = content.eval(p);
+        // Everything below samples the frame another ten times, and the last line then throws all
+        // of it away wherever the mask is zero — which is most of the display, since the rail is
+        // 28dp and the corner 94dp. Leaving early turns eleven full-screen texture reads per pixel
+        // per frame into one everywhere the glass is not, at no cost to how the glass looks.
+        if (mask <= 0.0) return original;
+
         float railDispersion = uRailStyle > 2.5 && uRailStyle < 3.5 ? 0.115 : (uRailStyle > 3.5 ? 0.055 : 0.028);
         float cornerDispersion = uCornerStyle > 2.5 && uCornerStyle < 3.5 ? 0.115 : (uCornerStyle > 3.5 ? 0.055 : 0.028);
         float dispersion = max(railMask * railDispersion, cornerMask * cornerDispersion);
         float2 sampleRed = clamp(p - opticalOffset * (1.0 - dispersion), float2(0.0), uResolution - float2(1.0));
         float2 sampleGreen = clamp(p - opticalOffset, float2(0.0), uResolution - float2(1.0));
         float2 sampleBlue = clamp(p - opticalOffset * (1.0 + dispersion), float2(0.0), uResolution - float2(1.0));
-        half4 original = content.eval(p);
         half3 refracted = half3(content.eval(sampleRed).r, content.eval(sampleGreen).g, content.eval(sampleBlue).b);
 
         // Reflections are sampled from the live artwork mirrored across each lens,
@@ -130,27 +131,23 @@ fun EdgeRefractionSurface(
         Box(modifier) { content() }
         return
     }
-    val effect = remember(shader) { RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect() }
     val density = LocalDensity.current
     val railWidth = with(density) { (28.dp * railScale.coerceIn(.65f, 1.8f)).toPx() }
     val cornerRadius = with(density) { (94.dp * cornerScale.coerceIn(.65f, 1.8f)).toPx() }
-    var width by remember { mutableFloatStateOf(1f) }
-    var height by remember { mutableFloatStateOf(1f) }
-    SideEffect {
-        shader.setFloatUniform("uResolution", width, height)
-        shader.setFloatUniform("uRailSide", if (railSide == EdgeControlSide.LEFT) 0f else 1f)
-        shader.setFloatUniform("uRailWidth", railWidth)
-        shader.setFloatUniform("uCornerRadius", cornerRadius)
-        shader.setFloatUniform("uRailEnabled", if (railEnabled) 1f else 0f)
-        shader.setFloatUniform("uCornerEnabled", if (cornerEnabled) 1f else 0f)
-        shader.setFloatUniform("uRailStyle", railMaterial.ordinal.toFloat())
-        shader.setFloatUniform("uCornerStyle", cornerMaterial.ordinal.toFloat())
-    }
     Box(
-        modifier.onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f); height = it.height.toFloat().coerceAtLeast(1f) }
-            .graphicsLayer {
-                compositingStrategy = CompositingStrategy.Offscreen
-                renderEffect = effect
-            }
+        modifier.graphicsLayer {
+            compositingStrategy = CompositingStrategy.Offscreen
+            renderEffect = runCatching {
+                shader.setFloatUniform("uResolution", size.width.coerceAtLeast(1f), size.height.coerceAtLeast(1f))
+                shader.setFloatUniform("uRailSide", if (railSide == EdgeControlSide.LEFT) 0f else 1f)
+                shader.setFloatUniform("uRailWidth", railWidth)
+                shader.setFloatUniform("uCornerRadius", cornerRadius)
+                shader.setFloatUniform("uRailEnabled", if (railEnabled) 1f else 0f)
+                shader.setFloatUniform("uCornerEnabled", if (cornerEnabled) 1f else 0f)
+                shader.setFloatUniform("uRailStyle", railMaterial.ordinal.toFloat())
+                shader.setFloatUniform("uCornerStyle", cornerMaterial.ordinal.toFloat())
+                RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
+            }.getOrNull()
+        }
     ) { content() }
 }
