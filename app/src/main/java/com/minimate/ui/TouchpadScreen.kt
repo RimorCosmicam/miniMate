@@ -66,6 +66,7 @@ import com.minimate.ui.components.LiveCalibrationOverlay
 import com.minimate.ui.components.PermissionPrompt
 import com.minimate.ui.components.ScreenEditorOverlay
 import com.minimate.ui.components.CommandBar
+import com.minimate.ui.components.MONT_SURFACE_ALPHA
 import com.minimate.ui.components.PanelTarget
 import com.minimate.ui.theme.Mont
 import com.minimate.ui.components.buildCommandMenu
@@ -726,7 +727,7 @@ fun TouchpadScreen(
         if (editingPanels && (showAudio || showWebcam)) {
             Box(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 108.dp)
-                    .background(Color.Black.copy(.95f))
+                    .background(Color.Black.copy(MONT_SURFACE_ALPHA))
                     .clickable { editingPanels = false }
                     .padding(horizontal = 18.dp, vertical = 10.dp)
             ) {

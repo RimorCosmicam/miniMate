@@ -59,7 +59,7 @@ fun ScreenEditorOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
+
     ) {
         // Drag Target 2: Clock Handle
         val clockWidth = (140f * settings.clockScale) * 2.7f
@@ -102,7 +102,6 @@ fun ScreenEditorOverlay(
         // same glass chrome as every other studio rather than a bespoke navy-and-cyan card.
         StudioPanel(
             title = "Pill Layout",
-            subtitle = "Drag the pill, then set its size",
             onCancel = onClose,
             onDone = onClose,
             modifier = Modifier.align(Alignment.TopStart)

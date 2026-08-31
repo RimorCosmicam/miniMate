@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
@@ -93,7 +92,7 @@ fun CommandBar(
                 .fillMaxWidth()
                 .fillMaxHeight(.33f)
                 // Just short of opaque, so the scene reads faintly behind the bar.
-                .background(Color.Black.copy(alpha = .95f))
+                .background(Color.Black.copy(alpha = MONT_SURFACE_ALPHA))
                 .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 10.dp)
         ) {
             MenuColumn(

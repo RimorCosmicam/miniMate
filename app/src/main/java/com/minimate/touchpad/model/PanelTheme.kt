@@ -47,7 +47,8 @@ data class PanelTheme(
  */
 val panelThemes: List<PanelTheme> = listOf(
     PanelTheme("Default", PanelMaterial.DEFAULT, 0xB319191B, 0x38FFFFFF, 0xFFFFFFFF, 22),
-    PanelTheme("Mont", PanelMaterial.MONT, 0xF2000000, 0x00000000, 0xFFFFFFFF, 0),
+    // The Mont body's alpha lives with the rest of the Mont surface definition, not here.
+    PanelTheme("Mont", PanelMaterial.MONT, 0xFF000000, 0x00000000, 0xFFFFFFFF, 0),
     PanelTheme("Liquid Glass", PanelMaterial.LIQUID_GLASS, 0x1FFFFFFF, 0x59FFFFFF, 0xFFFFFFFF, 26),
     PanelTheme("Frosted", PanelMaterial.FROSTED, 0x3D0E0F12, 0x2EFFFFFF, 0xFFF4F7FA, 20)
 )

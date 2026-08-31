@@ -181,13 +181,7 @@ private fun KeyboardCustomizerTop(
     maxHeight: Dp = 150.dp,
     modifier: Modifier = Modifier
 ) {
-    val subtitle = when (section) {
-        KeyboardCustomizer.THEME -> theme.label
-        KeyboardCustomizer.TRAIL -> trail.label
-        KeyboardCustomizer.FONT -> "${font.label} · ${fontWeight.label}"
-        KeyboardCustomizer.SIZE -> "%.0f%%".format(scale * 100)
-    }
-    StudioPanel("Keyboard Studio", subtitle, onCancel, onDone, modifier, maxHeight) {
+    StudioPanel("Keyboard Studio", onCancel, onDone, modifier, maxHeight) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             KeyboardCustomizer.entries.forEach { item ->
                 StudioChip(item.label, section == item, Modifier.weight(1f)) { onSection(item) }

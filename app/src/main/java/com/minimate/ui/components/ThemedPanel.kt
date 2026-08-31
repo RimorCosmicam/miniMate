@@ -226,7 +226,7 @@ private fun androidx.compose.foundation.layout.BoxScope.PanelSurface(
 
     val body = Modifier.matchParentSize()
     when (theme.material) {
-        PanelMaterial.MONT -> Box(body.background(Color(theme.background)))
+        PanelMaterial.MONT -> Box(body.background(Color.Black.copy(alpha = MONT_SURFACE_ALPHA)))
         PanelMaterial.DEFAULT -> Box(
             body
                 .background(

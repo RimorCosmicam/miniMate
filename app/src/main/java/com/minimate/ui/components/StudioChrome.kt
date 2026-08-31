@@ -19,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,13 +35,18 @@ import com.minimate.ui.theme.Mont
  */
 private val StudioWeight = FontWeight.Black
 
-/** Matched to the command bar so the two never read as different apps. */
-internal val StudioBackground = Color.Black.copy(alpha = .95f)
+/**
+ * The Mont surface: black, with the scene faintly present through the last eight percent. One
+ * definition, used by the command bar, every studio and the Mont panel material, so the design
+ * language cannot drift apart between them. The figure is the user's, arrived at by looking at it.
+ */
+const val MONT_SURFACE_ALPHA = .92f
+
+internal val StudioBackground = Color.Black.copy(alpha = MONT_SURFACE_ALPHA)
 
 @Composable
 internal fun StudioPanel(
     title: String,
-    subtitle: String,
     onCancel: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
@@ -62,19 +66,10 @@ internal fun StudioPanel(
             .padding(start = 22.dp, top = 26.dp, end = 14.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
+        // One line. The name of the studio is enough to say where you are, and what is selected
+        // is already legible from the chips below being the bright ones.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                StudioLabel(title, dim = true, size = 11)
-                Text(
-                    subtitle,
-                    color = Color.White,
-                    fontFamily = Mont,
-                    fontWeight = StudioWeight,
-                    fontSize = 17.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            StudioLabel(title.uppercase(), Modifier.weight(1f), dim = true, size = 11)
             StudioLabel("CANCEL", dim = true, modifier = Modifier.clickable(onClick = onCancel).padding(6.dp))
             Spacer(Modifier.width(10.dp))
             StudioLabel("DONE", modifier = Modifier.clickable(onClick = onDone).padding(6.dp))
