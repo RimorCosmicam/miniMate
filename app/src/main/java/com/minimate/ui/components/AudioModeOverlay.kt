@@ -71,7 +71,6 @@ fun AudioModeOverlay(
     onOutputEnabled: (Boolean) -> Unit,
     onOutputDeviceSelected: (String) -> Unit,
     onMicrophoneEnabled: (Boolean) -> Unit,
-    onInputDeviceSelected: (String) -> Unit,
     onOutputVolume: (Float) -> Unit,
     onOutputPreset: (AudioOutputPreset) -> Unit,
     onOutputEqBand: (Int, Float) -> Unit,
@@ -116,7 +115,7 @@ fun AudioModeOverlay(
                     onOutputPreset, onOutputEqBand
                 )
                 AudioEditorTab.INPUT -> MicrophoneControls(
-                    state, onMicrophoneEnabled, onInputDeviceSelected, onMicrophoneGain,
+                    state, onMicrophoneEnabled, onMicrophoneGain,
                     microphonePreset, onMicrophonePreset
                 )
                 AudioEditorTab.TOOLS -> ToolsControls(
@@ -294,7 +293,6 @@ private fun DeviceList(
 private fun MicrophoneControls(
     state: AudioBridgeState,
     onEnabled: (Boolean) -> Unit,
-    onDeviceSelected: (String) -> Unit,
     onGain: (Float) -> Unit,
     preset: MicrophoneVoicePreset,
     onPreset: (MicrophoneVoicePreset) -> Unit
@@ -313,7 +311,7 @@ private fun MicrophoneControls(
             Spacer(Modifier.size(7.dp))
             Column(Modifier.weight(1f)) {
                 Text("Microphone", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text("Raw input", color = Color.White.copy(.48f), fontSize = 7.5.sp)
+                Text("Phone array, beam aimed at you", color = Color.White.copy(.48f), fontSize = 7.5.sp)
             }
             Switch(
                 checked = state.microphoneEnabled,
@@ -321,12 +319,6 @@ private fun MicrophoneControls(
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = Color.White)
             )
         }
-        DeviceList(
-            devices = state.inputDevices,
-            selectedKey = state.selectedInputKey,
-            enabled = state.microphoneEnabled,
-            onSelected = onDeviceSelected
-        )
         LinearProgressIndicator(
             progress = state.microphoneLevel,
             modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),

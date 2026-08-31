@@ -512,7 +512,6 @@ data class TouchpadSettings(
     val audioOutputDeviceKey: String = "phone",
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
     val audioMicrophoneGain: Float = 1f,
-    val audioInputDeviceKey: String = "phone",
     val audioMicrophonePreset: MicrophoneVoicePreset = MicrophoneVoicePreset.CLEAN,
     val audioSuperhumanBands: List<Float> = DEFAULT_SUPERHUMAN_BANDS,
     /**

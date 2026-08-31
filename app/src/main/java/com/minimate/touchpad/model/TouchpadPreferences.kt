@@ -96,7 +96,6 @@ class TouchpadPreferences(context: Context) {
                     }
                 })
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
-                put("audioInputDeviceKey", settings.audioInputDeviceKey)
                 put("audioMicrophonePreset", settings.audioMicrophonePreset.name)
                 put("audioSuperhumanBands", JSONArray(settings.audioSuperhumanBands))
                 put("audioListenVolume", settings.audioListenVolume.toDouble())
@@ -286,7 +285,6 @@ class TouchpadPreferences(context: Context) {
                     }
                 } ?: emptyList(),
                 audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 3f),
-                audioInputDeviceKey = json.optString("audioInputDeviceKey", "phone"),
                 audioMicrophonePreset = runCatching {
                     MicrophoneVoicePreset.valueOf(json.optString("audioMicrophonePreset", "CLEAN"))
                 }.getOrDefault(MicrophoneVoicePreset.CLEAN),

@@ -115,7 +115,6 @@ fun TouchpadScreen(
         settings.audioOutputDeviceKey,
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
-        settings.audioInputDeviceKey,
         settings.audioMicrophonePreset,
         settings.audioSuperhumanBands
     ) {
@@ -126,7 +125,6 @@ fun TouchpadScreen(
             settings.audioOutputDeviceKey,
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
-            settings.audioInputDeviceKey,
             settings.audioMicrophonePreset,
             settings.audioSuperhumanBands
         )
@@ -494,9 +492,6 @@ fun TouchpadScreen(
                 },
                 onMicrophoneEnabled = { enabled ->
                     touchpadEngine.updateSettings(settings.copy(audioMicrophoneEnabled = enabled))
-                },
-                onInputDeviceSelected = { key ->
-                    touchpadEngine.updateSettings(settings.copy(audioInputDeviceKey = key))
                 },
                 onOutputVolume = { volume ->
                     touchpadEngine.updateSettings(settings.copy(audioOutputVolume = volume))

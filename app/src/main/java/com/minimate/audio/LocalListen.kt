@@ -101,23 +101,47 @@ class LocalListen(private val context: Context) {
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
             )
             val frames = (SAMPLE_RATE / 100).coerceAtLeast(recordMinimum / 2 / 2) // ~10 ms
-            recorder = AudioRecord(
-                // Tool modes want the microphone's own sensitivity, not a speech-tuned profile
-                // that suppresses exactly the faint continuous sound being listened for.
-                if (isToolMode()) MediaRecorder.AudioSource.UNPROCESSED
-                else MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                maxOf(recordMinimum, frames * 2 * 4)
-            )
-            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            val builtIn = builtInMic()
+            fun open(source: Int): AudioRecord? {
+                val candidate = AudioRecord(
+                    source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT, maxOf(recordMinimum, frames * 2 * 4)
+                )
+                if (candidate.state != AudioRecord.STATE_INITIALIZED) {
+                    candidate.release()
+                    return null
+                }
+                candidate.setPreferredDevice(builtIn)
+                return candidate
+            }
+
+            // Tool modes want the microphone's own sensitivity rather than a speech-tuned
+            // profile that suppresses the faint continuous sound being listened for. But the
+            // request that matters more is which capsule: with earphones plugged in, the
+            // platform will hand over their inline microphone unless the built-in array is
+            // pinned, and UNPROCESSED does not always honour that pin. So the routing is
+            // verified after opening, and a source that ignored it is discarded — an
+            // instrument listening through a cable-mounted capsule is not the instrument.
+            val unprocessed = if (isToolMode()) open(MediaRecorder.AudioSource.UNPROCESSED) else null
+            recorder = if (unprocessed != null && builtIn != null &&
+                unprocessed.routedDevice?.type != AudioDeviceInfo.TYPE_BUILTIN_MIC
+            ) {
+                Log.i(TAG, "UNPROCESSED routed to ${unprocessed.routedDevice?.type}, not the built-in array; falling back")
+                unprocessed.release()
+                null
+            } else {
+                unprocessed
+            }
+            if (recorder == null) recorder = open(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+            if (recorder == null) {
                 lastError = "Microphone unavailable"
                 return
             }
-            recorder.setPreferredDevice(builtInMic())
+            val mic: AudioRecord = recorder
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !isToolMode()) {
                 runCatching {
-                    recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
-                    recorder.setPreferredMicrophoneFieldDimension(.75f)
+                    mic.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+                    mic.setPreferredMicrophoneFieldDimension(.75f)
                 }
             }
             // Suppression and echo cancellation are deliberately off for the tools: both remove
@@ -125,12 +149,12 @@ class LocalListen(private val context: Context) {
             if (!isToolMode()) {
                 if (NoiseSuppressor.isAvailable()) {
                     suppressor = runCatching {
-                        NoiseSuppressor.create(recorder.audioSessionId)?.apply { enabled = true }
+                        NoiseSuppressor.create(mic.audioSessionId)?.apply { enabled = true }
                     }.getOrNull()
                 }
                 if (AcousticEchoCanceler.isAvailable()) {
                     canceller = runCatching {
-                        AcousticEchoCanceler.create(recorder.audioSessionId)?.apply { enabled = true }
+                        AcousticEchoCanceler.create(mic.audioSessionId)?.apply { enabled = true }
                     }.getOrNull()
                 }
             }
@@ -167,13 +191,14 @@ class LocalListen(private val context: Context) {
             // clears. Without it, enabling monitoring at any useful level is a blast of noise.
             var hotBlocks = 0
             var duck = 1f
-            recorder.startRecording()
+            mic.startRecording()
             track.play()
+            Log.i(TAG, "capture routed to ${mic.routedDevice?.type}/${mic.routedDevice?.productName} (builtin=${AudioDeviceInfo.TYPE_BUILTIN_MIC})")
             Log.i(TAG, "local listen started: preset=$preset frames=$frames out=${track.routedDevice?.productName}")
 
             var emptyReads = 0
             while (running.get()) {
-                val read = recorder.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
+                val read = mic.read(samples, 0, samples.size, AudioRecord.READ_BLOCKING)
                 if (read <= 0) {
                     if (++emptyReads > 200) { lastError = "Microphone stopped producing audio"; break }
                     continue
