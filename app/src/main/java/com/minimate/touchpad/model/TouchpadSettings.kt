@@ -421,6 +421,8 @@ data class TouchpadSettings(
     val hapticIntensity: HapticIntensity = HapticIntensity.CRISP,
     /** Vibration on each key. On by default: a keyboard with no travel needs something to confirm. */
     val keyboardHapticsEnabled: Boolean = true,
+    /** The pill's three gestures are explained once, because nothing on screen implies them. */
+    val pillTourSeen: Boolean = false,
     
     // One active shader configuration. Theme Studio edits this directly.
     val backgroundTheme: BackgroundTheme = BackgroundTheme.CHROME_FLUID,

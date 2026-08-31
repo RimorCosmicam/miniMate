@@ -156,3 +156,71 @@ fun WelcomeScreen(
         }
     }
 }
+
+/**
+ * The one thing that is not discoverable.
+ *
+ * Every other control is visible on the screen it belongs to, but the pill carries three separate
+ * gestures and looks like a clock. Shown once, over the trackpad it is describing, so the reader
+ * can see the thing being talked about while they read about it.
+ */
+@Composable
+fun PillTourCard(onAcknowledge: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().background(Color.Black.copy(.45f))) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.Center)
+                .padding(horizontal = 18.dp)
+                .background(Color.Black.copy(MONT_SURFACE_ALPHA))
+                .padding(start = 22.dp, top = 20.dp, end = 18.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "THE SWITCHER",
+                color = Color.White.copy(.55f),
+                fontFamily = Mont,
+                fontWeight = FontWeight.Black,
+                fontSize = 11.sp
+            )
+            TourLine("ONE TAP", "Change mode")
+            TourLine("TWO TAPS", "AMOLED black")
+            TourLine("HOLD", "Open settings")
+
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "OKAY",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAcknowledge)
+                    .padding(vertical = 6.dp),
+                color = Color.White,
+                fontFamily = Mont,
+                fontWeight = FontWeight.Black,
+                fontSize = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun TourLine(gesture: String, meaning: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            gesture,
+            modifier = Modifier.weight(.42f),
+            color = Color.White,
+            fontFamily = Mont,
+            fontWeight = FontWeight.Black,
+            fontSize = 12.sp
+        )
+        Text(
+            meaning,
+            modifier = Modifier.weight(.58f),
+            color = Color.White.copy(.62f),
+            fontFamily = Mont,
+            fontWeight = FontWeight.Normal,
+            fontSize = 11.sp
+        )
+    }
+}

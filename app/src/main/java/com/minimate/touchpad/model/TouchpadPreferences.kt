@@ -35,6 +35,7 @@ class TouchpadPreferences(context: Context) {
                 put("edgeMarginDp", settings.edgeMarginDp.toDouble())
                 put("hapticIntensity", settings.hapticIntensity.name)
                 put("keyboardHapticsEnabled", settings.keyboardHapticsEnabled)
+                put("pillTourSeen", settings.pillTourSeen)
 
                 // Active theme
                 put("backgroundTheme", settings.backgroundTheme.name)
@@ -154,6 +155,7 @@ class TouchpadPreferences(context: Context) {
                     HapticIntensity.CRISP
                 },
                 keyboardHapticsEnabled = json.optBoolean("keyboardHapticsEnabled", true),
+                pillTourSeen = json.optBoolean("pillTourSeen", false),
                 backgroundTheme = try {
                     BackgroundTheme.valueOf(json.optString("backgroundTheme", "CHROME_FLUID"))
                 } catch (_: Exception) {
