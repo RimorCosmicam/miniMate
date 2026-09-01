@@ -702,9 +702,11 @@ fun TouchpadScreen(
         // tap advances Trackpad -> Keyboard -> Audio -> Webcam -> Trackpad,
         // double-tap toggles true-black AMOLED rendering, and hold opens Settings.
         if (pillVisible) ClockBatteryOverlay(
-            clockStyle = if (isDimMode || showKeyboard || showAudio || showWebcam || showThemeTester) {
-                com.minimate.touchpad.model.ClockStyle.MINIMAL_PILL
-            } else settings.clockStyle,
+            // The chosen style, on every page. This used to force the glass pill outside the
+            // trackpad, from back when that was the plainest style available — so picking Mont
+            // dressed the pill up again the moment you left the first screen, which is the
+            // opposite of what the override was for. Mont is the plain one now.
+            clockStyle = settings.clockStyle,
             positionXFraction = settings.clockPositionX,
             positionYFraction = settings.clockPositionY,
             clockScale = settings.clockScale,
