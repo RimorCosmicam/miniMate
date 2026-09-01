@@ -16,6 +16,14 @@ class TouchpadPreferences(context: Context) {
 
     companion object {
         private const val KEY_SETTINGS_JSON = "saved_touchpad_settings_json"
+
+        /**
+         * Bumped whenever the look of the HUD changes shape rather than value. Settings carried in
+         * from a cloud backup or a phone-to-phone transfer can predate the current chrome entirely,
+         * and a stale clock position or a retired clock style comes back as a pill floating at the
+         * top of the screen. Anything stamped older than this has its layout read as unset.
+         */
+        private const val SCHEMA = 2
     }
 
     fun saveSettings(settings: TouchpadSettings) {
@@ -36,6 +44,7 @@ class TouchpadPreferences(context: Context) {
                 put("hapticIntensity", settings.hapticIntensity.name)
                 put("keyboardHapticsEnabled", settings.keyboardHapticsEnabled)
                 put("onboardingSeen", settings.onboardingSeen)
+                put("schema", SCHEMA)
 
                 // Active theme
                 put("backgroundTheme", settings.backgroundTheme.name)
@@ -137,6 +146,9 @@ class TouchpadPreferences(context: Context) {
         val jsonStr = prefs.getString(KEY_SETTINGS_JSON, null) ?: return TouchpadSettings()
         return try {
             val json = JSONObject(jsonStr)
+            // Settings older than the current chrome keep their behaviour but lose their layout.
+            val layoutIsStale = json.optInt("schema", 1) < SCHEMA
+            val fresh = TouchpadSettings()
 
             TouchpadSettings(
                 trackingSpeed = json.optDouble("trackingSpeed", 1.0).toFloat(),
@@ -298,19 +310,19 @@ class TouchpadPreferences(context: Context) {
                 webcamExposure = json.optDouble("webcamExposure", 0.0).toFloat().coerceIn(-1f, 1f),
                 webcamFlashEnabled = json.optBoolean("webcamFlashEnabled", false),
                 webcamFlashIntensity = json.optDouble("webcamFlashIntensity", .5).toFloat().coerceIn(0f, 1f),
-                // Migrate the old centered-top default to the camera-safe lower-left layout.
-                clockPositionX = json.optDouble("clockPositionX", 0.248).toFloat().let {
-                    if (it == 0.50f && json.optDouble("clockPositionY", 0.882).toFloat() == 0.09f) 0.248f else it
-                },
-                clockPositionY = json.optDouble("clockPositionY", 0.882).toFloat().let {
-                    if (it == 0.09f && json.optDouble("clockPositionX", 0.248).toFloat() == 0.50f) 0.882f else it
-                },
-                clockScale = json.optDouble("clockScale", 1.18).toFloat().let { if (it == 1.0f) 1.18f else it },
-                clockStyle = try {
-                    ClockStyle.valueOf(json.optString("clockStyle", "MONT"))
-                } catch (_: Exception) {
-                    ClockStyle.MINIMAL_PILL
-                },
+                clockPositionX =
+                    if (layoutIsStale) fresh.clockPositionX
+                    else json.optDouble("clockPositionX", fresh.clockPositionX.toDouble()).toFloat(),
+                clockPositionY =
+                    if (layoutIsStale) fresh.clockPositionY
+                    else json.optDouble("clockPositionY", fresh.clockPositionY.toDouble()).toFloat(),
+                clockScale =
+                    if (layoutIsStale) fresh.clockScale
+                    else json.optDouble("clockScale", fresh.clockScale.toDouble()).toFloat(),
+                clockStyle =
+                    if (layoutIsStale) fresh.clockStyle
+                    else runCatching { ClockStyle.valueOf(json.optString("clockStyle", fresh.clockStyle.name)) }
+                        .getOrDefault(fresh.clockStyle),
                 show24HourFormat = json.optBoolean("show24HourFormat", false),
                 showSeconds = json.optBoolean("showSeconds", false),
                 showBatteryPercentage = json.optBoolean("showBatteryPercentage", true),
