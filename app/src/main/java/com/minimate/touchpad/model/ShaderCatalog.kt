@@ -1048,12 +1048,12 @@ val shaderScenes: List<ShaderScene> = listOf(
     // separates a boiled sweet from a coloured circle.
 
     ShaderScene(
-        "boiled", "Boiled Sweets", ShaderFamily.CANDY,
-        "Glass discs with the swirl set inside them.",
+        "boiled", "Bonbons", ShaderFamily.CANDY,
+        "Glass discs with the swirl set inside them, rolling past.",
         listOf(
             param("size", "Size", 2.5f, 9f, 4.5f),
             param("swirl", "Swirl", 1f, 9f, 5f),
-            param("turn", "Turn", 0f, 1.5f, .35f),
+            param("drift", "Drift", 0f, 1.5f, .5f),
             param("gloss", "Gloss", 0f, 2f, 1f)
         ),
         BRIGHT,
@@ -1062,7 +1062,10 @@ val shaderScenes: List<ShaderScene> = listOf(
             float3 c = mix(uC0, uC1, clamp(uv.y * 0.7, 0.0, 1.0) * 0.5);
             float3 lightDir = normalize(float3(-0.45, 0.55, 0.70));
 
-            float2 g = p * uP0;
+            // The whole tray slides, and each sweet turns on its own path within its place. A
+            // field of them sitting perfectly still is a wallpaper of circles; it is the drift
+            // across the frame and the swirl turning behind the glass that make them objects.
+            float2 g = p * uP0 + float2(t * uP2 * 0.20, t * uP2 * 0.07);
             float2 cell = floor(g);
             float2 f = fract(g) - 0.5;
 
@@ -1071,7 +1074,9 @@ val shaderScenes: List<ShaderScene> = listOf(
                 float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
                 float2 id = cell + o;
                 float2 seed = hash2(id);
-                float2 at = o + (seed - 0.5) * 0.42;
+                float wander = t * uP2 * (0.4 + seed.y * 0.7) + seed.x * 6.28;
+                float2 at = o + (seed - 0.5) * 0.34
+                    + float2(cos(wander), sin(wander * 0.8)) * 0.07;
                 float2 d = f - at;
                 float radius = 0.30 + seed.x * 0.09;
                 float unit = length(d) / radius;
@@ -1084,7 +1089,7 @@ val shaderScenes: List<ShaderScene> = listOf(
                     // The swirl is read at a displaced position, so it bends toward the rim the
                     // way anything seen through a lens does, and stands still in the middle.
                     float2 inner = d / radius - n.xy * 0.30;
-                    float spin = t * uP2 * (seed.y - 0.5) * 2.0;
+                    float spin = t * (0.5 + uP2) * (seed.y - 0.5) * 2.2;
                     float arms = sin(atan(inner.y, inner.x) * uP1 + length(inner) * 9.0 + spin);
                     float3 body = mix(pal(fract(hash(id + 2.3) + 0.1)),
                                       pal(fract(hash(id + 2.3) + 0.45)),
@@ -1104,170 +1109,6 @@ val shaderScenes: List<ShaderScene> = listOf(
                 }
                 float contact = smoothstep(radius * 1.25, radius * 0.9, length(d - float2(0.0, 0.05)));
                 c = mix(c, c * 0.88, contact * 0.35 * (1.0 - smoothstep(1.0, 0.9, unit)));
-            }
-            return c;
-        }
-        """
-    ),
-
-    ShaderScene(
-        "jellies", "Jellies", ShaderFamily.CANDY,
-        "Soft gels, lit from behind as much as in front.",
-        listOf(
-            param("size", "Size", 2f, 7f, 3.6f),
-            param("wobble", "Wobble", 0f, 1.5f, .5f),
-            param("through", "Light through", 0f, 2f, 1.1f),
-            param("sugar", "Sugar", 0f, 1f, .5f)
-        ),
-        BRIGHT,
-        """
-        float3 scene(float2 p, float2 uv, float t){
-            float3 c = mix(uC0, uC1, clamp(uv.y * 0.8, 0.0, 1.0) * 0.45);
-            float3 lightDir = normalize(float3(-0.4, 0.5, 0.76));
-
-            float2 g = p * uP0;
-            float2 cell = floor(g);
-            float2 f = fract(g) - 0.5;
-
-            for (int j = 0; j < 9; j++){
-                float fj = float(j);
-                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
-                float2 id = cell + o;
-                float2 seed = hash2(id);
-
-                // A gel is soft, so it is not a circle: it settles wider than it is tall and
-                // breathes a little where it meets its neighbours.
-                float2 at = o + (seed - 0.5) * 0.34;
-                float2 d = f - at;
-                float squash = 1.0 + 0.22 * sin(t * uP1 + seed.x * 6.3);
-                float2 e = float2(d.x * squash, d.y / squash);
-                float radius = 0.30 + seed.y * 0.07;
-                float unit = length(e) / radius;
-
-                if (unit < 1.0){
-                    float z = sqrt(max(1.0 - unit * unit, 0.0));
-                    float3 n = normalize(float3(e / radius, z));
-                    float3 tint = pal(fract(hash(id + 6.1) + 0.15));
-
-                    // The thin parts glow. Light entering a gel travels through it and leaves at
-                    // the rim, so a jelly is brightest exactly where there is least of it —
-                    // shading it only from the front leaves a plastic bead.
-                    float thickness = z;
-                    float through = pow(1.0 - thickness, 2.2) * uP2;
-                    float3 shaded = tint * (0.45 + 0.4 * max(dot(n, lightDir), 0.0));
-                    shaded += mix(tint, float3(1.0), 0.45) * through * 0.8;
-                    shaded += float3(pow(max(dot(reflect(-lightDir, n), float3(0.0, 0.0, 1.0)), 0.0), 26.0) * 0.5);
-
-                    // Sugar crust: grains that catch the light only near the surface's edge.
-                    float grain = smoothstep(0.55, 0.95, hash(floor((d + at) * 260.0)));
-                    shaded += float3(grain * uP3 * (0.25 + through * 0.5));
-
-                    c = mix(c, shaded, smoothstep(1.0, 0.93, unit));
-                }
-            }
-            return c;
-        }
-        """
-    ),
-
-    // ---------------------------------------------------------------- Bloom
-    //
-    // A petal has a shape: pinched where it joins the flower, widest around two thirds along, and
-    // drawn to a point at the tip. Everything here is built from that outline rather than from a
-    // faded circle, and the centres use Vogel's model — each floret one golden angle round from
-    // the last at a radius proportional to the square root of its index, which is the arrangement
-    // real seed heads use and the reason they show two families of counter-rotating spirals.
-
-    ShaderScene(
-        "daisies", "Daisies", ShaderFamily.BLOOM,
-        "Rings of petals around a seeded eye.",
-        listOf(
-            param("scale", "Size", 1.4f, 5f, 2.6f),
-            param("petals", "Petals", 6f, 16f, 11f),
-            param("turn", "Turn", 0f, 1.2f, .2f),
-            param("eye", "Eye", .1f, .5f, .26f)
-        ),
-        BRIGHT,
-        """
-        /**
-         * One petal, standing on the origin and pointing up. Pinched at the base, widest around
-         * two thirds along, drawn to a point: the outline of a petal rather than of a lens.
-         */
-        float petal(float2 q, float len, float wide){
-            if (q.y < 0.0 || q.y > len) return 0.0;
-            float along = q.y / len;
-            float w = wide * sin(3.14159 * pow(along, 0.62));
-            return smoothstep(w, w * 0.78, abs(q.x));
-        }
-
-        /** How far across the petal a point sits, for shading it from spine to edge. */
-        float petalAcross(float2 q, float len, float wide){
-            float along = clamp(q.y / len, 0.0, 1.0);
-            float w = max(wide * sin(3.14159 * pow(along, 0.62)), 0.0001);
-            return clamp(abs(q.x) / w, 0.0, 1.0);
-        }
-
-        float3 scene(float2 p, float2 uv, float t){
-            float3 c = mix(uC0, uC1, clamp(uv.y, 0.0, 1.0) * 0.4);
-
-            float2 g = p * uP0;
-            float2 cell = floor(g);
-            float2 f = fract(g) - 0.5;
-
-            for (int j = 0; j < 9; j++){
-                float fj = float(j);
-                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
-                float2 id = cell + o;
-                float2 seed = hash2(id);
-                if (seed.x > 0.34){
-                    float2 centre = f - o - (seed - 0.5) * 0.34;
-                    float spin = t * uP2 * (seed.y - 0.5) * 1.4 + seed.x * 6.28;
-                    float3 near = pal(fract(hash(id + 4.4) * 0.5 + 0.12));
-                    float3 far = mix(near, float3(1.0), 0.55);
-
-                    // Two rings, the inner one shorter and turned by half a petal so its petals
-                    // sit in the gaps of the outer. That overlap is what makes a flower read as
-                    // layered rather than as a cog.
-                    for (int ring = 0; ring < 2; ring++){
-                        float fr = float(ring);
-                        float count = max(floor(uP1) - fr * 2.0, 4.0);
-                        float len = (0.34 - fr * 0.09) * (0.85 + seed.y * 0.3);
-                        float step_ = 6.28318 / count;
-                        float angle = atan(centre.y, centre.x) - spin - fr * step_ * 0.5;
-                        // Fold the plane into one petal's wedge, so a single petal is drawn once
-                        // and repeated exactly rather than looped over.
-                        float wedge = mod(angle + 3.14159, step_) - step_ * 0.5;
-                        float radius = length(centre);
-                        float2 local = float2(sin(wedge) * radius, cos(wedge) * radius);
-
-                        float mask = petal(local - float2(0.0, uP3 * 0.42), len, len * 0.34);
-                        if (mask > 0.001){
-                            float across = petalAcross(local - float2(0.0, uP3 * 0.42), len, len * 0.34);
-                            float along = clamp((local.y - uP3 * 0.42) / len, 0.0, 1.0);
-                            // Darker where it joins, paler at the rim and the tip, with the
-                            // midrib left as a faint line down the middle.
-                            float3 tint = mix(near, far, along * 0.7 + across * 0.3);
-                            tint = mix(tint, near * 0.82, smoothstep(0.12, 0.0, across) * 0.5);
-                            c = mix(c, tint, mask);
-                        }
-                    }
-
-                    // The eye: florets on Vogel's spiral, one golden angle apart, each at a radius
-                    // proportional to the root of its index.
-                    float eye = uP3 * 0.42;
-                    float er = length(centre);
-                    if (er < eye){
-                        c = mix(c, mix(uC3, float3(0.0), 0.15), smoothstep(eye, eye * 0.94, er));
-                        for (int k = 0; k < 40; k++){
-                            float fk = float(k);
-                            float a = fk * 2.39996 + spin;
-                            float rr = eye * 0.14 * sqrt(fk);
-                            float2 floret = centre - float2(cos(a), sin(a)) * rr;
-                            c = mix(c, mix(uC3, float3(1.0), 0.4),
-                                    smoothstep(eye * 0.09, eye * 0.05, length(floret)) * 0.8);
-                        }
-                    }
-                }
             }
             return c;
         }
@@ -1301,9 +1142,12 @@ val shaderScenes: List<ShaderScene> = listOf(
                 float2 seed = hash2(float2(fi, 4.0));
 
                 float fall = fract(seed.y + t * uP1 * (0.4 + seed.x * 0.5));
+                // Down the screen, which is toward +y here: the fragment coordinate starts at the
+                // top-left, so subtracting from y sent these upward — they were rising, not
+                // falling, which is the one thing the scene is named for.
                 float2 at = float2(
                     (seed.x - 0.5) * 1.25 + sin(t * (0.4 + seed.y) + seed.x * 6.3) * 0.12,
-                    0.66 - fall * 1.35
+                    -0.66 + fall * 1.35
                 );
 
                 // Turning about its own long axis: the petal narrows to nothing as it comes edge
@@ -1323,6 +1167,236 @@ val shaderScenes: List<ShaderScene> = listOf(
                     float3 tint = face > 0.0 ? front : mix(front, float3(1.0), 0.45);
                     tint = mix(tint * 0.86, mix(tint, float3(1.0), 0.3), along);
                     c = mix(c, tint, mask * (0.35 + 0.65 * abs(face)));
+                }
+            }
+            return c;
+        }
+        """
+    ),
+
+    ShaderScene(
+        "lollipops", "Lollipops", ShaderFamily.CANDY,
+        "Spirals turning on their sticks.",
+        listOf(
+            param("size", "Size", 1.6f, 5f, 2.6f),
+            param("turns", "Spiral turns", 1.5f, 8f, 4f),
+            param("spin", "Spin", 0f, 2f, .7f),
+            param("gloss", "Gloss", 0f, 2f, 1f)
+        ),
+        BRIGHT,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float3 c = mix(uC0, uC1, clamp(uv.y * 0.8, 0.0, 1.0) * 0.45);
+            float3 lightDir = normalize(float3(-0.45, 0.55, 0.70));
+
+            float2 g = p * uP0 + float2(t * 0.06, 0.0);
+            float2 cell = floor(g);
+            float2 f = fract(g) - 0.5;
+
+            for (int j = 0; j < 9; j++){
+                float fj = float(j);
+                float2 o = float2(mod(fj, 3.0) - 1.0, floor(fj / 3.0) - 1.0);
+                float2 id = cell + o;
+                float2 seed = hash2(id);
+                float2 at = o + (seed - 0.5) * 0.30;
+                float2 d = f - at;
+                float radius = 0.26 + seed.x * 0.06;
+
+                // The stick first, so the head sits over it rather than beside it.
+                float2 stickTop = at + float2(0.0, radius * 0.6);
+                float2 s = f - stickTop;
+                float stick = smoothstep(radius * 0.075, radius * 0.05, abs(s.x))
+                    * step(0.0, s.y) * smoothstep(radius * 1.5, radius * 1.35, s.y);
+                c = mix(c, mix(uC1, float3(1.0), 0.55), stick * 0.9);
+
+                float unit = length(d) / radius;
+                if (unit < 1.0){
+                    float z = sqrt(max(1.0 - unit * unit, 0.0));
+                    float3 n = normalize(float3(d / radius, z));
+
+                    // An Archimedean spiral: the angle advances with the radius, so the arm keeps
+                    // an even gap as it winds out. Reading it through the displaced position is
+                    // what curves it over the dome instead of lying flat on it.
+                    float2 inner = d / radius - n.xy * 0.26;
+                    float angle = atan(inner.y, inner.x);
+                    float arm = fract((angle / 6.28318) * 1.0 + length(inner) * uP1
+                        + t * uP2 * (seed.y - 0.5) * 2.0);
+                    float band = smoothstep(0.46, 0.5, arm) * smoothstep(0.98, 0.94, arm);
+                    float3 body = mix(pal(fract(hash(id + 1.9) + 0.08)), float3(1.0), band * 0.85);
+
+                    float3 shaded = body * (0.55 + 0.45 * max(dot(n, lightDir), 0.0));
+                    shaded += float3(pow(max(dot(reflect(-lightDir, n), float3(0.0, 0.0, 1.0)), 0.0), 44.0) * 0.85 * uP3);
+                    shaded += float3(pow(1.0 - z, 4.0) * 0.30 * uP3);
+                    c = mix(c, shaded, smoothstep(1.0, 0.94, unit));
+                }
+            }
+            return c;
+        }
+        """
+    ),
+
+    ShaderScene(
+        "taffy", "Pulled Taffy", ShaderFamily.CANDY,
+        "Twisted ropes, still glossy from the pull.",
+        listOf(
+            param("count", "Ropes", 2f, 7f, 4f),
+            param("twist", "Twist", 0f, 3f, 1.4f),
+            param("width", "Width", .05f, .26f, .12f),
+            param("gloss", "Gloss", 0f, 2f, 1f)
+        ),
+        BRIGHT,
+        """
+        float3 scene(float2 p, float2 uv, float t){
+            float3 c = mix(uC0, uC1, clamp(uv.y, 0.0, 1.0) * 0.4);
+
+            for (int i = 0; i < 7; i++){
+                float fi = float(i);
+                if (fi >= uP0) break;
+                float lane = (fi + 0.5) / max(uP0, 1.0) - 0.5;
+                float centre = lane * 1.15 + sin(p.x * 1.5 + fi * 2.1 + t * 0.35) * 0.10;
+                float across = (p.y - centre) / uP2;
+
+                if (abs(across) < 1.0){
+                    // A rope is a cylinder, so the normal comes from how far across it a point is
+                    // and the highlight runs its whole length rather than sitting in one place.
+                    float z = sqrt(max(1.0 - across * across, 0.0));
+                    float3 n = normalize(float3(0.0, across, z));
+                    float3 lightDir = normalize(float3(-0.3, 0.55, 0.78));
+
+                    // The twist: two colours wound round each other, the seam advancing along the
+                    // rope, which is what pulling taffy actually leaves behind.
+                    float wind = sin((p.x * 5.0 + t * 0.8) * uP1 + asin(clamp(across, -1.0, 1.0)));
+                    float3 body = mix(pal(fract(fi * 0.27 + 0.08)),
+                                      pal(fract(fi * 0.27 + 0.42)),
+                                      smoothstep(-0.3, 0.3, wind));
+
+                    float3 shaded = body * (0.5 + 0.5 * max(dot(n, lightDir), 0.0));
+                    shaded += float3(pow(max(dot(reflect(-lightDir, n), float3(0.0, 0.0, 1.0)), 0.0), 32.0) * 0.7 * uP3);
+                    shaded += float3(pow(1.0 - z, 3.0) * 0.22 * uP3);
+                    c = mix(c, shaded, smoothstep(1.0, 0.9, abs(across)));
+                }
+            }
+            return c;
+        }
+        """
+    ),
+
+    ShaderScene(
+        "waterpetals", "Petals on Water", ShaderFamily.BLOOM,
+        "Floating, and the water will not hold them still.",
+        listOf(
+            param("count", "How many", 4f, 18f, 9f),
+            param("ripple", "Ripple", 0f, 2f, .9f),
+            param("size", "Size", .05f, .2f, .1f),
+            param("drift", "Drift", 0f, 1f, .3f)
+        ),
+        BRIGHT,
+        """
+        float petal(float2 q, float len, float wide){
+            if (q.y < -len * 0.5 || q.y > len * 0.5) return 0.0;
+            float along = (q.y + len * 0.5) / len;
+            float w = wide * sin(3.14159 * pow(along, 0.62));
+            return smoothstep(w, w * 0.76, abs(q.x));
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            // The surface: rings running outward, crossed by a slower swell.
+            float rings = sin(length(p - float2(0.2, -0.15)) * 26.0 - t * 1.6) * 0.5
+                + sin(length(p + float2(0.25, 0.2)) * 19.0 - t * 1.1) * 0.5;
+            float swell = fbm(p * 3.0 + float2(0.0, t * 0.08));
+            float height = rings * 0.35 + swell;
+
+            // Slope of the surface, which is what bends the light and moves what floats on it.
+            float e = 0.004;
+            float2 slope = float2(
+                sin(length(p + float2(e, 0.0) - float2(0.2, -0.15)) * 26.0 - t * 1.6) - rings * 2.0,
+                sin(length(p + float2(0.0, e) - float2(0.2, -0.15)) * 26.0 - t * 1.6) - rings * 2.0
+            ) * uP1;
+
+            float3 c = mix(uC0, uC1, clamp(0.5 + height * 0.4, 0.0, 1.0));
+            c += mix(uC2, float3(1.0), 0.5) * pow(clamp(height * 0.5 + 0.5, 0.0, 1.0), 8.0) * 0.5;
+
+            for (int i = 0; i < 18; i++){
+                float fi = float(i);
+                if (fi >= uP0) break;
+                float2 seed = hash2(float2(fi, 6.0));
+
+                // Carried by the water rather than travelling through it: each drifts slowly and
+                // is nudged by the same slope that is bending the light.
+                float2 at = float2(
+                    fract(seed.x + t * uP3 * 0.04 * (0.5 + seed.y)) * 1.4 - 0.7,
+                    (seed.y - 0.5) * 1.1 + sin(t * 0.3 + seed.x * 6.3) * 0.05
+                ) + slope * 0.03;
+
+                float turn = seed.x * 6.3 + sin(t * 0.4 + seed.y * 6.3) * 0.35;
+                float2 q = rot(p - at, turn);
+                float len = uP2 * (0.85 + seed.y * 0.4);
+                float mask = petal(q, len, len * 0.36);
+                if (mask > 0.001){
+                    float along = clamp((q.y + len * 0.5) / len, 0.0, 1.0);
+                    float3 tint = pal(fract(hash(float2(fi, 3.0)) * 0.35 + 0.1));
+                    tint = mix(tint * 0.85, mix(tint, float3(1.0), 0.35), along);
+                    // A petal sits in the water, so it darkens what is under its edge.
+                    float shadow = petal(rot(p - at - float2(0.012, 0.012), turn), len, len * 0.36);
+                    c = mix(c, c * 0.82, shadow * 0.5);
+                    c = mix(c, tint, mask);
+                }
+            }
+            return c;
+        }
+        """
+    ),
+
+    ShaderScene(
+        "wisteria", "Wisteria", ShaderFamily.BLOOM,
+        "Hanging strands, swaying together.",
+        listOf(
+            param("strands", "Strands", 3f, 10f, 6f),
+            param("length", "Length", .4f, 1.4f, .95f),
+            param("sway", "Sway", 0f, 1.5f, .6f),
+            param("size", "Flower size", .012f, .05f, .026f)
+        ),
+        BRIGHT,
+        """
+        float petal(float2 q, float len, float wide){
+            if (q.y < -len * 0.5 || q.y > len * 0.5) return 0.0;
+            float along = (q.y + len * 0.5) / len;
+            float w = wide * sin(3.14159 * pow(along, 0.62));
+            return smoothstep(w, w * 0.74, abs(q.x));
+        }
+
+        float3 scene(float2 p, float2 uv, float t){
+            float3 c = mix(uC0, uC1, clamp(uv.y, 0.0, 1.0) * 0.5);
+
+            for (int i = 0; i < 10; i++){
+                float fi = float(i);
+                if (fi >= uP0) break;
+                float2 seed = hash2(float2(fi, 7.0));
+                float anchor = (fi + 0.5) / max(uP0, 1.0) - 0.5;
+                float x = anchor * 1.25 + (seed.x - 0.5) * 0.06;
+                float len = uP1 * (0.7 + seed.y * 0.6);
+
+                for (int k = 0; k < 14; k++){
+                    float fk = float(k);
+                    float along = fk / 13.0;
+                    if (along > 1.0) break;
+
+                    // The whole strand swings from where it is fixed, so the sway grows toward the
+                    // tip: a strand that moves evenly along its length reads as a sliding image.
+                    float swing = sin(t * (0.7 + seed.y * 0.5) + fi * 1.3) * uP2 * 0.18 * along * along;
+                    float2 at = float2(x + swing, -0.62 + along * len);
+
+                    // Bigger and paler at the top, small and saturated at the tip, which is the
+                    // way a raceme opens: the oldest flowers are the ones nearest the branch.
+                    float size = uP3 * (1.25 - along * 0.55);
+                    float3 tint = mix(mix(uC2, float3(1.0), 0.55), uC3, along * 0.8);
+
+                    for (int q3 = 0; q3 < 3; q3++){
+                        float fq = float(q3);
+                        float turn = fq * 2.094 + seed.x * 6.3 + swing * 2.0;
+                        float mask = petal(rot(p - at, turn) - float2(0.0, size * 0.5), size * 1.6, size * 0.7);
+                        c = mix(c, tint, mask);
+                    }
                 }
             }
             return c;
