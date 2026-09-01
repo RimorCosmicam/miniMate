@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import SwiftUI
 
 @main
@@ -32,14 +33,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q")
         statusItem.menu = menu
 
+        MontFont.register()
+        installMenu()
+
         let hosting = NSHostingController(rootView: CompanionView(controller: controller))
         window = NSWindow(contentViewController: hosting)
-        window.title = "MiniMate Audio"
-        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.title = "MiniMate"
+        // Closable stays in the mask so Cmd+W has something to act on; the buttons themselves are
+        // hidden, because the window says Close in words like every other surface in this app.
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
-        window.setContentSize(NSSize(width: 340, height: 320))
+        window.backgroundColor = .black
+        window.standardWindowButton(.closeButton)?.isHidden = true
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
+        window.setContentSize(NSSize(width: 320, height: 300))
         window.center()
         window.delegate = self
         // An installer launch must be visible. The app returns to menu-bar-only mode when
@@ -57,23 +67,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
+    /// An accessory app has no menu bar of its own, so Cmd+W and Cmd+Q had nothing to reach.
+    private func installMenu() {
+        let mainMenu = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Quit MiniMate", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+        NSApp.mainMenu = mainMenu
+    }
+
     @objc private func quit() {
         controller.disconnect()
         NSApp.terminate(nil)
     }
 }
 
-private struct StatusPill: View {
-    var connected: Bool
-    var text: String
+/// Mont, loaded from the bundle. The same typeface the phone uses, so the two halves of the app
+/// do not look like they were made by different people.
+enum MontFont {
+    static let thin = "Mont-Thin"
+    static let black = "Mont-Black"
+
+    static func register() {
+        for name in ["mont_thin", "mont_black"] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+    }
+}
+
+/// A row of the window. Text alone, bright when it can be used and dim when it cannot — the rule
+/// every control on the phone follows, and the reason there are no buttons drawn here.
+private struct MontRow: View {
+    var label: String
+    var enabled: Bool = true
+    var action: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
-            Text(text).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
+        Button(action: action) {
+            Text(label.uppercased())
+                .font(.custom(MontFont.black, size: 13))
+                .foregroundStyle(.white.opacity(enabled ? 1 : 0.3))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 7)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 9).padding(.vertical, 4)
-        .glassEffect(.regular, in: Capsule())
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 }
 
@@ -82,106 +126,73 @@ struct CompanionView: View {
 
     private var devicesReady: Bool { controller.driverInstalled && controller.cameraInstalled }
 
+    /// The first thing anyone came here to do, named after the thing it will do it to.
+    private var connection: (label: String, enabled: Bool, act: () -> Void) {
+        if controller.connected {
+            return ("Disconnect", true, { controller.disconnect() })
+        }
+        if let service = controller.wifiServices.first {
+            return ("Connect to \(service.name)", true, { controller.connectWiFi(service) })
+        }
+        if let device = controller.bluetoothDevices.first {
+            let name = device.name ?? device.addressString ?? "paired device"
+            return ("Connect to \(name)", true, { controller.connectBluetooth(device) })
+        }
+        return ("Looking for your phone", false, {})
+    }
+
     var body: some View {
-        GlassEffectContainer(spacing: 14) {
-            VStack(spacing: 18) {
-                HStack(spacing: 9) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable().frame(width: 30, height: 30)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    Text("MiniMate Audio").font(.system(size: 14, weight: .bold))
-                    Spacer()
-                    StatusPill(connected: controller.connected, text: controller.status)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 44, height: 44)
 
-                Spacer()
-
-                if controller.wifiServices.isEmpty {
-                    Text("Looking for your phone…")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(controller.wifiServices.enumerated()), id: \.offset) { _, service in
-                        Button("Connect to \(service.name)") { controller.connectWiFi(service) }
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 3)
-                            .buttonStyle(.glassProminent)
-                    }
-                }
-
-                if !controller.bluetoothDevices.isEmpty {
-                    ForEach(controller.bluetoothDevices, id: \.addressString) { device in
-                        Button {
-                            controller.connectBluetooth(device)
-                        } label: {
-                            Label(device.name ?? device.addressString ?? "Paired device", systemImage: "dot.radiowaves.left.and.right")
-                        }
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(maxWidth: .infinity)
-                        .buttonStyle(.glass)
-                    }
-                }
-
-                if !devicesReady {
-                    Button("Install MiniMate Devices") { controller.installAudioDevices() }
-                        .font(.system(size: 11.5, weight: .medium))
-                        .buttonStyle(.glass)
-                } else if controller.cameraDeviceName.hasPrefix("OBS") {
-                    Text("Camera available as OBS Virtual Camera")
-                        .font(.system(size: 10)).foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-
-                VStack(spacing: 8) {
-                    if !controller.monitorOutputs.isEmpty {
-                        Picker("Listen on", selection: Binding(
-                            get: { controller.monitorOutputID ?? controller.monitorOutputs[0].id },
-                            set: { controller.monitorOutputID = $0 }
-                        )) {
-                            ForEach(controller.monitorOutputs) { output in
-                                Text(output.name).tag(output.id)
-                            }
-                        }
-                        .labelsHidden()
-                        .disabled(controller.monitoringMicrophone)
-                    }
-
-                    if controller.monitoringMicrophone {
-                        Button("Stop listening to mic") { controller.setMicrophoneMonitoring(false) }
-                            .frame(maxWidth: .infinity)
-                            .buttonStyle(.glassProminent)
-                            .help("Plays the phone microphone through this Mac exactly as apps receive it. Use headphones.")
-                    } else {
-                        Button("Listen to mic") { controller.setMicrophoneMonitoring(true) }
-                            .frame(maxWidth: .infinity)
-                            .buttonStyle(.glass)
-                            .disabled(!controller.connected)
-                            .help("Plays the phone microphone through this Mac exactly as apps receive it. Use headphones.")
-                    }
-
-                    HStack(spacing: 8) {
-                        Button(controller.streaming ? "Stop audio" : "Start audio") {
-                            controller.streaming ? controller.stopStreaming() : controller.startStreaming()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .buttonStyle(.glass)
-                        .disabled(!controller.connected)
-
-                        Button("Disconnect") { controller.disconnect() }
-                            .frame(maxWidth: .infinity)
-                            .buttonStyle(.glass)
-                            .disabled(!controller.connected)
-                    }
+                // Set the way the phone's first screen sets it: the lightest weight over the
+                // heaviest, which is the whole identity in two words.
+                VStack(alignment: .leading, spacing: -6) {
+                    Text("mini").font(.custom(MontFont.thin, size: 26)).foregroundStyle(.white)
+                    Text("Mate").font(.custom(MontFont.black, size: 26)).foregroundStyle(.white)
                 }
             }
-            .padding(.horizontal, 20)
             .padding(.bottom, 18)
-            .padding(.top, 32)
+
+            let connect = connection
+            MontRow(label: connect.label, enabled: connect.enabled, action: connect.act)
+
+            if !devicesReady {
+                MontRow(label: "Install MiniMate devices") { controller.installAudioDevices() }
+            }
+
+            MontRow(
+                label: controller.streaming ? "Stop audio" : "Start audio",
+                enabled: controller.connected
+            ) {
+                controller.streaming ? controller.stopStreaming() : controller.startStreaming()
+            }
+
+            MontRow(
+                label: controller.monitoringMicrophone ? "Stop listening to mic" : "Listen to mic",
+                enabled: controller.connected
+            ) {
+                controller.setMicrophoneMonitoring(!controller.monitoringMicrophone)
+            }
+
+            Spacer(minLength: 12)
+
+            Text(controller.status.uppercased())
+                .font(.custom(MontFont.black, size: 10))
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(.bottom, 6)
+
+            // Last in the list, the way Close ends the phone's command bar.
+            MontRow(label: "Close") { NSApp.keyWindow?.performClose(nil) }
         }
-        .background(.regularMaterial)
+        .padding(.horizontal, 22)
+        .padding(.top, 30)
+        .padding(.bottom, 16)
+        .frame(width: 320, height: 300, alignment: .topLeading)
+        .background(Color.black)
         .ignoresSafeArea()
-        .frame(width: 340, height: 320)
     }
 }
