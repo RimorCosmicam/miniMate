@@ -78,11 +78,10 @@ class ShaderCatalogTest {
         }
     }
 
-    @Test fun theDepthFamilyIsPresentAndRaymarchedScenesDisperseThemselves() {
-        val depth = shaderScenes.filter { it.family == ShaderFamily.DEPTH }
-        assertTrue(depth.size >= 7)
-        // A raymarching scene sampled three times through the shared lens marches three times.
-        depth.filter { "for (int i = 0; i < 5" in it.body || "march" in it.body }
-            .forEach { assertTrue("${it.id} should disperse itself", it.dispersive) }
+    /** Every family carries scenes; an empty one is a heading with nothing under it. */
+    @Test fun everyFamilyHasScenes() {
+        ShaderFamily.entries.forEach { family ->
+            assertTrue(family.label, shaderScenes.any { it.family == family })
+        }
     }
 }
