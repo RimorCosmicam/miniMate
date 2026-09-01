@@ -16,5 +16,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\Mini.png"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <!-- Mont travels inside the executable, not beside it: this publishes as a single file, and a
+         folder of loose resources next to it is a folder someone can leave behind. -->
+    <EmbeddedResource Include="Assets\mont_thin.ttf" LogicalName="mont_thin.ttf" />
+    <EmbeddedResource Include="Assets\mont_black.ttf" LogicalName="mont_black.ttf" />
   </ItemGroup>
 </Project>
