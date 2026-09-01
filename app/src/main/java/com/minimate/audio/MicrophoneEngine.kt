@@ -1,6 +1,7 @@
 package com.minimate.audio
 
 import kotlin.math.abs
+import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sign
@@ -26,7 +27,23 @@ class MicrophoneEngine(private val sampleRate: Int) {
         const val SPEECH_SNR = 2.0f
         const val SPEECH_ABSOLUTE_FLOOR = 8f
         const val SPEECH_HANGOVER_SECONDS = .60f
-        const val NON_VOICE_LEVEL = .45f
+        /**
+         * How far the level drops between phrases.
+         *
+         * It was .45, which is barely a duck at all: with the makeup a communications capture
+         * needs, room tone at forty-five percent is plainly audible as a hum sitting under the
+         * whole call. The speech hangover keeps this from closing inside a sentence.
+         */
+        const val NON_VOICE_LEVEL = .08f
+
+        /**
+         * Everything below this is rumble, not voice.
+         *
+         * Mains hum, desk vibration and handling noise all live under the bottom of the human
+         * voice, and amplifying them along with it is most of what "ambient hum" is. Removing
+         * them before the gain rather than after means the gain has less to amplify.
+         */
+        const val HIGH_PASS_HZ = 85f
         const val LIMIT_THRESHOLD = .88f
         const val NOISE_WINDOW_BLOCKS = 200
 
@@ -38,8 +55,17 @@ class MicrophoneEngine(private val sampleRate: Int) {
          * was distortion. The capture on this phone already reaches full scale unaided; what it
          * needs is a little makeup and a lot of headroom, not an order of magnitude.
          */
-        const val UNITY_MAKEUP = 1.4f
+        const val UNITY_MAKEUP = 5f
     }
+
+    private var highPassPreviousIn = 0f
+    private var highPassPreviousOut = 0f
+    private val highPassCoefficient = run {
+        val rc = 1f / (2f * PI.toFloat() * HIGH_PASS_HZ)
+        val dt = 1f / sampleRate
+        rc / (rc + dt)
+    }
+    private var filtered = FloatArray(0)
 
     private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
     private var recentIndex = 0
@@ -71,13 +97,22 @@ class MicrophoneEngine(private val sampleRate: Int) {
         if (count <= 0) return output
         val dt = count.toFloat() / sampleRate
 
+        if (filtered.size < count) filtered = FloatArray(count)
+
         var blockPeak = 0f
         var energy = 0.0
         for (index in 0 until count) {
-            val sample = samples[index].toFloat()
-            val magnitude = abs(sample)
+            // High-passed before anything looks at it, so the level that decides speech from
+            // silence is the level of the voice rather than the level of the room's rumble.
+            val raw = samples[index].toFloat()
+            val value = highPassCoefficient * (highPassPreviousOut + raw - highPassPreviousIn)
+            highPassPreviousIn = raw
+            highPassPreviousOut = value
+            filtered[index] = value
+
+            val magnitude = abs(value)
             if (magnitude > blockPeak) blockPeak = magnitude
-            energy += sample.toDouble() * sample
+            energy += value.toDouble() * value
         }
         val blockRms = sqrt(energy / count).toFloat()
         level = (blockRms / Short.MAX_VALUE).coerceIn(0f, 1f)
@@ -120,9 +155,7 @@ class MicrophoneEngine(private val sampleRate: Int) {
 
         var outputPeak = 0f
         for (index in 0 until count) {
-            val dry = samples[index].toFloat()
-
-            val driven = dry
+            val driven = filtered[index]
 
             val ramped = previousGain + (currentGain - previousGain) * (index.toFloat() / count)
             val value = driven * ramped
