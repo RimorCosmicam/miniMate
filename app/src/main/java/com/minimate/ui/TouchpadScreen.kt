@@ -152,6 +152,7 @@ fun TouchpadScreen(
         settings.audioOutputDeviceKey,
         settings.audioDeviceEqProfiles,
         settings.audioMicrophoneGain,
+        settings.audioMicrophoneIsolation,
         settings.audioMicrophonePlacement,
         settings.audioPlacementAuto
     ) {
@@ -162,6 +163,7 @@ fun TouchpadScreen(
             settings.audioOutputDeviceKey,
             settings.audioDeviceEqProfiles,
             settings.audioMicrophoneGain,
+            settings.audioMicrophoneIsolation,
             settings.audioMicrophonePlacement,
             settings.audioPlacementAuto
         )

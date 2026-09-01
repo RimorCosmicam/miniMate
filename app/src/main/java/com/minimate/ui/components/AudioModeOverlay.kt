@@ -274,8 +274,8 @@ private fun MicrophoneControls(
             trackColor = Color.White.copy(.10f)
         )
         CompactAudioSlider(
-            label = "GAIN", value = state.microphoneGain, range = 0f..3f,
-            valueLabel = "${state.microphoneGain.formatGain()}×", enabled = state.microphoneEnabled,
+            label = "GAIN", value = state.microphoneGain, range = -12f..24f,
+            valueLabel = "%+.0f dB".format(state.microphoneGain), enabled = state.microphoneEnabled,
             onValue = onGain
         )
         Text("PHONE POSITION", color = Color.White.copy(.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
@@ -351,4 +351,3 @@ private fun LabeledAudioSlider(
     }
 }
 
-private fun Float.formatGain(): String = if (this % 1f == 0f) toInt().toString() else String.format("%.1f", this)

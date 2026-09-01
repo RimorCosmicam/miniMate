@@ -514,7 +514,23 @@ data class TouchpadSettings(
     val audioOutputVolume: Float = .80f,
     val audioOutputDeviceKey: String = "phone",
     val audioDeviceEqProfiles: List<AudioDeviceEqProfile> = emptyList(),
-    val audioMicrophoneGain: Float = 1f,
+    /**
+     * The dial, in decibels, nought being the natural level with a little makeup on top.
+     *
+     * It was a nought-to-three multiplier over a base of eleven, which put the whole usable range
+     * inside the first fifth of the travel and left the rest as distortion. A stored value from
+     * then lands somewhere sane on this scale, so there is nothing to migrate.
+     */
+    val audioMicrophoneGain: Float = 0f,
+    /**
+     * Whether the platform's echo canceller and noise suppressor are in the capture chain.
+     *
+     * They only exist on a communications capture; a recognition capture is a cleaner, wider
+     * signal but is handed over raw, room and all. On a desk in a room that is heard as no
+     * isolation and a great deal of echo, so this is on by default. It costs some bandwidth at
+     * the top, which is the trade being made.
+     */
+    val audioMicrophoneIsolation: Boolean = true,
     val audioMicrophonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
     /** Follow the gravity sensor instead of the manual choice above. */
     val audioPlacementAuto: Boolean = true,

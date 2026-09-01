@@ -4,6 +4,7 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sign
+import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.math.tanh
 
@@ -29,7 +30,15 @@ class MicrophoneEngine(private val sampleRate: Int) {
         const val LIMIT_THRESHOLD = .88f
         const val NOISE_WINDOW_BLOCKS = 200
 
-        const val VOICE_BASE_GAIN = 11f
+        /**
+         * Makeup applied at nought on the dial.
+         *
+         * It used to be eleven, and the dial multiplied it by nought to three on top — so the
+         * usable part of the control was the first fifth of its travel and everything past that
+         * was distortion. The capture on this phone already reaches full scale unaided; what it
+         * needs is a little makeup and a lot of headroom, not an order of magnitude.
+         */
+        const val UNITY_MAKEUP = 1.4f
     }
 
     private val recentRms = FloatArray(NOISE_WINDOW_BLOCKS)
@@ -47,10 +56,15 @@ class MicrophoneEngine(private val sampleRate: Int) {
     var lastStats: MicrophoneFrameStats? = null
         private set
 
+    /**
+     * @param gainDb what the dial says, in decibels, nought being the natural level plus a little
+     *   makeup. Decibels because the ear hears ratios: an even sweep of a linear multiplier is a
+     *   sprint through the useful range followed by a long walk through distortion.
+     */
     fun process(
         samples: ShortArray,
         count: Int,
-        trim: Float,
+        gainDb: Float,
         placementGain: Float = 1f
     ): ShortArray {
         val output = ShortArray(count)
@@ -96,12 +110,8 @@ class MicrophoneEngine(private val sampleRate: Int) {
         //
         // So loudness is the user's decision and stays where they put it. The gate ducks between
         // phrases so room tone is not held at speaking level, and the limiter catches peaks.
-        val base = VOICE_BASE_GAIN * placementGain
-        val targetGain = if (voiceActive) {
-            base * trim.coerceIn(0f, 3f)
-        } else {
-            base * trim.coerceIn(0f, 3f) * NON_VOICE_LEVEL
-        }
+        val base = UNITY_MAKEUP * placementGain * (10.0.pow(gainDb.coerceIn(-12f, 24f) / 20.0)).toFloat()
+        val targetGain = if (voiceActive) base else base * NON_VOICE_LEVEL
 
         // Smoothed only enough to keep the gate from stepping; the gain itself does not hunt.
         val tau = if (targetGain < currentGain) .120f else .200f

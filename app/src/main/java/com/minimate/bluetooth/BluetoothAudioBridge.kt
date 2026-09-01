@@ -93,7 +93,8 @@ data class AudioBridgeState(
     val outputDeviceName: String = "Phone output",
     val outputPreset: AudioOutputPreset = AudioOutputPreset.FLAT,
     val outputEqGains: List<Float> = AudioOutputPreset.FLAT.gains,
-    val microphoneGain: Float = 1f,
+    val microphoneGain: Float = 0f,
+    val microphoneIsolation: Boolean = true,
     val microphoneLevel: Float = 0f,
     val error: String? = null
 )
@@ -168,12 +169,16 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
         outputDeviceKey: String,
         outputProfiles: List<AudioDeviceEqProfile>,
         microphoneGain: Float,
+        microphoneIsolation: Boolean = true,
         microphonePlacement: MicrophonePlacement = MicrophonePlacement.HANDHELD,
         placementAuto: Boolean = true
     ) {
         this.placementAuto = placementAuto
         this.microphonePlacement = microphonePlacement
-        val restartMicrophone = false
+        // The capture source itself changes with isolation, and a source is chosen when the
+        // recorder is opened — so this is the one setting that cannot take effect without
+        // reopening it. Everything else is applied to the running capture.
+        val restartMicrophone = _state.value.microphoneIsolation != microphoneIsolation
         deviceEqProfiles = outputProfiles
         // Playing out of the phone's own speaker puts the loop back into its own microphone, so
         // the two cannot both be live. Refused here rather than only discouraged in the UI: the
@@ -189,7 +194,8 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
                 outputEqGains = profile?.gains?.takeIf { gains -> gains.size == 9 }?.map { gain -> gain.coerceIn(-12f, 12f) }
                     ?: AudioOutputPreset.FLAT.gains,
-                microphoneGain = microphoneGain.coerceIn(0f, 3f),
+                microphoneGain = microphoneGain.coerceIn(-12f, 24f),
+                microphoneIsolation = microphoneIsolation,
                 error = null
             )
         }
@@ -479,7 +485,17 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
             // beamforming. This is what the last version anyone was happy with used, and with
             // external microphones gone there is nothing left to choose between.
             val isPhoneMic = true
-            val chosenSource = MediaRecorder.AudioSource.VOICE_RECOGNITION
+            // Isolation is the whole reason to prefer one source over the other. A communications
+            // capture carries the platform's echo canceller and noise suppressor inside the chain
+            // — they are simply not available on a recognition session, which is why creating them
+            // there reported unavailable and did nothing. A recognition capture is the wider,
+            // cleaner signal, but it is handed over with the room still in it.
+            val isolate = _state.value.microphoneIsolation
+            val chosenSource = if (isolate) {
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION
+            } else {
+                MediaRecorder.AudioSource.VOICE_RECOGNITION
+            }
             val recorder = AudioRecord(
                 chosenSource,
                 sampleRate, AudioFormat.CHANNEL_IN_MONO,

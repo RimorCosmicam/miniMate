@@ -104,6 +104,7 @@ class TouchpadPreferences(context: Context) {
                     }
                 })
                 put("audioMicrophoneGain", settings.audioMicrophoneGain.toDouble())
+                put("audioMicrophoneIsolation", settings.audioMicrophoneIsolation)
                 put("audioMicrophonePlacement", settings.audioMicrophonePlacement.name)
                 put("audioPlacementAuto", settings.audioPlacementAuto)
                 put("audioTransport", settings.audioTransport.name)
@@ -274,7 +275,8 @@ class TouchpadPreferences(context: Context) {
                         }
                     }
                 } ?: emptyList(),
-                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 1.0).toFloat().coerceIn(0f, 3f),
+                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 0.0).toFloat().coerceIn(-12f, 24f),
+                audioMicrophoneIsolation = json.optBoolean("audioMicrophoneIsolation", true),
                 audioMicrophonePlacement = runCatching {
                     MicrophonePlacement.valueOf(json.optString("audioMicrophonePlacement", "HANDHELD"))
                 }.getOrDefault(MicrophonePlacement.HANDHELD),

@@ -266,8 +266,16 @@ fun buildCommandMenu(
             MenuToggle("Microphone", settings.audioMicrophoneEnabled) {
                 onChange { current -> current.copy(audioMicrophoneEnabled = it) }
             },
-            MenuSlider("Mic gain", settings.audioMicrophoneGain, 0f..3f, "%.1fx".format(settings.audioMicrophoneGain)) {
+            MenuSlider(
+                "Mic gain",
+                settings.audioMicrophoneGain,
+                -12f..24f,
+                "%+.0f dB".format(settings.audioMicrophoneGain)
+            ) {
                 onChange { current -> current.copy(audioMicrophoneGain = it) }
+            },
+            MenuToggle("Isolation", settings.audioMicrophoneIsolation) {
+                onChange { current -> current.copy(audioMicrophoneIsolation = it) }
             },
             MenuBranch("Position", buildList {
                 add(MenuToggle("Auto", settings.audioPlacementAuto) {
