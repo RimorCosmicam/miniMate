@@ -194,7 +194,7 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                 outputPreset = profile?.preset ?: AudioOutputPreset.FLAT,
                 outputEqGains = profile?.gains?.takeIf { gains -> gains.size == 9 }?.map { gain -> gain.coerceIn(-12f, 12f) }
                     ?: AudioOutputPreset.FLAT.gains,
-                microphoneGain = microphoneGain.coerceIn(-12f, 24f),
+                microphoneGain = microphoneGain.coerceIn(-12f, 12f),
                 microphoneIsolation = microphoneIsolation,
                 error = null
             )
@@ -595,7 +595,11 @@ class BluetoothAudioBridge(private val context: Context, private val adapter: Bl
                         }
                         Log.i(TAG, "placement changed to ${placement.name}, field=${placement.fieldDimension}")
                     }
-                    val adjusted = engine.process(samples, count, gain, placement.gainScale)
+                    // A communications capture arrives around thirty decibels quieter than a
+                    // recognition one on this phone, so nought on the dial cannot mean the same
+                    // multiplier for both. Measured: four percent of full scale against all of it.
+                    val makeup = if (isolate) 15f else 1.2f
+                    val adjusted = engine.process(samples, count, gain, placement.gainScale, makeup)
                     for (index in 0 until count) {
                         val rawAbs = kotlin.math.abs(samples[index].toInt())
                         if (rawAbs > windowRawPeak) windowRawPeak = rawAbs

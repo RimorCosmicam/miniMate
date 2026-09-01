@@ -269,7 +269,7 @@ fun buildCommandMenu(
             MenuSlider(
                 "Mic gain",
                 settings.audioMicrophoneGain,
-                -12f..24f,
+                -12f..12f,
                 "%+.0f dB".format(settings.audioMicrophoneGain)
             ) {
                 onChange { current -> current.copy(audioMicrophoneGain = it) }

@@ -55,7 +55,14 @@ class MicrophoneEngine(private val sampleRate: Int) {
          * was distortion. The capture on this phone already reaches full scale unaided; what it
          * needs is a little makeup and a lot of headroom, not an order of magnitude.
          */
-        const val UNITY_MAKEUP = 5f
+        /**
+         * What nought on the dial means, for a capture that already arrives at a usable level.
+         *
+         * A quieter source is handed its own figure instead — see [process]. Measured on this
+         * phone the two differ by around thirty decibels, which is far too much to leave for the
+         * dial to make up: a dial that has to be held at its top is a dial with one setting.
+         */
+        const val UNITY_MAKEUP = 1.2f
     }
 
     // Two poles, not one. A single pole at this corner leaves fifty hertz at half its amplitude,
@@ -99,15 +106,22 @@ class MicrophoneEngine(private val sampleRate: Int) {
         private set
 
     /**
-     * @param gainDb what the dial says, in decibels, nought being the natural level plus a little
-     *   makeup. Decibels because the ear hears ratios: an even sweep of a linear multiplier is a
-     *   sprint through the useful range followed by a long walk through distortion.
+     * @param gainDb what the dial says, in decibels, nought being a usable level. Decibels
+     *   because the ear hears ratios: an even sweep of a linear multiplier is a sprint through the
+     *   useful range followed by a long walk through distortion.
+     * @param makeup what nought on the dial is worth for the capture in use. Measured on this
+     *   phone a communications capture peaks at four percent of full scale where a recognition
+     *   capture reaches all of it, so they cannot share a figure — with one, nought is already
+     *   right; with the other the dial had to be held at maximum, which put the chain ninety-one
+     *   times over and thirteen decibels into the limiter. That is heard as a tone that will not
+     *   stop, and it is distortion rather than feedback.
      */
     fun process(
         samples: ShortArray,
         count: Int,
         gainDb: Float,
-        placementGain: Float = 1f
+        placementGain: Float = 1f,
+        makeup: Float = UNITY_MAKEUP
     ): ShortArray {
         val output = ShortArray(count)
         if (count <= 0) return output
@@ -158,7 +172,7 @@ class MicrophoneEngine(private val sampleRate: Int) {
         //
         // So loudness is the user's decision and stays where they put it. The gate ducks between
         // phrases so room tone is not held at speaking level, and the limiter catches peaks.
-        val base = UNITY_MAKEUP * placementGain * (10.0.pow(gainDb.coerceIn(-12f, 24f) / 20.0)).toFloat()
+        val base = makeup * placementGain * (10.0.pow(gainDb.coerceIn(-12f, 12f) / 20.0)).toFloat()
         val targetGain = if (voiceActive) base else base * NON_VOICE_LEVEL
 
         // Smoothed only enough to keep the gate from stepping; the gain itself does not hunt.

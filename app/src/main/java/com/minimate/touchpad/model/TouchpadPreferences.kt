@@ -275,7 +275,11 @@ class TouchpadPreferences(context: Context) {
                         }
                     }
                 } ?: emptyList(),
-                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 0.0).toFloat().coerceIn(-12f, 24f),
+                audioMicrophoneGain = json.optDouble("audioMicrophoneGain", 0.0).toFloat()
+                    // A value stored while the dial ran to +24 was chosen to compensate for a
+                    // makeup that no longer applies; carrying it over would keep the chain hot for
+                    // no reason. Anything outside the dial's range now starts again at nought.
+                    .let { if (it < -12f || it > 12f) 0f else it },
                 audioMicrophoneIsolation = json.optBoolean("audioMicrophoneIsolation", true),
                 audioMicrophonePlacement = runCatching {
                     MicrophonePlacement.valueOf(json.optString("audioMicrophonePlacement", "HANDHELD"))
