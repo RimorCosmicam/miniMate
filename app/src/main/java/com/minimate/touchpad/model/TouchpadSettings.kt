@@ -385,9 +385,18 @@ enum class AudioTransport(val label: String) {
  * narrow, which rejects most of the room. Lying on a desk at arm's length the same narrow beam
  * would cut off anyone who leans or turns, so it widens and the gain rises to cover the distance.
  */
+/**
+ * Where the phone is, and what that costs in level.
+ *
+ * The desk boost used to be 2.1, multiplied on top of a base of eleven — twenty-three times before
+ * the slider was even consulted. Measured on the desk that drove the capture to full scale on
+ * every phrase and held the limiter engaged continuously, which is heard as a hard, distorted
+ * voice rather than a loud one. A desk is further away than a hand, but not eleven decibels
+ * further, and the wide beam it opens already recovers most of the difference.
+ */
 enum class MicrophonePlacement(val label: String, val fieldDimension: Float, val gainScale: Float) {
     HANDHELD("Handheld", .75f, 1f),
-    DESK("On desk", .35f, 2.1f)
+    DESK("On desk", .55f, 1.15f)
 }
 
 enum class AudioOutputPreset(val label: String, val gains: List<Float>) {
