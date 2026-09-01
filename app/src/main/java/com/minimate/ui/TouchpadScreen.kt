@@ -92,11 +92,6 @@ fun TouchpadScreen(
     bluetoothState: BluetoothUiState,
     batteryPercentage: Int,
     onRequestPermissions: () -> Unit,
-    /**
-     * Held back while the switcher is still being introduced, so the one flying out of the card is
-     * the only one on screen and lands exactly where this one appears.
-     */
-    pillVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val settings by touchpadEngine.settings.collectAsState()
@@ -701,7 +696,7 @@ fun TouchpadScreen(
         // One pill, one gesture contract in every primary mode and editor:
         // tap advances Trackpad -> Keyboard -> Audio -> Webcam -> Trackpad,
         // double-tap toggles true-black AMOLED rendering, and hold opens Settings.
-        if (pillVisible) ClockBatteryOverlay(
+        ClockBatteryOverlay(
             // The chosen style, on every page. This used to force the glass pill outside the
             // trackpad, from back when that was the plainest style available — so picking Mont
             // dressed the pill up again the moment you left the first screen, which is the

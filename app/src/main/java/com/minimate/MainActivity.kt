@@ -19,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import com.minimate.ui.components.PermissionItem
-import com.minimate.ui.components.ClockBatteryOverlay
 import com.minimate.ui.components.Welcome
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
@@ -112,7 +111,6 @@ class MainActivity : ComponentActivity() {
                         bluetoothState = bluetoothState,
                         batteryPercentage = batteryPercentage,
                         onRequestPermissions = { checkAndRequestPermissions() },
-                        pillVisible = settings.onboardingSeen,
                         modifier = Modifier.fillMaxSize()
                     )
 
@@ -126,27 +124,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                             onGrant = { checkAndRequestPermissions() },
-                            pill = {
-                                ClockBatteryOverlay(
-                                    clockStyle = settings.clockStyle,
-                                    positionXFraction = .5f,
-                                    positionYFraction = .5f,
-                                    clockScale = settings.clockScale,
-                                    screenWidthPx = 0f,
-                                    screenHeightPx = 0f,
-                                    show24Hour = settings.show24HourFormat,
-                                    showSeconds = settings.showSeconds,
-                                    showBattery = settings.showBatteryPercentage,
-                                    batteryPercentage = batteryPercentage,
-                                    bluetoothState = bluetoothState,
-                                    amoledMode = false,
-                                    onTap = {},
-                                    onDoubleTap = {},
-                                    onLongPress = {}
-                                )
-                            },
-                            targetX = settings.clockPositionX,
-                            targetY = settings.clockPositionY,
                             onFinished = {
                                 touchpadEngine.updateSettings(
                                     touchpadEngine.settings.value.copy(onboardingSeen = true)

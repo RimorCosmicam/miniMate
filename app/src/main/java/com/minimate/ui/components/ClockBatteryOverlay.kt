@@ -127,7 +127,16 @@ fun ClockBatteryOverlay(
             .offset { IntOffset(posX.roundToInt(), posY.roundToInt()) }
             .onSizeChanged { measuredSize = it }
             .scale(clockScale * pressScale)
-            .shadow(12.dp, RoundedCornerShape(18.dp), spotColor = if (amoledMode) Color.Transparent else AccentCyan.copy(alpha = 0.35f))
+            // The shadow clips to its own shape, so a rounded one was rounding off the corners of
+            // a pill that is meant to be square. Mont casts none at all — it is a flat surface.
+            .then(
+                if (clockStyle == ClockStyle.MONT) Modifier
+                else Modifier.shadow(
+                    12.dp,
+                    RoundedCornerShape(18.dp),
+                    spotColor = if (amoledMode) Color.Transparent else AccentCyan.copy(alpha = 0.35f)
+                )
+            )
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {

@@ -17,7 +17,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -25,7 +24,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,18 +41,11 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.minimate.touchpad.model.HostPlatform
 import com.minimate.ui.theme.Mont
-import kotlin.math.roundToInt
 
 /** One thing the app needs, and whether it has it yet. */
 data class PermissionItem(val label: String, val detail: String, val granted: Boolean)
@@ -82,29 +73,74 @@ private fun MustardDiagonals(
         val spacing = 34.dp.toPx()
         val band = spacing * 0.5f
         val drift = travel * spacing
-        // Enough overhang that the turned frame still covers the corners, and enough travel that
-        // both halves are gone by the end.
-        val reach = size.width + size.height
-        val pull = split * reach
-        val mustard = lerp(Mustard, Color.Black, invert)
-        val black = lerp(Color.Black, Mustard, invert)
         val middle = size.width / 2f
+        // Each half is exactly as wide as it travels, so pulling it by its own width clears the
+        // side it was covering. The previous version drew a sheet three times wider than the pull,
+        // which meant it slid without ever leaving — the ground looked like it simply vanished at
+        // the end, because that was the composable being removed rather than anything moving.
+        val span = size.width + size.height
+        val pull = split * span
 
-        rotate(degrees = 26.565f) {
-            fun sheet(shift: Float) {
-                translate(left = shift) {
-                    var y = -reach
-                    while (y < size.height + reach) {
-                        drawRect(mustard, Offset(-reach, y + drift), Size(reach * 3f, band))
-                        drawRect(black, Offset(-reach, y + drift + band), Size(reach * 3f, band))
-                        y += spacing
-                    }
+        fun half(from: Float, shift: Float) {
+            translate(left = shift) {
+                var y = -span
+                while (y < size.height + span) {
+                    drawRect(
+                        lerp(Mustard, Color.Black, invert),
+                        Offset(from, y + drift),
+                        Size(span, band)
+                    )
+                    drawRect(
+                        lerp(Color.Black, Mustard, invert),
+                        Offset(from, y + drift + band),
+                        Size(span, band)
+                    )
+                    y += spacing
                 }
             }
-
-            clipRect(-reach, -reach, middle, size.height + reach) { sheet(-pull) }
-            clipRect(middle, -reach, size.width + reach, size.height + reach) { sheet(pull) }
         }
+
+        rotate(degrees = 26.565f) {
+            clipRect(-span, -span, middle, size.height + span) { half(middle - span, -pull) }
+            clipRect(middle, -span, size.width + span, size.height + span) { half(middle, pull) }
+        }
+    }
+}
+
+/**
+ * A stand-in for the switcher.
+ *
+ * Drawn rather than borrowed. The real one was being lifted out of the card and flown to its
+ * corner, which meant measuring a gap through three layers of layout to find out where it was
+ * standing — and when that measurement came back wrong the switcher simply did not appear. The
+ * app's own switcher is already in place behind all of this, so the card only ever needed to show
+ * what one looks like.
+ */
+@Composable
+private fun FakePill() {
+    Row(
+        Modifier
+            .background(Color.Black.copy(MONT_SURFACE_ALPHA))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "9:41",
+            color = Color.White.copy(.92f),
+            fontFamily = Mont,
+            fontWeight = FontWeight.Black,
+            fontSize = 13.sp
+        )
+        Spacer(Modifier.width(9.dp))
+        Text(
+            "84%",
+            color = Color(0xFF34D399),
+            fontFamily = Mont,
+            fontWeight = FontWeight.Black,
+            fontSize = 10.sp
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.size(5.dp).background(Color(0xFF22D3EE)))
     }
 }
 
@@ -122,9 +158,6 @@ fun Welcome(
     platform: HostPlatform,
     onPlatform: (HostPlatform) -> Unit,
     onGrant: () -> Unit,
-    pill: @Composable () -> Unit,
-    targetX: Float,
-    targetY: Float,
     onFinished: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -143,36 +176,16 @@ fun Welcome(
         animationSpec = tween(durationMillis = 260),
         label = "platformInvert"
     )
+    // Quick. The app behind this is already up and running, so the transition is the only thing
+    // standing between the reader and it.
     val journey by animateFloatAsState(
         targetValue = if (leaving) 1f else 0f,
-        animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
         label = "journey",
         finishedListener = { if (it == 1f) onFinished() }
     )
 
-    // The gap's position has to be resolved against this box, not against whichever nested column
-    // happens to contain it — positionInParent() answered relative to the card's inner content, so
-    // the switcher came out near the origin and hung off the top-left corner.
-    var rootCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-
-    BoxWithConstraints(modifier.fillMaxSize().onGloballyPositioned { rootCoords = it }) {
-        val density = LocalDensity.current
-        val widthPx = with(density) { maxWidth.toPx() }
-        val heightPx = with(density) { maxHeight.toPx() }
-
-        // Where the card is holding the switcher, and where it belongs afterwards. The rest
-        // position is measured off the gap the card leaves for it, so the two never disagree.
-        var pillSize by remember { mutableStateOf(IntSize.Zero) }
-        var berthTopLeft by remember { mutableStateOf(Offset.Zero) }
-        var berthSize by remember { mutableStateOf(IntSize.Zero) }
-        // Centred in the gap, and recomputed if either measurement lands later than the other.
-        val restX = berthTopLeft.x + (berthSize.width - pillSize.width) / 2f
-        val restY = berthTopLeft.y + (berthSize.height - pillSize.height) / 2f
-        val homeX = (targetX * widthPx - pillSize.width / 2f)
-            .coerceIn(8f, (widthPx - pillSize.width - 8f).coerceAtLeast(8f))
-        val homeY = (targetY * heightPx - pillSize.height / 2f)
-            .coerceIn(8f, (heightPx - pillSize.height - 8f).coerceAtLeast(8f))
-
+    Box(modifier.fillMaxSize()) {
         MustardDiagonals(travel, journey, inverted, modifier = Modifier.fillMaxSize())
 
         Column(
@@ -180,7 +193,8 @@ fun Welcome(
                 .fillMaxWidth()
                 .align(Alignment.Center)
                 .padding(horizontal = 18.dp)
-                .alpha(1f - (journey / 0.30f).coerceAtMost(1f))
+                // The card goes first, and faster than the ground it is standing on.
+                .alpha(1f - (journey / 0.22f).coerceAtMost(1f))
                 .background(Color.Black.copy(MONT_SURFACE_ALPHA))
                 .padding(start = 22.dp, top = 22.dp, end = 18.dp, bottom = 16.dp)
         ) {
@@ -213,15 +227,7 @@ fun Welcome(
             ) { switcher ->
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (switcher) {
-                        SwitcherStep(
-                            onBerth = { child ->
-                                rootCoords?.let { root ->
-                                    berthTopLeft = root.localPositionOf(child, Offset.Zero)
-                                    berthSize = child.size
-                                }
-                            },
-                            onOkay = { leaving = true }
-                        )
+                        SwitcherStep(onOkay = { leaving = true })
                     } else {
                         PermissionsStep(
                             permissions = permissions,
@@ -235,20 +241,6 @@ fun Welcome(
             }
         }
 
-        // Drawn above the card so it can leave it, but resting in the gap the card set aside.
-        // Held back until that gap has been measured, so it never appears at the origin first.
-        if (showingSwitcher && berthSize.width > 0) {
-            Box(
-                Modifier
-                    .offset {
-                        IntOffset(
-                            (restX + (homeX - restX) * journey).roundToInt(),
-                            (restY + (homeY - restY) * journey).roundToInt()
-                        )
-                    }
-                    .onSizeChanged { pillSize = it }
-            ) { pill() }
-        }
     }
 }
 
@@ -310,15 +302,9 @@ private fun ColumnScope.PermissionsStep(
 }
 
 @Composable
-private fun ColumnScope.SwitcherStep(onBerth: (LayoutCoordinates) -> Unit, onOkay: () -> Unit) {
+private fun ColumnScope.SwitcherStep(onOkay: () -> Unit) {
     Label("THE SWITCHER", .55f, 11)
-    // The gap the switcher sits in. Reporting where it landed is what lets the pill be drawn
-    // above the card and still appear to be inside it.
-    Spacer(
-        Modifier
-            .height(36.dp)
-            .onGloballyPositioned { onBerth(it) }
-    )
+    FakePill()
     TourLine("ONE TAP", "Change mode")
     TourLine("TWO TAPS", "AMOLED black")
     TourLine("HOLD", "Open settings")
