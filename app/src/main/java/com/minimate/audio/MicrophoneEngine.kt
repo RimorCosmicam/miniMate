@@ -58,12 +58,28 @@ class MicrophoneEngine(private val sampleRate: Int) {
         const val UNITY_MAKEUP = 5f
     }
 
+    // Two poles, not one. A single pole at this corner leaves fifty hertz at half its amplitude,
+    // which is an attenuation nobody would describe as removing the hum; cascading a second
+    // section takes it to a quarter and gives the filter the twelve decibels an octave that a
+    // microphone channel normally has.
     private var highPassPreviousIn = 0f
     private var highPassPreviousOut = 0f
+    private var highPassPreviousIn2 = 0f
+    private var highPassPreviousOut2 = 0f
     private val highPassCoefficient = run {
         val rc = 1f / (2f * PI.toFloat() * HIGH_PASS_HZ)
         val dt = 1f / sampleRate
         rc / (rc + dt)
+    }
+
+    private fun highPass(sample: Float): Float {
+        val first = highPassCoefficient * (highPassPreviousOut + sample - highPassPreviousIn)
+        highPassPreviousIn = sample
+        highPassPreviousOut = first
+        val second = highPassCoefficient * (highPassPreviousOut2 + first - highPassPreviousIn2)
+        highPassPreviousIn2 = first
+        highPassPreviousOut2 = second
+        return second
     }
     private var filtered = FloatArray(0)
 
@@ -104,10 +120,7 @@ class MicrophoneEngine(private val sampleRate: Int) {
         for (index in 0 until count) {
             // High-passed before anything looks at it, so the level that decides speech from
             // silence is the level of the voice rather than the level of the room's rumble.
-            val raw = samples[index].toFloat()
-            val value = highPassCoefficient * (highPassPreviousOut + raw - highPassPreviousIn)
-            highPassPreviousIn = raw
-            highPassPreviousOut = value
+            val value = highPass(samples[index].toFloat())
             filtered[index] = value
 
             val magnitude = abs(value)
