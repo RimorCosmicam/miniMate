@@ -7,6 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.core.content.res.ResourcesCompat
 import android.widget.RemoteViews
 import com.minimate.MinimateApp
 import com.minimate.R
@@ -66,8 +71,45 @@ class MinimateWidgetSmall : MinimateWidget(R.layout.widget_small)
 class MinimateWidgetMedium : MinimateWidget(R.layout.widget_medium)
 class MinimateWidgetLarge : MinimateWidget(R.layout.widget_large)
 
+/**
+ * The name, drawn rather than set.
+ *
+ * A widget's layout is inflated by the launcher, in the launcher's process, and a font resource
+ * referenced from it does not resolve there — the wordmark came out in whatever the system font
+ * happened to be, which is to say not in Mont at all. Painting it here and sending the pixels is
+ * the only way to be certain the two words arrive in the right typeface, at the right weights.
+ */
+private fun wordmark(context: Context, heightPx: Int): Bitmap {
+    val thin = runCatching { ResourcesCompat.getFont(context, R.font.mont_thin) }.getOrNull()
+    val black = runCatching { ResourcesCompat.getFont(context, R.font.mont_black) }.getOrNull()
+
+    val size = heightPx * 0.46f
+    fun paint(face: Typeface?) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = face
+        textSize = size
+        color = android.graphics.Color.WHITE
+    }
+
+    val top = paint(thin)
+    val bottom = paint(black)
+    val width = maxOf(top.measureText("mini"), bottom.measureText("Mate")).toInt() + 2
+    // Mont sits high in its box; setting the lines by their own metrics keeps the pair tight
+    // rather than leaving the gap the font's default leading would.
+    val lineHeight = -top.ascent() + top.descent()
+    val bitmap = Bitmap.createBitmap(width.coerceAtLeast(1), heightPx.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val block = lineHeight * 1.72f
+    val start = (heightPx - block) / 2f - top.ascent()
+    canvas.drawText("mini", 0f, start, top)
+    canvas.drawText("Mate", 0f, start + lineHeight * 0.86f, bottom)
+    return bitmap
+}
+
 private fun render(context: Context, layout: Int, settings: TouchpadSettings): RemoteViews =
     RemoteViews(context.packageName, layout).apply {
+        val density = context.resources.displayMetrics.density
+        setImageViewBitmap(R.id.widget_wordmark, wordmark(context, (46 * density).toInt()))
+
         fun toggle(viewId: Int, which: String, on: Boolean) {
             setInt(viewId, "setImageAlpha", if (on) ON_ALPHA else OFF_ALPHA)
             setOnClickPendingIntent(viewId, togglePendingIntent(context, which))

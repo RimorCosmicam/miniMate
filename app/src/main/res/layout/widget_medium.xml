@@ -1,73 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  The wide face: the name set the way the welcome sets it, the lightest weight over the heaviest,
-  then the three toggles laid out along the rest of the bar.
--->
+<!-- A line: the name at one end, the three toggles at the other. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="@drawable/widget_card"
     android:gravity="center_vertical"
-    android:paddingStart="16dp"
-    android:paddingEnd="12dp"
+    android:background="@drawable/widget_card"
+    android:paddingStart="14dp"
+    android:paddingEnd="10dp"
     android:paddingTop="10dp"
     android:paddingBottom="10dp">
 
-    <LinearLayout
+    <ImageView
+        android:id="@+id/widget_wordmark"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:layout_height="match_parent"
+        android:scaleType="fitStart"
+        android:adjustViewBounds="true"
+        android:contentDescription="MiniMate" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="mini"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:fontFamily="@font/mont_thin"
-            android:includeFontPadding="false" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Mate"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:fontFamily="@font/mont_black"
-            android:includeFontPadding="false" />
-    </LinearLayout>
-
-    <LinearLayout
+    <ImageView
+        android:id="@+id/widget_speaker"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_weight="1"
-        android:layout_marginStart="14dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical|end">
+        android:padding="7dp"
+        android:src="@drawable/ic_widget_speaker"
+        android:contentDescription="Speaker" />
 
-        <ImageView
-            android:id="@+id/widget_speaker"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginStart="16dp"
-            android:src="@drawable/ic_widget_speaker"
-            android:contentDescription="Speaker" />
+    <ImageView
+        android:id="@+id/widget_mic"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:padding="7dp"
+        android:src="@drawable/ic_widget_mic"
+        android:contentDescription="Microphone" />
 
-        <ImageView
-            android:id="@+id/widget_mic"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginStart="16dp"
-            android:src="@drawable/ic_widget_mic"
-            android:contentDescription="Microphone" />
-
-        <ImageView
-            android:id="@+id/widget_camera"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginStart="16dp"
-            android:src="@drawable/ic_widget_camera"
-            android:contentDescription="Camera" />
-    </LinearLayout>
+    <ImageView
+        android:id="@+id/widget_camera"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:padding="7dp"
+        android:src="@drawable/ic_widget_camera"
+        android:contentDescription="Camera" />
 </LinearLayout>
