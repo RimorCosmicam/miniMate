@@ -455,7 +455,7 @@ data class TouchpadSettings(
     val themeFilters: List<ThemeFilter> = emptyList(),
     val abstractShaderTheme: AbstractShaderTheme = AbstractShaderTheme.OCEANIC,
     /** Selected scene from the shader catalog, its per-scene control values, and its palette. */
-    val shaderSceneId: String = "parallax_sky",
+    val shaderSceneId: String = "halftone",
     val shaderParams: List<Float> = emptyList(),
     val shaderPaletteIndex: Int = 0,
     val shaderTouchStrength: Float = 1f,

@@ -187,7 +187,7 @@ class TouchpadPreferences(context: Context) {
                 abstractSubthemeIndex = json.optInt("abstractSubthemeIndex", 1).coerceIn(0, 9),
                 // These were being written but never read, so every restart quietly reset the
                 // scene to the default rather than restoring what was chosen.
-                shaderSceneId = json.optString("shaderSceneId", "parallax_sky").ifEmpty { "parallax_sky" },
+                shaderSceneId = json.optString("shaderSceneId", "halftone").ifEmpty { "halftone" },
                 shaderParams = json.optJSONArray("shaderParams")?.let { values ->
                     List(values.length()) { values.optDouble(it, 0.0).toFloat() }
                 }.orEmpty(),
