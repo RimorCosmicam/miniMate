@@ -12,7 +12,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,12 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,16 +49,7 @@ data class PermissionItem(val label: String, val detail: String, val granted: Bo
 
 private val Mustard = Color(0xFFD8A628)
 
-/**
- * The welcome's ground: interleaved diagonal bands, mustard and black.
- *
- * Everything is drawn in a frame turned to the bands' own slope, so within it they are simply
- * horizontal rows and the whole thing is easy to reason about. Rows scroll for as long as the
- * welcome is up. [split] then cuts the sheet down the middle and pulls the two halves apart along
- * the bands' own axis — each side leaving the way it points, both colours going with it. The
- * ground is drawn on nothing rather than over a black fill, so what opens up between the halves is
- * whatever is behind it. [invert] exchanges the two colours.
- */
+/** The welcome's ground: mustard and black, with the two able to trade places. */
 @Composable
 private fun MustardDiagonals(
     travel: Float,
@@ -71,42 +57,13 @@ private fun MustardDiagonals(
     invert: Float = 0f,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier) {
-        val spacing = 34.dp.toPx()
-        val band = spacing * 0.5f
-        val drift = travel * spacing
-        val middle = size.width / 2f
-        // Each half is exactly as wide as it travels, so pulling it by its own width clears the
-        // side it was covering. The previous version drew a sheet three times wider than the pull,
-        // which meant it slid without ever leaving — the ground looked like it simply vanished at
-        // the end, because that was the composable being removed rather than anything moving.
-        val span = size.width + size.height
-        val pull = split * span
-
-        fun half(from: Float, shift: Float) {
-            translate(left = shift) {
-                var y = -span
-                while (y < size.height + span) {
-                    drawRect(
-                        lerp(Mustard, Color.Black, invert),
-                        Offset(from, y + drift),
-                        Size(span, band)
-                    )
-                    drawRect(
-                        lerp(Color.Black, Mustard, invert),
-                        Offset(from, y + drift + band),
-                        Size(span, band)
-                    )
-                    y += spacing
-                }
-            }
-        }
-
-        rotate(degrees = 26.565f) {
-            clipRect(-span, -span, middle, size.height + span) { half(middle - span, -pull) }
-            clipRect(middle, -span, size.width + span, size.height + span) { half(middle, pull) }
-        }
-    }
+    DiagonalStripes(
+        travel = travel,
+        first = lerp(Mustard, Color.Black, invert),
+        second = lerp(Color.Black, Mustard, invert),
+        split = split,
+        modifier = modifier
+    )
 }
 
 /**

@@ -77,7 +77,7 @@ fun WebcamModeOverlay(
                     else -> "CAMERA READY"
                 },
                 active = captureState.running && linkState.connected && linkState.transport.name == "WIFI",
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 20.dp)
+                modifier = Modifier.align(Alignment.TopStart).padding(top = 20.dp, start = 20.dp)
             )
 
             ThemedPanel(

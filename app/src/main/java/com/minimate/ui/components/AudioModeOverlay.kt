@@ -141,10 +141,18 @@ private fun AudioTopBar(
                 val active = tab == selected
                 Box(
                     Modifier.clip(panelShape(15.dp))
-                        .background(if (active) panelSelectionFill() else Color.Transparent)
+                        // These two keep their block whatever the material: which of the pair is
+                        // showing is the most consequential thing on the panel, and brightness
+                        // alone is too quiet a way to say it.
+                        .background(if (active) Color.White else Color.Black)
                         .clickable { onSelected(tab) }.padding(horizontal = 14.dp, vertical = 9.dp)
                 ) {
-                    Text(tab.label, color = if (active) Color.Black else Color.White.copy(.68f), fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        tab.label,
+                        color = if (active) Color.Black else Color.White.copy(.72f),
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

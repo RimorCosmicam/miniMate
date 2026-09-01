@@ -253,6 +253,12 @@ class MainActivity : ComponentActivity() {
         // Permissions can be granted from outside the app entirely. Re-reading on resume means
         // the welcome list is never showing a state that stopped being true while it was away.
         permissionTick++
+        // The services start here because every other path to them was conditional. Moving the
+        // permission request into the welcome screen left this being called only when a permission
+        // dialog returned, or when the welcome was dismissed — so on an ordinary launch of an
+        // already-set-up app, nothing ever began listening and nothing could connect. It is
+        // guarded against starting twice, so calling it on every resume costs nothing.
+        startBluetoothServicesIfAllowed()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
