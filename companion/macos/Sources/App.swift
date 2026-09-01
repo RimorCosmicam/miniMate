@@ -126,6 +126,31 @@ struct CompanionView: View {
 
     private var devicesReady: Bool { controller.driverInstalled && controller.cameraInstalled }
 
+    private var currentOutput: MonitorOutput? {
+        controller.monitorOutputs.first { $0.id == controller.monitorOutputID } ?? controller.monitorOutputs.first
+    }
+
+    private var currentOutputName: String { currentOutput?.name ?? "the default output" }
+
+    /// A guess, and phrased as one: there is no flag that says "these are the built-in speakers".
+    private var outputIsLikelySpeakers: Bool {
+        let name = currentOutputName.lowercased()
+        return name.contains("speaker") || name.contains("macbook") || name.contains("built-in")
+    }
+
+    private func cycleOutput() {
+        let outputs = controller.monitorOutputs
+        guard !outputs.isEmpty else { return }
+        let index = outputs.firstIndex { $0.id == controller.monitorOutputID } ?? -1
+        let next = outputs[(index + 1) % outputs.count]
+        controller.monitorOutputID = next.id
+        // Bound at start, so a running monitor has to be turned over to follow the choice.
+        if controller.monitoringMicrophone {
+            controller.setMicrophoneMonitoring(false)
+            controller.setMicrophoneMonitoring(true)
+        }
+    }
+
     /// The first thing anyone came here to do, named after the thing it will do it to.
     private var connection: (label: String, enabled: Bool, act: () -> Void) {
         if controller.connected {
@@ -176,6 +201,21 @@ struct CompanionView: View {
                 enabled: controller.connected
             ) {
                 controller.setMicrophoneMonitoring(!controller.monitoringMicrophone)
+            }
+
+            // Where listening comes out, which is not a detail. Monitoring through the Mac's own
+            // speakers puts the phone's microphone in earshot of its own signal, and the loop that
+            // makes takes about a syllable to build into a howl that never stops. This row was
+            // dropped in the redesign and that is exactly what happened.
+            if !controller.monitorOutputs.isEmpty {
+                MontRow(label: "Hear it on \(currentOutputName)") { cycleOutput() }
+                if controller.monitoringMicrophone && outputIsLikelySpeakers {
+                    Text("This is probably the Mac's own speakers. The phone will hear them and howl — pick headphones.")
+                        .font(.custom(MontFont.black, size: 9))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 4)
+                }
             }
 
             Spacer(minLength: 12)
