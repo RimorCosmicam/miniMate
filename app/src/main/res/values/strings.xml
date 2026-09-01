@@ -29,7 +29,4 @@
     <string name="disconnect">Disconnect</string>
     <string name="make_discoverable">Pair New Device</string>
     <string name="reset_defaults">Reset to Defaults</string>
-    <string name="widget_small_description">Speaker, microphone and camera</string>
-    <string name="widget_medium_description">MiniMate, with speaker, microphone and camera</string>
-    <string name="widget_large_description">MiniMate, with speaker, microphone and camera</string>
 </resources>
