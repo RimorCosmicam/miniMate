@@ -7,4 +7,6 @@
     <color name="accent_cyan">#FF4ECCA3</color>
     <color name="accent_blue">#FF3B82F6</color>
     <color name="accent_purple">#FF8B5CF6</color>
+    <!-- The Mont surface. Must match MONT_SURFACE_ALPHA: 0.92 of 255 is 235, which is EB. -->
+    <color name="mont_surface">#EB000000</color>
 </resources>

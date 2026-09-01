@@ -317,7 +317,9 @@ private fun SwipeTypingPanel(
         Modifier.fillMaxWidth().height(121.dp * LocalKeyboardHeight.current).onSizeChanged { surfaceSize = it }
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val keyBrush = if (amoled) Brush.verticalGradient(listOf(Color.Black, Color.Black)) else when (theme) {
+            val keyBrush = if (amoled && theme != KeyboardTheme.MONT) {
+                Brush.verticalGradient(listOf(Color.Black, Color.Black))
+            } else when (theme) {
                 KeyboardTheme.GLASS -> Brush.verticalGradient(listOf(Color.White.copy(.18f), Color.White.copy(.07f)))
                 KeyboardTheme.FROST -> Brush.verticalGradient(listOf(Color.White.copy(.88f), Color.White.copy(.58f)))
                 KeyboardTheme.MONT -> Brush.verticalGradient(
@@ -331,7 +333,7 @@ private fun SwipeTypingPanel(
                 KeyboardTheme.CYBER -> Brush.verticalGradient(listOf(Color(0xDD071419), Color(0xF0010508)))
                 KeyboardTheme.PAPER -> Brush.verticalGradient(listOf(Color(0xFFF4E9D2), Color(0xFFE4D3B4)))
             }
-            val keyBorder = if (amoled) Color.White.copy(.74f) else when (theme) {
+            val keyBorder = if (amoled && theme != KeyboardTheme.MONT) Color.White.copy(.74f) else when (theme) {
                 KeyboardTheme.FROST -> Color.White.copy(.62f)
                 KeyboardTheme.MONT -> Color.Transparent
                 KeyboardTheme.TITANIUM -> Color(0xFFF2F5F7).copy(.58f)
@@ -967,7 +969,7 @@ private fun RowScope.GlassKey(
     // repeating keys did not, which is why they were the only ones that stayed dark under a finger.
     var held by remember { mutableStateOf(false) }
     val active = pressed || held || selected
-    val colors = if (amoled) {
+    val colors = if (amoled && theme != KeyboardTheme.MONT) {
         if (active) listOf(Color.White.copy(.18f), Color.White.copy(.07f)) else listOf(Color.Black, Color.Black)
     } else when (theme) {
         KeyboardTheme.GLASS -> if (active) listOf(Color(0x7AFFFFFF), Color(0x34FFFFFF)) else listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))

@@ -148,6 +148,13 @@ fun ClockBatteryOverlay(
                 Row(
                     modifier = Modifier
                         .background(Color.Black.copy(MONT_SURFACE_ALPHA))
+                        // In AMOLED the pill is black on black and would have no edge at all, so
+                        // it gets the thinnest outline that still reads. Square, like the pill.
+                        .then(
+                            if (amoledMode) {
+                                Modifier.border(0.5.dp, Color.White.copy(if (isPressed) .7f else .34f))
+                            } else Modifier
+                        )
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -162,7 +169,9 @@ fun ClockBatteryOverlay(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = currentAmPm,
-                            color = Color.White.copy(.55f),
+                            // Colour everywhere except AMOLED, where the point is that nothing
+                            // lights a pixel it does not have to.
+                            color = if (amoledMode) Color.White.copy(.55f) else AccentPink,
                             fontFamily = Mont,
                             fontWeight = FontWeight.Black,
                             fontSize = 9.sp
@@ -172,7 +181,11 @@ fun ClockBatteryOverlay(
                         Spacer(modifier = Modifier.width(9.dp))
                         Text(
                             text = "$batteryPercentage%",
-                            color = Color.White.copy(if (batteryPercentage < 20) .95f else .55f),
+                            color = when {
+                                amoledMode -> Color.White.copy(if (batteryPercentage < 20) .95f else .55f)
+                                batteryPercentage < 20 -> Color(0xFFEF4444)
+                                else -> AccentEmerald
+                            },
                             fontFamily = Mont,
                             fontWeight = FontWeight.Black,
                             fontSize = 10.sp
@@ -181,7 +194,11 @@ fun ClockBatteryOverlay(
                     if (bluetoothState.status == ConnectionStatus.CONNECTED) {
                         Spacer(modifier = Modifier.width(8.dp))
                         // A square, not a dot. Nothing here is round.
-                        Box(Modifier.size(5.dp).background(Color.White))
+                        Box(
+                            Modifier
+                                .size(5.dp)
+                                .background(if (amoledMode) Color.White else AccentCyan)
+                        )
                     }
                 }
             }
