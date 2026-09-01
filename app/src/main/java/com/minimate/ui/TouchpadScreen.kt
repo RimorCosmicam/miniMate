@@ -685,8 +685,14 @@ fun TouchpadScreen(
         if (showPairingDialog) {
             BluetoothPairingDialog(
                 bluetoothState = bluetoothState,
+                audioState = audioState,
                 onMakeDiscoverable = { makeDeviceDiscoverable() },
-                onConnectHost = { address -> hidManager.connectByAddress(address) },
+                // One tap joins up both halves: the input link is opened here, and the phone is
+                // put on the air so the companion can complete the audio link from its own side.
+                onConnectHost = { address ->
+                    hidManager.connectByAddress(address)
+                    makeDeviceDiscoverable()
+                },
                 onDisconnect = { hidManager.disconnect() },
                 onRefresh = { hidManager.refreshPairedDevices() },
                 onDismiss = { showPairingDialog = false }
